@@ -1,0 +1,75 @@
+# ==========================================
+# C++ Compiled files and Libraries
+# ==========================================
+*.html
+*.objs
+*.o
+*.a
+*.lib
+*.so
+*.dylib
+*.dll
+*.exe
+*.out
+*.app
+
+# ==========================================
+# Qt Creator & Build System Outputs
+# ==========================================
+# Chặn toàn bộ các thư mục build sinh ra khi biên dịch (Shadow builds)
+build-*/
+CMakeFiles/
+CMakeCache.txt
+CMakeUsers.txt
+cmake_install.cmake
+Makefile
+*.pro.user
+*.pro.user.*
+*.moc
+moc_*.cpp
+qrc_*.cpp
+ui_*.h
+
+# ==========================================
+# IDEs and Editors Local Configurations
+# ==========================================
+# Qt Creator
+.qtc_clangd/
+.qt/
+
+# VS Code (Nếu có thành viên dùng)
+.vscode/
+
+# Visual Studio
+.vs/
+Debug/
+Release/
+x64/
+*.user
+*.suo
+*.idb
+*.pdb
+
+# CLion / JetBrains
+.idea/
+
+# ==========================================
+# Operating System Garbage
+# ==========================================
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# ==========================================
+# Database & Local Logs (Tránh đè dữ liệu cục bộ)
+# ==========================================
+# Nếu nhóm dùng SQLite hoặc file JSON cục bộ để test, chặn để tránh ghi đè dữ liệu của nhau
+*.sqlite
+*.db
+*.log
