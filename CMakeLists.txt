@@ -2,7 +2,7 @@
 #Mỗi khi add một class mới (ví dụ: tạo thêm VipCustomer.h, VipCustomer.cpp), 
 #người đó phải mở file CMakeLists.txt ra 
 #và điền thêm dòng src/models/VipCustomer.h và scr/models/VipCustomer.cpp
-#vào đúng vị trí nhóm PROJECT_HEADERS thì mới compile được
+#vào đúng vị trí "add_executable" thì mới compile được
 # Yêu cầu phiên bản CMake tối thiểu để chạy dự án này
 cmake_minimum_required(VERSION 3.16)
 
