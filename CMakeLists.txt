@@ -47,14 +47,29 @@ add_executable(HotelBookingManagement
     src/views/MainWindow.cpp
     src/views/MainWindow.h
     src/views/MainWindow.ui
+    src/views/RoomsView.cpp
+    src/views/RoomsView.h
+    src/views/CustomersView.cpp
+    src/views/CustomersView.h
+    src/views/BookingsView.cpp
+    src/views/BookingsView.h
+    src/views/InvoicesView.cpp
+    src/views/InvoicesView.h
 
     # Phân hệ Thực thể OOP (Models / Các lớp đối tượng quản lý)
+    src/models/Room.cpp
     src/models/Room.h
+    src/models/StandardRoom.cpp
     src/models/StandardRoom.h
+    src/models/DeluxeRoom.cpp
     src/models/DeluxeRoom.h
+    src/models/SuiteRoom.cpp
     src/models/SuiteRoom.h
+    src/models/Customer.cpp
     src/models/Customer.h
+    src/models/Booking.cpp
     src/models/Booking.h
+    src/models/Invoice.cpp
     src/models/Invoice.h
 )
 
