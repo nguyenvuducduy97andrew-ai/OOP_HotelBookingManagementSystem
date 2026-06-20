@@ -23,6 +23,8 @@ set(CMAKE_AUTORCC ON)
 
 # Tìm và nạp module đồ họa giao diện Qt6 Widgets (bắt buộc phải có)
 find_package(Qt6 REQUIRED COMPONENTS Widgets)
+find_package(Qt6 REQUIRED COMPONENTS Core Widgets)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Sql)
 
 # Thiết lập các cấu hình mặc định chuẩn của Qt cho dự án (giúp tối ưu hóa đường dẫn build)
 qt_standard_project_setup()
@@ -47,14 +49,14 @@ add_executable(HotelBookingManagement
     src/views/MainWindow.cpp
     src/views/MainWindow.h
     src/views/MainWindow.ui
-    src/views/RoomsView.cpp
-    src/views/RoomsView.h
-    src/views/CustomersView.cpp
-    src/views/CustomersView.h
-    src/views/BookingsView.cpp
-    src/views/BookingsView.h
-    src/views/InvoicesView.cpp
-    src/views/InvoicesView.h
+    # src/views/RoomsView.cpp
+    # src/views/RoomsView.h
+    # src/views/CustomersView.cpp
+    # src/views/CustomersView.h
+    # src/views/BookingsView.cpp
+    # src/views/BookingsView.h
+    # src/views/InvoicesView.cpp
+    # src/views/InvoicesView.h
 
     # Phân hệ Thực thể OOP (Models / Các lớp đối tượng quản lý)
     src/models/Room.cpp
@@ -71,6 +73,8 @@ add_executable(HotelBookingManagement
     src/models/Booking.h
     src/models/Invoice.cpp
     src/models/Invoice.h
+    src/models/RoomFactory.cpp
+    src/models/RoomFactory.h
 )
 
 #-------------------------------------------------------------------
@@ -90,4 +94,8 @@ target_include_directories(HotelBookingManagement PRIVATE
 # LIÊN KẾT THƯ VIỆN GIAO DIỆN
 # Kéo các thư viện Core và GUI tích hợp của Qt6 vào file thực thi cuối cùng
 #-------------------------------------------------------------------
-target_link_libraries(HotelBookingManagement PRIVATE Qt6::Widgets)
+target_link_libraries(HotelBookingManagement PRIVATE
+    Qt6::Core
+    Qt6::Widgets
+    Qt6::Sql
+)
