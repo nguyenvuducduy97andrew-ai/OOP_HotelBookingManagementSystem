@@ -2,9 +2,8 @@
 #include "Booking.h"
 #include "Room.h"
 #include "Customer.h"
-#include <iostream>
-#include <iomanip>
-using namespace std;
+
+#include <string>
 
 Invoice::Invoice() {
     this->invoiceId = "INV_UNKNOWN";
@@ -13,10 +12,10 @@ Invoice::Invoice() {
     this->paymentDate = QDate::currentDate();
 }
 
-string Invoice::getInvoiceId() const {
+std::string Invoice::getInvoiceId() const {
     return invoiceId;
 }
-void Invoice::setInvoiceId(const string& invoiceId) {
+void Invoice::setInvoiceId(const std::string& invoiceId) {
     this->invoiceId = invoiceId;
 }
 
