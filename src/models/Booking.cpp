@@ -4,7 +4,7 @@
 
 #include <string>
 
-
+//The booking counter started at 1000 to be used as BookingID
 int Booking::bookingCounter = 1000;
 Booking::Booking() {
     bookingCounter++;

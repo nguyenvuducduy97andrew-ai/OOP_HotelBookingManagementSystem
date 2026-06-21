@@ -28,20 +28,32 @@ Each layer has a single responsibility so team members can work in parallel with
 ## High-Level Data Flow
 
 ```text
-main.cpp
+main.cpp (Demo)
   │
-  ├─► DataManager::getInstance().loadAll()   // load persisted data on startup
+  ├─► HotelManager::registerRoom()        // add rooms with validation
+  ├─► HotelManager::registerCustomer()    // add customers with validation
+  ├─► HotelManager::createBooking()       // create bookings with date/availability checks
+  ├─► Room::calculateTargetPrice()        // polymorphic pricing
+  ├─► HotelManager::setRoomAvailability() // manage room status
+  ├─► HotelManager::createInvoice()       // generate invoices with tax
+  ├─► HotelManager::find*()               // query system state
   │
-  └─► MainWindow                              // user interaction (View)
+  └─► DataManager::getInstance()          // persist data to disk
         │
-        └─► HotelManager                      // business logic (Controller)
-              │
-              ├─► Models                      // Room, Customer, Booking, Invoice
-              │
-              └─► DataManager                 // save/load (Persistence)
+        └─► Models (Room, Customer, Booking, Invoice)
 ```
 
-`main.cpp` stays thin: it initializes Qt, loads data, shows the window, and runs the event loop. It does not contain business rules.
+**main.cpp** is now a comprehensive demo program that:
+1. Registers rooms of different types (Standard, Deluxe, Suite)
+2. Registers customers
+3. Creates bookings with full validation
+4. Demonstrates polymorphic room pricing
+5. Shows room availability management
+6. Generates invoices with tax calculation
+7. Performs object queries and retrieval
+8. Persists all data using DataManager
+
+The demo showcases all four OOP principles, design patterns, and the complete system workflow.
 
 ## OOP Design (Models)
 
@@ -67,18 +79,18 @@ Room (abstract)
 `Room` declares a pure virtual method:
 
 ```cpp
-virtual double calculateRent(int days) const = 0;
+virtual double calculateTargetPrice() = 0;
 ```
 
 Each subclass overrides it with its own pricing rule:
 
 | Class | Formula |
 |---|---|
-| `StandardRoom` | `baseRate × days` |
-| `DeluxeRoom` | `baseRate × days × 1.2` |
-| `SuiteRoom` | `baseRate × days × 1.5` |
+| `StandardRoom` | `baseRate` (1.0x) |
+| `DeluxeRoom` | `baseRate × 1.2` (20% premium) |
+| `SuiteRoom` | `baseRate × 1.5` (50% premium) |
 
-Controller and view code can call `calculateRent()` on any `Room` without knowing the concrete type.
+Controller and view code can call `calculateTargetPrice()` on any `Room` without knowing the concrete type.
 
 ### Abstraction
 
@@ -106,25 +118,42 @@ Every model class uses a `.h` (declaration) and `.cpp` (implementation) pair:
 
 ## Design Patterns
 
-### Factory Pattern — `HotelManager::createRoom()`
+### Factory Pattern — `RoomFactory`
 
 ```cpp
-static std::shared_ptr<Room> createRoom(RoomKind kind, int roomNumber, double baseRate = 0.0);
+static std::shared_ptr<Room> createRoom(RoomType type, std::string num, double basePrice);
 ```
 
-**Why:** GUI and controller code request a room by kind (`Standard`, `Deluxe`, `Suite`) instead of constructing concrete classes directly.
+**Why:** The system decouples room creation logic from the controller. Callers request a room by type enum (`Standard`, `Deluxe`, `Suite`) rather than constructing concrete classes directly.
 
 **Benefits:**
 - Callers depend on the `Room` abstraction, not specific subclasses.
-- Adding a new room type requires updating only the factory switch — not every caller.
-- Satisfies the lab requirement for at least one design pattern.
+- Adding a new room type requires updating only the factory — not every caller.
+- Encapsulates object creation logic in one place.
 
-Default base rates are applied inside the factory when `baseRate` is not provided (100 / 200 / 350).
+### Validation-First Controller Pattern — `HotelManager`
+
+```cpp
+bool registerRoom(RoomType kind, const std::string& roomNumber, double baseRate, std::string& errorMessage);
+bool registerCustomer(const std::string& id, const std::string& name, const std::string& phone, std::string& errorMessage);
+bool createBooking(const std::string& customerId, const std::string& roomNumber, const std::string& checkInDate, const std::string& checkOutDate, std::string& errorMessage);
+bool setRoomAvailability(const std::string& roomNumber, bool available, std::string& errorMessage);
+```
+
+**Why:** All public use-case methods perform input validation before modifying state. Errors are returned as strings rather than exceptions, making the system more resilient and testable.
+
+**Key Methods:**
+- `registerRoom()`, `registerCustomer()` — validate input, create objects, add to collections
+- `createBooking()` — validates customer exists, room is available, dates are valid, then marks room unavailable
+- `setRoomAvailability()` — prevents marking a booked room as available
+- `createInvoice()` — computes billing based on base price, duration, and tax rate
 
 ### Singleton Pattern — `DataManager`
 
 ```cpp
 static DataManager& getInstance();
+bool saveAll(const std::string& prefix);
+bool loadAll(const std::string& prefix);
 ```
 
 **Why:** Persistence should have a single access point for loading and saving data, regardless of whether the backend is JSON, CSV, or SQLite.
@@ -149,13 +178,84 @@ std::vector<std::shared_ptr<Booking>> bookings;
 - A `Booking` references the same `Customer` and `Room` objects held by the manager — shared ownership prevents use-after-free and double-delete.
 - No manual `delete` calls — satisfies the lab memory-management requirement cleanly.
 
+## HotelManager API
+
+### Core Methods
+
+**Room Management:**
+```cpp
+bool registerRoom(RoomType kind, const std::string& roomNumber, double baseRate, std::string& errorMessage);
+bool setRoomAvailability(const std::string& roomNumber, bool available, std::string& errorMessage);
+```
+
+**Customer Management:**
+```cpp
+bool registerCustomer(const std::string& id, const std::string& name, const std::string& phone, std::string& errorMessage);
+```
+
+**Booking Management:**
+```cpp
+bool createBooking(
+    const std::string& customerId,
+    const std::string& roomNumber,
+    const std::string& checkInDate,      // ISO format: "YYYY-MM-DD"
+    const std::string& checkOutDate,     // ISO format: "YYYY-MM-DD"
+    std::string& errorMessage
+);
+```
+
+**Invoice Generation:**
+```cpp
+std::shared_ptr<Invoice> createInvoice(
+    const std::string& invoiceId,
+    const std::string& bookingId,
+    int days,                             // duration in nights
+    double taxRate,                       // 0.1 = 10%
+    std::string& errorMessage
+) const;
+```
+
+### Query Methods
+
+```cpp
+const std::vector<std::shared_ptr<Room>>& getRooms() const;
+const std::vector<std::shared_ptr<Customer>>& getCustomers() const;
+const std::vector<std::shared_ptr<Booking>>& getBookings() const;
+
+std::shared_ptr<Room> findRoomByNumber(const std::string& roomNumber) const;
+std::shared_ptr<Customer> findCustomerById(const std::string& customerId) const;
+std::shared_ptr<Booking> findBookingById(const std::string& bookingId) const;
+
+std::vector<std::shared_ptr<Room>> getAvailableRooms() const;
+```
+
+### Validation & Error Handling
+
+All public methods validate inputs and return errors via reference parameter:
+
+- Invalid room numbers (empty, non-alphanumeric)
+- Duplicate room numbers or customer IDs
+- Invalid base rates (≤ 0)
+- Invalid date formats (must be ISO "YYYY-MM-DD")
+- Invalid date ranges (checkout ≤ checkin)
+- Room already booked
+- Customer or room not found
+
+This validation-first approach makes the system robust and testable.
+
 ## View Layer (Qt6)
 
-| File | Role |
-|---|---|
-| `MainWindow.ui` | Visual layout designed in Qt Designer |
-| `MainWindow.h` | Widget class declaration (`Q_OBJECT`, signals/slots) |
-| `MainWindow.cpp` | Behavior — connects UI events to controller logic |
+The view layer is currently in development with the following structure:
+
+| File | Role | Status |
+|---|---|---|
+| `MainWindow.ui` | Visual layout designed in Qt Designer | Scaffolding |
+| `MainWindow.h` | Widget class declaration (`Q_OBJECT`, signals/slots) | Scaffolding |
+| `MainWindow.cpp` | Behavior — connects UI events to controller logic | Scaffolding |
+
+**Current State:** The system runs as a comprehensive console demo in `main.cpp` that demonstrates all functionality. This allows validation of business logic before integrating with the Qt GUI.
+
+**Next Step:** Wire `MainWindow` signals/slots to `HotelManager` methods to provide interactive GUI control.
 
 The `.ui` file is compiled automatically by CMake (`AUTOUIC`). The generated `ui_MainWindow.h` is included in `MainWindow.cpp`, not edited by hand.
 
@@ -190,9 +290,19 @@ Keeping these boundaries strict makes the codebase easier to test, extend, and g
 
 ## Future Work
 
-The current scaffold provides compilable stubs. Expected next steps by layer:
+The current implementation provides:
 
-- **`database/`** — implement `loadAll()` / `saveAll()` with JSON, CSV, or SQLite
-- **`controllers/`** — booking validation, availability checks, invoice generation
-- **`views/`** — tabbed UI for rooms, customers, bookings; wire signals to `HotelManager`
-- **`main.cpp`** — call `saveAll()` on application exit
+✅ **Complete** — OOP design with all four pillars (encapsulation, inheritance, polymorphism, abstraction)
+✅ **Complete** — Factory Pattern (RoomFactory) and Singleton Pattern (DataManager)
+✅ **Complete** — Comprehensive validation and error handling in HotelManager
+✅ **Complete** — Polymorphic room pricing (calculateTargetPrice)
+✅ **Complete** — Invoice generation with tax calculation
+✅ **Complete** — Working demo in main.cpp
+
+**Next Steps:**
+
+- **`database/`** — implement `loadAll()` / `saveAll()` persistence layer (JSON, CSV, or SQLite)
+- **`views/`** — integrate MainWindow with HotelManager (tabbed UI for rooms, customers, bookings, invoices)
+- **Qt Integration** — connect GUI signals/slots to HotelManager methods for interactive use
+- **Error Display** — show validation errors in UI dialogs rather than console output
+- **Data Loading** — call `DataManager::getInstance().loadAll()` on MainWindow initialization
