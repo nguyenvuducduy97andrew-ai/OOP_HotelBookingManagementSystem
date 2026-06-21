@@ -321,8 +321,8 @@ bool HotelManager::createBooking(
     const auto checkOut = QDate::fromString(QString::fromStdString(checkOutDate), Qt::ISODate);
 
     auto booking = std::make_shared<Booking>();
-    booking->setCustomer(customer.get());
-    booking->setRoom(room.get());
+    booking->setCustomer(customer);  // Pass shared_ptr directly
+    booking->setRoom(room);          // Pass shared_ptr directly
     booking->setCheckInDate(checkIn);
     booking->setCheckOutDate(checkOut);
 
@@ -410,10 +410,8 @@ std::shared_ptr<Invoice> HotelManager::createInvoice(
 
     auto invoice = std::make_shared<Invoice>();
     invoice->setInvoiceId(invoiceId);
-    invoice->setBooking(booking.get());
-
-    const double subtotal = room->getBasePrice() * static_cast<double>(days);
-    invoice->setTotalAmount(subtotal * (1.0 + taxRate));
+    invoice->setTaxRate(taxRate);        // Set tax rate first
+    invoice->setBooking(booking);        // Pass shared_ptr directly
     invoice->setPaymentDate(QDate::currentDate());
 
     return invoice;

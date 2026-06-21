@@ -99,14 +99,23 @@ Controller and view code can call `calculateTargetPrice()` on any `Room` without
 ### Entity Relationships
 
 ```text
-Customer ──┐
-           ├── Booking ── Invoice
-Room ──────┘
+HotelManager (owns via shared_ptr)
+  ├─ Customer ─ ─ ─ ─ ┐
+  ├─ Room ─ ─ ─ ─ ┐   │
+  └─ Booking       ├─→ (weak references)
+        └─ Invoice ┘
 ```
 
 - **`Customer`** — identity and contact info (ID, name, phone). Kept separate so one customer can hold multiple bookings.
-- **`Booking`** — links a customer to a room with check-in and check-out dates. Represents the reservation itself.
-- **`Invoice`** — wraps a booking and computes subtotal, tax, and total. Separates billing from reservation logic.
+- **`Booking`** — links a customer to a room with check-in and check-out dates via weak references. Represents the reservation itself.
+  - Stores `weak_ptr<Customer>` and `weak_ptr<Room>` (non-owning references)
+- **`Invoice`** — wraps a booking and computes subtotal, tax, and total via a weak reference. Separates billing from reservation logic.
+  - Stores `weak_ptr<Booking>` (non-owning reference)
+
+This design ensures that:
+1. HotelManager maintains sole ownership of all objects
+2. Deleting a customer, room, or booking from HotelManager invalidates only the weak_ptrs
+3. No dangling pointers can occur — lock() returns nullptr if the object was deleted
 
 ### Header / Source Split
 
@@ -163,20 +172,110 @@ bool loadAll(const std::string& prefix);
 - Copy and assignment are deleted to prevent accidental second instances.
 - The rest of the application calls `DataManager::getInstance()` without managing its lifetime.
 
-## Memory Management
+### Non-Owning Reference Pattern — weak_ptr
 
-The project uses `std::shared_ptr` for heap-allocated model objects stored in `HotelManager`:
+Model objects use `std::weak_ptr` to store non-owning references to entities:
+- `Booking` holds weak references to Customer and Room
+- `Invoice` holds a weak reference to Booking
 
+**Why weak_ptr instead of shared_ptr:**
+- Avoids circular reference problems and ensures HotelManager has clear ownership
+- `weak_ptr::lock()` safely returns `nullptr` if the referenced object was deleted
+- Prevents dangling pointer bugs when objects are removed from HotelManager
+- Forces callers to check validity before use, improving code safety
+
+**Example:**
 ```cpp
-std::vector<std::shared_ptr<Room>> rooms;
-std::vector<std::shared_ptr<Customer>> customers;
-std::vector<std::shared_ptr<Booking>> bookings;
+auto customer = booking->getCustomer();  // Returns shared_ptr (from lock())
+if (customer != nullptr) {
+    // Safe to use
+}
+// If HotelManager deleted the customer, lock() would return nullptr
 ```
 
-**Why `shared_ptr` and not raw pointers:**
-- `Room` is polymorphic — pointer semantics are required to store subclasses through a base pointer.
-- A `Booking` references the same `Customer` and `Room` objects held by the manager — shared ownership prevents use-after-free and double-delete.
-- No manual `delete` calls — satisfies the lab memory-management requirement cleanly.
+## Memory Management
+
+The project uses a **non-owning reference pattern** with `std::weak_ptr` for model relationships, ensuring safe pointer semantics and preventing dangling pointer risks.
+
+### Smart Pointer Strategy
+
+**Ownership:**
+- `HotelManager` owns all model objects via `std::shared_ptr` vectors:
+  ```cpp
+  std::vector<std::shared_ptr<Room>> rooms;
+  std::vector<std::shared_ptr<Customer>> customers;
+  std::vector<std::shared_ptr<Booking>> bookings;
+  ```
+- Rooms, Customers, and Bookings are created, stored, and destroyed by HotelManager
+
+**References (Non-owning):**
+- `Booking` stores weak references to Customer and Room:
+  ```cpp
+  std::weak_ptr<Customer> customer;
+  std::weak_ptr<Room> room;
+  ```
+- `Invoice` stores a weak reference to Booking:
+  ```cpp
+  std::weak_ptr<Booking> booking;
+  ```
+
+### Why weak_ptr?
+
+**Problem with Raw Pointers:**
+- Raw pointers don't indicate ownership
+- If HotelManager deletes a Room but an Invoice still holds a raw pointer, accessing it causes undefined behavior (dangling pointer)
+- No way to detect at runtime if a pointer is still valid
+
+**Solution with weak_ptr:**
+- `weak_ptr` **does not prevent object deletion** — ownership remains solely with HotelManager
+- `weak_ptr::lock()` safely converts to `shared_ptr` and returns `nullptr` if the object was deleted
+- Callers can check validity before use
+- Eliminates dangling pointer risks
+
+### Usage Pattern
+
+**Setting references:**
+```cpp
+booking->setCustomer(managerCustomerSharedPtr);  // Pass shared_ptr
+booking->setRoom(managerRoomSharedPtr);          // Pass shared_ptr
+```
+
+**Getting references:**
+```cpp
+auto customer = booking->getCustomer();  // Returns shared_ptr (locked)
+auto room = booking->getRoom();          // Returns shared_ptr (locked)
+
+if (customer) {
+    // Safe to use; customer is still alive
+    std::cout << customer->getName();
+}
+// After this block, shared_ptr auto-releases if no other owners
+```
+
+**In Invoice:**
+```cpp
+auto lockedBooking = invoice->getBooking();  // Lock weak_ptr safely
+if (lockedBooking != nullptr && lockedBooking->isValid()) {
+    // Booking and its Customer/Room are guaranteed valid in this scope
+}
+```
+
+### Validation Methods
+
+Both Booking and Invoice provide `isValid()` methods that safely lock all weak_ptrs:
+
+```cpp
+// Booking::isValid()
+bool Booking::isValid() const {
+    auto lockedCustomer = customer.lock();
+    auto lockedRoom = room.lock();
+    return lockedCustomer != nullptr && lockedRoom != nullptr &&
+           checkInDate.isValid() && checkOutDate.isValid() &&
+           checkOutDate > checkInDate;
+}
+```
+
+This ensures all referenced objects still exist before use.
 
 ## HotelManager API
 
