@@ -1,77 +1,35 @@
+cmake_minimum_required(VERSION 3.19)
+project(hotel_booking LANGUAGES CXX)
 
-#Mỗi khi add một class mới (ví dụ: tạo thêm VipCustomer.h, VipCustomer.cpp), 
-#người đó phải mở file CMakeLists.txt ra 
-#và điền thêm dòng src/models/VipCustomer.h và scr/models/VipCustomer.cpp
-#vào đúng vị trí "add_executable" thì mới compile được
-# Yêu cầu phiên bản CMake tối thiểu để chạy dự án này
-cmake_minimum_required(VERSION 3.16)
+find_package(Qt6 6.5 REQUIRED COMPONENTS Core Widgets)
 
-# Định nghĩa tên dự án và chỉ định ngôn ngữ lập trình sử dụng là C++ (CXX)
-project(HotelBookingManagement LANGUAGES CXX)
-
-# Thiết lập tiêu chuẩn mã nguồn C++ tối thiểu là C++17 (để sử dụng các tính năng OOP hiện đại)
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
-# Bật tính năng tự động xử lý các thành phần đặc trưng của Qt:
-# AUTOMOC: Tự động biên dịch cơ chế Signal/Slot (Meta-Object Compiler)
-# AUTOUIC: Tự động chuyển đổi các file thiết kế kéo thả giao diện .ui thành code C++
-# AUTORCC: Tự động quản lý các file tài nguyên hệ thống như hình ảnh, icon (.qrc)
-set(CMAKE_AUTOMOC ON)
-set(CMAKE_AUTOUIC ON)
-set(CMAKE_AUTORCC ON)
-
-# Tìm và nạp module đồ họa giao diện Qt6 Widgets (bắt buộc phải có)
-find_package(Qt6 REQUIRED COMPONENTS Widgets)
-
-# Thiết lập các cấu hình mặc định chuẩn của Qt cho dự án (giúp tối ưu hóa đường dẫn build)
 qt_standard_project_setup()
 
-#-------------------------------------------------------------------
-# ĐỊNH NGHĨA FILE THỰC THI & QUẢN LÝ DANH SÁCH FILE MÃ NGUỒN
-# Khi thành viên thêm file mới, hãy điền chính xác đường dẫn vào nhóm tương ứng dưới đây.
-#-------------------------------------------------------------------
-add_executable(HotelBookingManagement
-    # File chạy chính của chương trình
-    src/main.cpp
-
-    # Phân hệ Điều phối (Controllers / Lớp xử lý logic)
-    src/controllers/HotelManager.cpp
-    src/controllers/HotelManager.h
-
-    # Phân hệ Cơ sở dữ liệu (Database / Lưu trữ tệp)
-    src/database/DataManager.cpp
-    src/database/DataManager.h
-
-    # Phân hệ Giao diện người dùng (Views / Giao diện kéo thả)
-    src/views/MainWindow.cpp
-    src/views/MainWindow.h
-    src/views/MainWindow.ui
-
-    # Phân hệ Thực thể OOP (Models / Các lớp đối tượng quản lý)
-    src/models/Room.h
-    src/models/StandardRoom.h
-    src/models/DeluxeRoom.h
-    src/models/SuiteRoom.h
-    src/models/Customer.h
-    src/models/Booking.h
-    src/models/Invoice.h
+qt_add_executable(hotel_booking
+    WIN32 MACOSX_BUNDLE
+    main.cpp
+    mainwindow.cpp
+    mainwindow.h
+    mainwindow.ui
+    Customer.h
+    Customer.cpp
 )
 
-#-------------------------------------------------------------------
-# CẤU HÌNH THƯ MỤC TÌM KIẾM HEADER (INCLUDE PATH)
-# Giúp các thành viên khi gọi chéo lớp chỉ cần #include "Room.h" 
-# thay vì phải gõ đường dẫn dài dòng như #include "../models/Room.h"
-#-------------------------------------------------------------------
-target_include_directories(HotelBookingManagement PRIVATE
-    src/models
-    src/controllers
-    src/database
-    src/views
+target_link_libraries(hotel_booking
+    PRIVATE
+        Qt::Core
+        Qt::Widgets
 )
 
-#-------------------------------------------------------------------
-# LIÊN KẾT THƯ VIỆN GIAO DIỆN
-# Kéo các thư viện Core và GUI tích hợp của Qt6 vào file thực thi cuối cùng
-#-------------------------------------------------------------------
-target_link_libraries(HotelBookingManagement PRIVATE Qt6::Widgets)
+install(TARGETS hotel_booking
+    BUNDLE  DESTINATION .
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+)
+
+qt_generate_deploy_app_script(
+    TARGET hotel_booking
+    OUTPUT_SCRIPT deploy_script
+    NO_UNSUPPORTED_PLATFORM_ERROR
+)
+install(SCRIPT ${deploy_script})
