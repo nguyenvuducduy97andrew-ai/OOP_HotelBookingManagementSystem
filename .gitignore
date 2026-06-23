@@ -12,6 +12,9 @@
 *.exe
 *.out
 *.app
+# Visual Studio CMake local settings
+CMakeSettings.json
+out/
 
 # ==========================================
 # Qt Creator & Build System Outputs

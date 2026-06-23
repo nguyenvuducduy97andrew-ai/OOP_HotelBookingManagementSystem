@@ -1,0 +1,418 @@
+#include "HotelManager.h"
+#include <QDate>
+#include <QString>
+#include <algorithm>
+#include <cctype>
+#include <utility>
+
+HotelManager::HotelManager() = default;
+
+// =========================
+// Internal add methods
+// =========================
+
+void HotelManager::addRoom(std::shared_ptr<Room> room)
+{
+    rooms.push_back(std::move(room));
+}
+
+void HotelManager::addCustomer(std::shared_ptr<Customer> customer)
+{
+    customers.push_back(std::move(customer));
+}
+
+void HotelManager::addBooking(std::shared_ptr<Booking> booking)
+{
+    bookings.push_back(std::move(booking));
+}
+
+// =========================
+// Getters
+// =========================
+
+const std::vector<std::shared_ptr<Room>> &HotelManager::getRooms() const
+{
+    return rooms;
+}
+
+const std::vector<std::shared_ptr<Customer>> &HotelManager::getCustomers() const
+{
+    return customers;
+}
+
+const std::vector<std::shared_ptr<Booking>> &HotelManager::getBookings() const
+{
+    return bookings;
+}
+
+// =========================
+// Validation helpers
+// =========================
+
+bool HotelManager::isValidRoomNumber(const std::string &roomNumber) const
+{
+    return !roomNumber.empty() &&
+           std::all_of(roomNumber.begin(), roomNumber.end(), [](unsigned char c)
+                       { return std::isalnum(c); });
+}
+
+bool HotelManager::validateRoomInput(
+    const std::string &roomNumber,
+    double baseRate,
+    std::string &errorMessage) const
+{
+    if (!isValidRoomNumber(roomNumber))
+    {
+        errorMessage = "Room number must not be empty and must contain only letters and numbers.";
+        return false;
+    }
+
+    if (baseRate <= 0)
+    {
+        errorMessage = "Base rate must be greater than zero.";
+        return false;
+    }
+
+    if (roomNumberExists(roomNumber))
+    {
+        errorMessage = "Room number already exists.";
+        return false;
+    }
+
+    return true;
+}
+
+bool HotelManager::validateCustomerInput(
+    const std::string &id,
+    const std::string &name,
+    const std::string &phone,
+    std::string &errorMessage) const
+{
+    if (id.empty())
+    {
+        errorMessage = "Customer ID is required.";
+        return false;
+    }
+
+    if (name.empty())
+    {
+        errorMessage = "Customer name is required.";
+        return false;
+    }
+
+    if (phone.empty())
+    {
+        errorMessage = "Phone number is required.";
+        return false;
+    }
+
+    if (customerIdExists(id))
+    {
+        errorMessage = "Customer ID already exists.";
+        return false;
+    }
+
+    return true;
+}
+
+bool HotelManager::validateBookingInput(
+    const std::string &customerId,
+    const std::string &roomNumber,
+    const std::string &checkInDate,
+    const std::string &checkOutDate,
+    std::string &errorMessage) const
+{
+    const auto checkIn = QDate::fromString(QString::fromStdString(checkInDate), Qt::ISODate);
+    const auto checkOut = QDate::fromString(QString::fromStdString(checkOutDate), Qt::ISODate);
+
+    if (!checkIn.isValid() || !checkOut.isValid())
+    {
+        errorMessage = "Check-in and check-out dates must use ISO format (YYYY-MM-DD).";
+        return false;
+    }
+
+    if (checkOut <= checkIn)
+    {
+        errorMessage = "Check-out date must be after check-in date.";
+        return false;
+    }
+
+    const auto customer = findCustomerById(customerId);
+    if (!customer)
+    {
+        errorMessage = "Customer not found.";
+        return false;
+    }
+
+    const auto room = findRoomByNumber(roomNumber);
+    if (!room)
+    {
+        errorMessage = "Room not found.";
+        return false;
+    }
+
+    if (!room->getIsAvailable())
+    {
+        errorMessage = "Room is not available.";
+        return false;
+    }
+
+    return true;
+}
+
+// =========================
+// Existence checks
+// =========================
+
+bool HotelManager::roomNumberExists(const std::string &roomNumber) const
+{
+    return findRoomByNumber(roomNumber) != nullptr;
+}
+
+bool HotelManager::customerIdExists(const std::string &customerId) const
+{
+    return findCustomerById(customerId) != nullptr;
+}
+
+bool HotelManager::bookingIdExists(const std::string &bookingId) const
+{
+    return findBookingById(bookingId) != nullptr;
+}
+
+// =========================
+// Find methods
+// =========================
+
+std::shared_ptr<Room> HotelManager::findRoomByNumber(const std::string &roomNumber) const
+{
+    for (const auto &room : rooms)
+    {
+        if (room && room->getRoomNumber() == roomNumber)
+        {
+            return room;
+        }
+    }
+
+    return nullptr;
+}
+
+std::shared_ptr<Customer> HotelManager::findCustomerById(const std::string &customerId) const
+{
+    for (const auto &customer : customers)
+    {
+        if (customer && customer->getCustomerId() == customerId)
+        {
+            return customer;
+        }
+    }
+
+    return nullptr;
+}
+
+std::shared_ptr<Booking> HotelManager::findBookingById(const std::string &bookingId) const
+{
+    for (const auto &booking : bookings)
+    {
+        if (booking && booking->getBookingId() == bookingId)
+        {
+            return booking;
+        }
+    }
+
+    return nullptr;
+}
+
+// =========================
+// Queries
+// =========================
+
+std::vector<std::shared_ptr<Room>> HotelManager::getAvailableRooms() const
+{
+    std::vector<std::shared_ptr<Room>> availableRooms;
+
+    for (const auto &room : rooms)
+    {
+        if (room && room->getIsAvailable())
+        {
+            availableRooms.push_back(room);
+        }
+    }
+
+    return availableRooms;
+}
+
+// =========================
+// ID generation
+// =========================
+
+std::string HotelManager::nextInvoiceId() const
+{
+    return "INV" + std::to_string(bookings.size() + 1);
+}
+
+// =========================
+// Use-case methods
+// =========================
+
+bool HotelManager::registerRoom(
+    RoomType kind,
+    const std::string &roomNumber,
+    double baseRate,
+    std::string &errorMessage)
+{
+    if (!validateRoomInput(roomNumber, baseRate, errorMessage))
+    {
+        return false;
+    }
+
+    auto room = RoomFactory::createRoom(kind, roomNumber, baseRate);
+
+    if (!room)
+    {
+        errorMessage = "Failed to create room.";
+        return false;
+    }
+
+    addRoom(room);
+    return true;
+}
+
+bool HotelManager::registerCustomer(
+    const std::string &id,
+    const std::string &name,
+    const std::string &phone,
+    std::string &errorMessage)
+{
+    if (!validateCustomerInput(id, name, phone, errorMessage))
+    {
+        return false;
+    }
+
+    auto customer = std::make_shared<Customer>();
+    customer->setCustomerId(id);
+    customer->setName(name);
+    customer->setPhoneNumber(phone);
+
+    addCustomer(customer);
+    return true;
+}
+
+bool HotelManager::createBooking(
+    const std::string &customerId,
+    const std::string &roomNumber,
+    const std::string &checkInDate,
+    const std::string &checkOutDate,
+    std::string &errorMessage)
+{
+    if (!validateBookingInput(
+            customerId,
+            roomNumber,
+            checkInDate,
+            checkOutDate,
+            errorMessage))
+    {
+        return false;
+    }
+
+    const auto customer = findCustomerById(customerId);
+    const auto room = findRoomByNumber(roomNumber);
+
+    const auto checkIn = QDate::fromString(QString::fromStdString(checkInDate), Qt::ISODate);
+    const auto checkOut = QDate::fromString(QString::fromStdString(checkOutDate), Qt::ISODate);
+
+    auto booking = std::make_shared<Booking>();
+    booking->setCustomer(customer);  // Pass shared_ptr directly
+    booking->setRoom(room);          // Pass shared_ptr directly
+    booking->setCheckInDate(checkIn);
+    booking->setCheckOutDate(checkOut);
+
+    room->setIsAvailable(false);
+    addBooking(booking);
+
+    return true;
+}
+
+bool HotelManager::setRoomAvailability(
+    const std::string &roomNumber,
+    bool available,
+    std::string &errorMessage)
+{
+    const auto room = findRoomByNumber(roomNumber);
+
+    if (!room)
+    {
+        errorMessage = "Room not found.";
+        return false;
+    }
+
+    if (available)
+    {
+        for (const auto &booking : bookings)
+        {
+            if (booking &&
+                booking->getRoom() &&
+                booking->getRoom()->getRoomNumber() == roomNumber)
+            {
+                errorMessage = "Cannot mark room available while it has an active booking.";
+                return false;
+            }
+        }
+    }
+
+    room->setIsAvailable(available);
+    return true;
+}
+
+// =========================
+// Invoice
+// =========================
+
+std::shared_ptr<Invoice> HotelManager::createInvoice(
+    const std::string &invoiceId,
+    const std::string &bookingId,
+    int days,
+    double taxRate,
+    std::string &errorMessage) const
+{
+    if (invoiceId.empty())
+    {
+        errorMessage = "Invoice ID is required.";
+        return nullptr;
+    }
+
+    if (days <= 0)
+    {
+        errorMessage = "Number of days must be greater than zero.";
+        return nullptr;
+    }
+
+    if (taxRate < 0)
+    {
+        errorMessage = "Tax rate must not be negative.";
+        return nullptr;
+    }
+
+    const auto booking = findBookingById(bookingId);
+
+    if (!booking)
+    {
+        errorMessage = "Booking not found.";
+        return nullptr;
+    }
+
+    const auto room = booking->getRoom();
+
+    if (!room)
+    {
+        errorMessage = "Booking has no room assigned.";
+        return nullptr;
+    }
+
+    auto invoice = std::make_shared<Invoice>();
+    invoice->setInvoiceId(invoiceId);
+    invoice->setTaxRate(taxRate);        // Set tax rate first
+    invoice->setBooking(booking);        // Pass shared_ptr directly
+    invoice->setPaymentDate(QDate::currentDate());
+
+    return invoice;
+}
