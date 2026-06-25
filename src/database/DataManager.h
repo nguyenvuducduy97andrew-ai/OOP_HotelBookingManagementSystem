@@ -1,6 +1,7 @@
 #pragma once
-
+#include "HotelManager.h"
 #include <string>
+#include <QSqlDatabase>
 
 // Central entry point for loading and saving hotel data.
 // This class is implemented as a singleton so the application uses one
@@ -9,6 +10,12 @@ class DataManager {
     private:
     DataManager() = default;
     ~DataManager() = default;
+
+    // Helper function to set up the connection and create the initial structure tables
+    bool initDatabase(const std::string& dataPath);
+
+    QSqlDatabase m_db; // Qt database connection storage variable
+
 public:
     // Returns the single shared DataManager instance.
     static DataManager& getInstance();
@@ -19,8 +26,8 @@ public:
     DataManager(const DataManager&) = delete;
     DataManager& operator=(const DataManager&) = delete;
 
-    bool loadAll(const std::string& dataPath = "data");
-    bool saveAll(const std::string& dataPath = "data");
+    bool loadAll(HotelManager& manager, const std::string& dataPath = "hotel_data.db");
+    bool saveAll(const HotelManager& manager, const std::string& dataPath = "hotel_data.db");
 
 };
 
