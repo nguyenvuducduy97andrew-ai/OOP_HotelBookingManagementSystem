@@ -11,10 +11,10 @@ std::shared_ptr<Room> RoomFactory::createRoom(RoomType type, std::string number,
         return std::make_shared<StandardRoom>(number, basePrice);
 
     case RoomType::Suite:
-        return std::make_shared<SuiteRoom>(number, basePrice, 50.0);
+        return std::make_shared<SuiteRoom>(number, basePrice, 100.0);
 
     case RoomType::Deluxe:
-        return std::make_shared<DeluxeRoom>(number, basePrice, 100.0);
+        return std::make_shared<DeluxeRoom>(number, basePrice, 50.0);
 
     default:
         return nullptr;

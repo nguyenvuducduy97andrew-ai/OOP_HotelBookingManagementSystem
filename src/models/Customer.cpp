@@ -1,5 +1,3 @@
-// Chỉ dùng để xác định lỗi trong class đang code, sau khi có code của Thảo Sương sẽ thế vào sau.
-
 #include "Customer.h"
 
 Customer::Customer() {

@@ -20,7 +20,6 @@ out/
 # Qt Creator & Build System Outputs
 # ==========================================
 # Chặn toàn bộ các thư mục build sinh ra khi biên dịch (Shadow builds)
-# Build directory
 build/
 build-*/
 CMakeFiles/
