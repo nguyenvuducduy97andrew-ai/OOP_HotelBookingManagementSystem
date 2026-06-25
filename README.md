@@ -39,14 +39,13 @@ The system demonstrates core object-oriented programming concepts:
 - **Available Room Filtering**: Query empty rooms for specific periods
 
 ### Invoice & Billing
-- **Tax Calculation**: Configurable tax rates applied to subtotals
-- **Itemized Invoices**: Separate billing from reservation logic
-- **Financial Tracking**: Total cost, subtotal, and tax breakdowns
+- **Invoice Lifecycle**: Create, lookup, list, and delete invoices through HotelManager
+- **Billing Separation**: Invoices remain tied to bookings while preserving their own payment date and tax configuration
 
 ### Data Persistence
-- **Automatic Save/Load**: Persist all data between sessions
-- **Multiple Backends**: Support for JSON, CSV, or SQLite databases
-- **DataManager Singleton**: Centralized data access layer
+- **SQLite-backed Persistence**: Load and save hotel state through DataManager::loadAll() and DataManager::saveAll()
+- **Automatic Database Setup**: The data layer creates the required tables on first use
+- **Core Domain Recovery**: Customer, room, and booking data are restored from the database on startup
 
 ---
 
@@ -74,11 +73,11 @@ src/
 ### Data Flow
 ```
 main.cpp
-  ├─► DataManager::getInstance().loadAll()    ← Load data on startup
+  ├─► DataManager::getInstance().loadAll()    ← Load persisted data on startup
   └─► MainWindow / Console Demo                ← User interactions
         └─► HotelManager                       ← Business logic
-              ├─► Models (Room, Customer, etc.) ← Domain objects
-              └─► DataManager                  ← Persistence
+              ├─► Models (Room, Customer, Booking, Invoice)
+              └─► DataManager::saveAll()        ← Persist state to SQLite
 ```
 
 ---
@@ -151,8 +150,8 @@ cmake --build .
 | `Customer` | Represents a guest |
 | `Booking` | Links customer to room with dates |
 | `Invoice` | Billing information for a booking |
-| `HotelManager` | Controller managing rooms, customers, bookings |
-| `DataManager` | Singleton for data persistence |
+| `HotelManager` | Controller managing rooms, customers, bookings, and invoice operations |
+| `DataManager` | Singleton for SQLite-backed data persistence via loadAll()/saveAll() |
 | `RoomFactory` | Factory for creating room instances |
 | `MainWindow` | Qt GUI (future expansion) |
 
@@ -165,8 +164,8 @@ The project includes a comprehensive console demo (`main.cpp`) showcasing:
 2. Registering customers
 3. Creating bookings
 4. Generating invoices
-5. Calculating totals with tax
-6. Displaying reports
+5. Listing and deleting invoices when needed
+6. Persisting and reloading state with DataManager::saveAll()/loadAll()
 
 Run the demo to see the system in action:
 ```bash
