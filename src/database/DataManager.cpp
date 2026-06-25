@@ -22,7 +22,7 @@ bool DataManager::initDatabase(const std::string& dataPath) {
     m_db.setDatabaseName(QString::fromStdString(dataPath));
 
     if (!m_db.open()) {
-        qDebug() << "Lỗi kết nối SQLite: " << m_db.lastError().text();
+        qDebug() << "SQLite connection error: " << m_db.lastError().text();
         return false;
     }
 
@@ -37,7 +37,7 @@ bool DataManager::initDatabase(const std::string& dataPath) {
         "   phoneNumber TEXT"
         ");";
     if (!query.exec(createCustomer)) {
-        qDebug() << "Lỗi tạo bảng Customer:" << query.lastError().text();
+        qDebug() << "Error creating Customer table: " << query.lastError().text();
         return false;
     }
 
@@ -51,7 +51,7 @@ bool DataManager::initDatabase(const std::string& dataPath) {
         "   miniBarFee REAL"
         ");";
     if (!query.exec(createRoom)) {
-        qDebug() << "Lỗi tạo bảng Room" << query.lastError().text();
+        qDebug() << "Error creating Room table: " << query.lastError().text();
         return false;
     }
 
@@ -66,7 +66,7 @@ bool DataManager::initDatabase(const std::string& dataPath) {
         "   FOREIGN KEY (roomNumber) REFERENCES Room(roomNumber) ON DELETE RESTRICT ON UPDATE CASCADE"
         ");";
     if (!query.exec(createBooking)) {
-        qDebug() << "Lỗi tạo bảng Booking:" << query.lastError().text();
+        qDebug() << "Error creating Booking table: " << query.lastError().text();
         return false;
     }
 
@@ -79,11 +79,11 @@ bool DataManager::initDatabase(const std::string& dataPath) {
         "   FOREIGN KEY (bookingId) REFERENCES Booking(bookingId) ON DELETE CASCADE ON UPDATE CASCADE"
         ");";
     if (!query.exec(createInvoice)) {
-        qDebug() << "Lỗi tạo bảng Invoice:" << query.lastError().text();
+        qDebug() << "Error creating Invoicce table: " << query.lastError().text();
         return false;
     }
 
-    qDebug() << "Cơ sở dữ liệu SQLite đã được thiết lập sẵn sàng!";
+    qDebug() << "The SQLite database is all set and ready!";
     return true;
 }
 
@@ -92,6 +92,8 @@ bool DataManager::loadAll(HotelManager& manager, const std::string& dataPath) {
     if (!initDatabase(dataPath)) {
         return false;
     }
+
+    Booking::initCounterFromDatabase();
 
     QSqlQuery query;
     std::string errorMsg;
@@ -106,7 +108,7 @@ bool DataManager::loadAll(HotelManager& manager, const std::string& dataPath) {
             manager.registerCustomer(custId, name, phone, errorMsg);
         }
     } else {
-        qDebug() << "Lỗi đọc bảng Customer:" << query.lastError().text();
+        qDebug() << "Error reading Customer table: " << query.lastError().text();
         return false;
     }
 
@@ -142,7 +144,7 @@ bool DataManager::loadAll(HotelManager& manager, const std::string& dataPath) {
             }
         }
     } else {
-        qDebug() << "Lỗi đọc bảng Room:" << query.lastError().text();
+        qDebug() << "Error reading Room table: " << query.lastError().text();
         return false;
     }
 
@@ -158,7 +160,7 @@ bool DataManager::loadAll(HotelManager& manager, const std::string& dataPath) {
             manager.createBooking(custId, roomNum, checkInStr, checkOutStr, errorMsg);
         }
     } else {
-        qDebug() << "Lỗi đọc bảng Booking:" << query.lastError().text();
+        qDebug() << "Error reading Booking table: " << query.lastError().text();
         return false;
     }
 
@@ -186,7 +188,7 @@ bool DataManager::saveAll(const HotelManager& manager, const std::string& dataPa
             query.addBindValue(QString::fromStdString(customer->getName()));
             query.addBindValue(QString::fromStdString(customer->getPhoneNumber()));
             if (!query.exec()) {
-                qDebug() << "Lỗi lưu Customer:" << query.lastError().text();
+                qDebug() << "Error saving Customer: " << query.lastError().text();
             }
         }
     }
@@ -217,7 +219,7 @@ bool DataManager::saveAll(const HotelManager& manager, const std::string& dataPa
             query.addBindValue(miniBarFee);
 
             if (!query.exec()) {
-                qDebug() << "Lỗi lưu Room:" << query.lastError().text();
+                qDebug() << "Error saving Room: " << query.lastError().text();
             }
         }
     }
@@ -235,7 +237,7 @@ bool DataManager::saveAll(const HotelManager& manager, const std::string& dataPa
             query.addBindValue(booking->getCheckOutDate().toString(Qt::ISODate));
 
             if (!query.exec()) {
-                qDebug() << "Lỗi lưu Booking:" << query.lastError().text();
+                qDebug() << "Error saving Booking: " << query.lastError().text();
             }
         }
     }

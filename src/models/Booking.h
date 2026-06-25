@@ -19,6 +19,8 @@ private:
 public:
     Booking();
 
+    static void initCounterFromDatabase();
+
     std::string getBookingId() const;
     void setBookingId(const std::string &bookingId);
 
