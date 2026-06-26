@@ -10,7 +10,7 @@ int main(int argc, char *argv[]) {
 // Tạo một đối tượng HotelManager để quản lý dữ liệu khách sạn
     HotelManager hotelManager;
 //Khởi tạo và tải dữ liệu từ cơ sở dữ liệu SQLite
-    if (DataManager::getInstance().loadAll(hotelManager, "hotel_data.db")) {
+    if (!DataManager::getInstance().loadAll(hotelManager, "hotel_data.db")) {
         QMessageBox::critical(nullptr, "Database Error", "Failed to load or initialize the database file. The application will close.");
         return -1;
     }
