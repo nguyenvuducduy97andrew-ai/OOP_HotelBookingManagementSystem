@@ -131,6 +131,7 @@ This separation of concerns improves code organization, maintainability, and sca
 - Model: Manages application data and business logic.
 - View: Handles the user interface and presentation of data.
 - Controller: Processes user input and coordinates between Model and View.
+  
 **Why:** MVC provides several benefits that improve application design and development.
 - Clear separation of concerns improves maintainability.
 - Allows parallel development of UI and hotel managing logic.
