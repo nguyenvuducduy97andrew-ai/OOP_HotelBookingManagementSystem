@@ -185,15 +185,14 @@ Run the demo to see the system in action:
 
 Group 10, Class 25C10
 University of Science, Vietnam National University Ho Chi Minh City
-| `Student ID` |          `Name`         |
-|:----------:|:---------------------:|
-|  25127070  |     Le Quang Khai     |
-|  25127190  |   Nguyen Vu Duc Duy   |
-|  25127234  | Nguyen Thi Thao Suong |
-|  25127389  |    Nguyen Minh Khoi   |
-|  25127464  |    Nguyen Kim Phuc    |
----
 
+| **Student ID** |        **Name**       | **Assigned Tasks**                                                                                              | **% Completed** |
+|:--------------:|:---------------------:|-----------------------------------------------------------------------------------------------------------------|-----------------|
+|    25127070    |     Le Quang Khai     | Base rooms class design and implementations                                                                     |                 |
+|    25127190    |   Nguyen Vu Duc Duy   | Backend system architecture design. Hotel management class implementation. Memory safety handling.              |                 |
+|    25127234    | Nguyen Thi Thao Suong | Customer class implementation.                                                                                  |                 |
+|    25127389    |    Nguyen Minh Khoi   | Booking and Invoice class implementation. Data management class design and implementation. User-flow designing. |                 |
+|    25127464    |    Nguyen Kim Phuc    | User-Interface research                                                                                         |                 |                                                                                       |                 |
 ## 📄 License
 
 Educational project for OOP coursework.
