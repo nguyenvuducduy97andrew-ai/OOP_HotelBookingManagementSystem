@@ -48,7 +48,6 @@ private:
     bool validateInvoiceInput(
         const std::string& invoiceId,
         const std::string& bookingId,
-        int days,
         double taxRate,
         std::string& errorMessage
     ) const;
@@ -98,6 +97,12 @@ public:
         const std::string& checkOutDate,
         std::string& errorMessage
     );
+    bool createInvoice(
+        const std::string& invoiceId,
+        const std::string& bookingId,
+        double taxRate,
+        std::string& errorMessage
+    );
 
     bool setRoomAvailability(
         const std::string& roomNumber,
@@ -108,14 +113,6 @@ public:
     // ID generation
     std::string nextInvoiceId() const;
 
-    // Invoice
-    std::shared_ptr<Invoice> createInvoice(
-        const std::string& invoiceId,
-        const std::string& bookingId,
-        int days,
-        double taxRate,
-        std::string& errorMessage
-    );
     // Delete methods
     bool deleteRoom(const std::string& roomNumber, std::string& errorMessage);
     bool deleteCustomer(const std::string& customerId, std::string& errorMessage);

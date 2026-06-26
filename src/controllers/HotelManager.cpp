@@ -171,7 +171,6 @@ bool HotelManager::validateBookingInput(
 bool HotelManager::validateInvoiceInput(
     const std::string &invoiceId,
     const std::string &bookingId,
-    int days,
     double taxRate,
     std::string &errorMessage) const
 {
@@ -181,11 +180,6 @@ bool HotelManager::validateInvoiceInput(
         return false;
     }
 
-    if (days <= 0)
-    {
-        errorMessage = "Number of days must be greater than zero.";
-        return false;
-    }
 
     if (taxRate < 0)
     {
@@ -391,6 +385,33 @@ bool HotelManager::createBooking(
     return true;
 }
 
+bool HotelManager::createInvoice(
+    const std::string &invoiceId,
+    const std::string &bookingId,
+    double taxRate,
+    std::string &errorMessage)
+{
+    if (!validateInvoiceInput(invoiceId, bookingId, taxRate, errorMessage))
+    {
+        return false;
+    }
+
+    const auto booking = findBookingById(bookingId);
+    if (!booking)
+    {
+        errorMessage = "Booking not found.";
+        return false;
+    }
+
+    auto invoice = std::make_shared<Invoice>();
+    invoice->setInvoiceId(invoiceId);
+    invoice->setBooking(booking);
+    invoice->setTaxRate(taxRate);
+
+    addInvoice(invoice);
+    return true;
+}
+
 bool HotelManager::setRoomAvailability(
     const std::string &roomNumber,
     bool available,
@@ -422,60 +443,7 @@ bool HotelManager::setRoomAvailability(
     return true;
 }
 
-// =========================
-// Invoice
-// =========================
 
-std::shared_ptr<Invoice> HotelManager::createInvoice(
-    const std::string &invoiceId,
-    const std::string &bookingId,
-    int days,
-    double taxRate,
-    std::string &errorMessage)
-{
-    if (invoiceId.empty())
-    {
-        errorMessage = "Invoice ID is required.";
-        return nullptr;
-    }
-
-    if (days <= 0)
-    {
-        errorMessage = "Number of days must be greater than zero.";
-        return nullptr;
-    }
-
-    if (taxRate < 0)
-    {
-        errorMessage = "Tax rate must not be negative.";
-        return nullptr;
-    }
-
-    const auto booking = findBookingById(bookingId);
-
-    if (!booking)
-    {
-        errorMessage = "Booking not found.";
-        return nullptr;
-    }
-
-    const auto room = booking->getRoom();
-
-    if (!room)
-    {
-        errorMessage = "Booking has no room assigned.";
-        return nullptr;
-    }
-
-    auto invoice = std::make_shared<Invoice>();
-    invoice->setInvoiceId(invoiceId);
-    invoice->setTaxRate(taxRate);        // Set tax rate first
-    invoice->setBooking(booking);        // Pass shared_ptr directly
-    invoice->setPaymentDate(QDate::currentDate());
-
-    addInvoice(invoice);
-    return invoice;
-}
 // =========================
 // Delete methods
 // =========================
