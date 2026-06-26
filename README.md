@@ -185,7 +185,13 @@ Run the demo to see the system in action:
 
 Group 10, Class 25C10
 University of Science, Vietnam National University Ho Chi Minh City
-
+| `Student ID` |          `Name`         |
+|:----------:|:---------------------:|
+|  25127070  |     Le Quang Khai     |
+|  25127190  |   Nguyen Vu Duc Duy   |
+|  25127234  | Nguyen Thi Thao Suong |
+|  25127389  |    Nguyen Minh Khoi   |
+|  25127464  |    Nguyen Kim Phuc    |
 ---
 
 ## 📄 License
