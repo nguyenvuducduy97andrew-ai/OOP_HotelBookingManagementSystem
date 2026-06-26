@@ -26,6 +26,11 @@ void HotelManager::addBooking(std::shared_ptr<Booking> booking)
     bookings.push_back(std::move(booking));
 }
 
+void HotelManager::addInvoice(std::shared_ptr<Invoice> invoice)
+{
+    invoices.push_back(std::move(invoice));
+}
+
 // =========================
 // Getters
 // =========================
@@ -45,6 +50,10 @@ const std::vector<std::shared_ptr<Booking>> &HotelManager::getBookings() const
     return bookings;
 }
 
+const std::vector<std::shared_ptr<Invoice>> &HotelManager::getInvoices() const
+{
+    return invoices;
+}
 // =========================
 // Validation helpers
 // =========================
@@ -159,6 +168,34 @@ bool HotelManager::validateBookingInput(
 
     return true;
 }
+bool HotelManager::validateInvoiceInput(
+    const std::string &invoiceId,
+    const std::string &bookingId,
+    double taxRate,
+    std::string &errorMessage) const
+{
+    if (invoiceId.empty())
+    {
+        errorMessage = "Invoice ID is required.";
+        return false;
+    }
+
+
+    if (taxRate < 0)
+    {
+        errorMessage = "Tax rate must not be negative.";
+        return false;
+    }
+
+    const auto booking = findBookingById(bookingId);
+    if (!booking)
+    {
+        errorMessage = "Booking not found.";
+        return false;
+    }
+
+    return true;
+}
 
 // =========================
 // Existence checks
@@ -179,6 +216,10 @@ bool HotelManager::bookingIdExists(const std::string &bookingId) const
     return findBookingById(bookingId) != nullptr;
 }
 
+bool HotelManager::invoiceIdExists(const std::string &invoiceId) const
+{
+    return findInvoiceById(invoiceId) != nullptr;
+}
 // =========================
 // Find methods
 // =========================
@@ -222,6 +263,18 @@ std::shared_ptr<Booking> HotelManager::findBookingById(const std::string &bookin
     return nullptr;
 }
 
+std::shared_ptr<Invoice> HotelManager::findInvoiceById(const std::string &invoiceId) const
+{
+    for (const auto &invoice : invoices)
+    {
+        if (invoice && invoice->getInvoiceId() == invoiceId)
+        {
+            return invoice;
+        }
+    }
+
+    return nullptr;
+}
 // =========================
 // Queries
 // =========================
@@ -332,6 +385,33 @@ bool HotelManager::createBooking(
     return true;
 }
 
+bool HotelManager::createInvoice(
+    const std::string &invoiceId,
+    const std::string &bookingId,
+    double taxRate,
+    std::string &errorMessage)
+{
+    if (!validateInvoiceInput(invoiceId, bookingId, taxRate, errorMessage))
+    {
+        return false;
+    }
+
+    const auto booking = findBookingById(bookingId);
+    if (!booking)
+    {
+        errorMessage = "Booking not found.";
+        return false;
+    }
+
+    auto invoice = std::make_shared<Invoice>();
+    invoice->setInvoiceId(invoiceId);
+    invoice->setBooking(booking);
+    invoice->setTaxRate(taxRate);
+
+    addInvoice(invoice);
+    return true;
+}
+
 bool HotelManager::setRoomAvailability(
     const std::string &roomNumber,
     bool available,
@@ -363,56 +443,82 @@ bool HotelManager::setRoomAvailability(
     return true;
 }
 
-// =========================
-// Invoice
-// =========================
 
-std::shared_ptr<Invoice> HotelManager::createInvoice(
-    const std::string &invoiceId,
-    const std::string &bookingId,
-    int days,
-    double taxRate,
-    std::string &errorMessage) const
+// =========================
+// Delete methods
+// =========================
+bool HotelManager::deleteRoom(const std::string &roomNumber, std::string &errorMessage)
 {
-    if (invoiceId.empty())
+    auto room = findRoomByNumber(roomNumber);
+    if (!room)
     {
-        errorMessage = "Invoice ID is required.";
-        return nullptr;
+        errorMessage = "Room not found.";
+        return false;
     }
 
-    if (days <= 0)
+    // Check if the room is associated with any active bookings
+    for (const auto &booking : bookings)
     {
-        errorMessage = "Number of days must be greater than zero.";
-        return nullptr;
+        if (booking && booking->getRoom() && booking->getRoom()->getRoomNumber() == roomNumber)
+        {
+            errorMessage = "Cannot delete room with active bookings.";
+            return false;
+        }
     }
 
-    if (taxRate < 0)
+    rooms.erase(std::remove(rooms.begin(), rooms.end(), room), rooms.end());
+    return true;
+}
+bool HotelManager::deleteCustomer(const std::string &customerId, std::string &errorMessage)
+{
+    auto customer = findCustomerById(customerId);
+    if (!customer)
     {
-        errorMessage = "Tax rate must not be negative.";
-        return nullptr;
+        errorMessage = "Customer not found.";
+        return false;
     }
 
-    const auto booking = findBookingById(bookingId);
+    // Check if the customer is associated with any active bookings
+    for (const auto &booking : bookings)
+    {
+        if (booking && booking->getCustomer() && booking->getCustomer()->getCustomerId() == customerId)
+        {
+            errorMessage = "Cannot delete customer with active bookings.";
+            return false;
+        }
+    }
 
+    customers.erase(std::remove(customers.begin(), customers.end(), customer), customers.end());
+    return true;
+}
+bool HotelManager::deleteBooking(const std::string &bookingId, std::string &errorMessage)
+{
+    auto booking = findBookingById(bookingId);
     if (!booking)
     {
         errorMessage = "Booking not found.";
-        return nullptr;
+        return false;
     }
 
-    const auto room = booking->getRoom();
-
-    if (!room)
+    // Mark the associated room as available
+    auto room = booking->getRoom();
+    if (room)
     {
-        errorMessage = "Booking has no room assigned.";
-        return nullptr;
+        room->setIsAvailable(true);
     }
 
-    auto invoice = std::make_shared<Invoice>();
-    invoice->setInvoiceId(invoiceId);
-    invoice->setTaxRate(taxRate);        // Set tax rate first
-    invoice->setBooking(booking);        // Pass shared_ptr directly
-    invoice->setPaymentDate(QDate::currentDate());
+    bookings.erase(std::remove(bookings.begin(), bookings.end(), booking), bookings.end());
+    return true;
+}
+bool HotelManager::deleteInvoice(const std::string &invoiceId, std::string &errorMessage)
+{
+    auto invoice = findInvoiceById(invoiceId);
+    if (!invoice)
+    {
+        errorMessage = "Invoice not found.";
+        return false;
+    }
 
-    return invoice;
+    invoices.erase(std::remove(invoices.begin(), invoices.end(), invoice), invoices.end());
+    return true;
 }

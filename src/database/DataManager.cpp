@@ -8,6 +8,7 @@
 #include <QString>
 
 // Creates or returns the one shared DataManager instance.
+//reference helps ensuring only one DataManager instance exist
 DataManager& DataManager::getInstance() {
     static DataManager instance;
     return instance;

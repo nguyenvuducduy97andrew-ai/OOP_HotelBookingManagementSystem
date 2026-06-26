@@ -35,3 +35,6 @@ std::string Customer::getPhoneNumber() const {
 void Customer::setPhoneNumber(std::string phoneNumber) {
     this->phoneNumber = phoneNumber;
 }
+bool Customer::isValid() const {
+    return !customerId.empty() && !name.empty() && !phoneNumber.empty();
+}
