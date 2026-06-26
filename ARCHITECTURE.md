@@ -22,7 +22,7 @@ Each layer has a single responsibility so team members can work in parallel with
 |---|---|
 | `models/` | What the system manages — rooms, customers, bookings, invoices |
 | `controllers/` | How the system behaves — create rooms, manage collections, enforce rules |
-| `database/` | Where data lives between sessions — JSON, CSV, or SQLite |
+| `database/` | Where data lives between sessions — SQLite |
 | `views/` | How the user interacts — Qt widgets, layouts, signals/slots |
 
 ## High-Level Data Flow
@@ -50,7 +50,7 @@ main.cpp (Demo)
 5. Shows room availability management
 6. Creates and deletes invoices through the controller
 7. Performs object queries and retrieval
-8. Persists core state using DataManager::saveAll() and reloads it with DataManager::loadAll()
+8. Persists core state using singleton DataManager
 
 The demo showcases all four OOP principles, design patterns, and the complete system workflow.
 
@@ -125,6 +125,16 @@ Every model class uses a `.h` (declaration) and `.cpp` (implementation) pair:
 - Matches standard C++ project conventions expected in grading.
 
 ## Design Patterns
+
+### MVC Pattern - `System Overall Architecture`
+This separation of concerns improves code organization, maintainability, and scalability. Each component handles a specific responsibility, making the application easier to modify and extend.
+- Model: Manages application data and business logic.
+- View: Handles the user interface and presentation of data.
+- Controller: Processes user input and coordinates between Model and View.
+**Why:** MVC provides several benefits that improve application design and development.
+- Clear separation of concerns improves maintainability.
+- Allows parallel development of UI and hotel managing logic.
+- Makes testing easier, especially unit testing.
 
 ### Factory Pattern — `RoomFactory`
 
