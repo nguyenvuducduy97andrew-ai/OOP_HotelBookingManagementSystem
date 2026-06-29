@@ -168,10 +168,13 @@ bool HotelManager::validateBookingInput(
 
     return true;
 }
+
+// Modified: Updated signature to accept nights to validate stay duration bounds
 bool HotelManager::validateInvoiceInput(
     const std::string &invoiceId,
     const std::string &bookingId,
     double taxRate,
+    int nights,
     std::string &errorMessage) const
 {
     if (invoiceId.empty())
@@ -180,10 +183,16 @@ bool HotelManager::validateInvoiceInput(
         return false;
     }
 
-
     if (taxRate < 0)
     {
         errorMessage = "Tax rate must not be negative.";
+        return false;
+    }
+
+    // Added: Validate that the calculated stay duration is at least 1 night
+    if (nights <= 0)
+    {
+        errorMessage = "Stay duration in nights must be greater than zero.";
         return false;
     }
 
@@ -350,6 +359,7 @@ bool HotelManager::registerCustomer(
     return true;
 }
 
+// Modified: Refactored entirely to assign dates directly as std::string instead of QDate
 bool HotelManager::createBooking(
     const std::string &customerId,
     const std::string &roomNumber,
@@ -370,14 +380,13 @@ bool HotelManager::createBooking(
     const auto customer = findCustomerById(customerId);
     const auto room = findRoomByNumber(roomNumber);
 
-    const auto checkIn = QDate::fromString(QString::fromStdString(checkInDate), Qt::ISODate);
-    const auto checkOut = QDate::fromString(QString::fromStdString(checkOutDate), Qt::ISODate);
-
     auto booking = std::make_shared<Booking>();
     booking->setCustomer(customer);  // Pass shared_ptr directly
     booking->setRoom(room);          // Pass shared_ptr directly
-    booking->setCheckInDate(checkIn);
-    booking->setCheckOutDate(checkOut);
+
+    // Modified: Directly passing string to core properties without wrapping in QDate
+    booking->setCheckInDate(checkInDate);
+    booking->setCheckOutDate(checkOutDate);
 
     room->setIsAvailable(false);
     addBooking(booking);
@@ -385,13 +394,16 @@ bool HotelManager::createBooking(
     return true;
 }
 
+// Modified: Updated signature and body to inject UI-calculated 'nights' and 'paymentDate' down into the core invoice entity
 bool HotelManager::createInvoice(
     const std::string &invoiceId,
     const std::string &bookingId,
     double taxRate,
+    int nights,
+    const std::string &paymentDate,
     std::string &errorMessage)
 {
-    if (!validateInvoiceInput(invoiceId, bookingId, taxRate, errorMessage))
+    if (!validateInvoiceInput(invoiceId, bookingId, taxRate, nights, errorMessage))
     {
         return false;
     }
@@ -407,6 +419,8 @@ bool HotelManager::createInvoice(
     invoice->setInvoiceId(invoiceId);
     invoice->setBooking(booking);
     invoice->setTaxRate(taxRate);
+    invoice->setNights(nights);           // Added: Storing calculated night count from view layer
+    invoice->setPaymentDate(paymentDate); // Added: Storing checkout billing timestamp string
 
     addInvoice(invoice);
     return true;

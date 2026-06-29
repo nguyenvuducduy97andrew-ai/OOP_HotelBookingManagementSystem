@@ -4,13 +4,17 @@
 #include "Customer.h"
 #include <iostream>
 #include <iomanip>
+#include <sstream> // Added for std::stringstream in generateInvoiceDetails
+
 using namespace std;
 
+// Modified: Updated default constructor to initialize 'nights' instead of 'totalAmount'
+// Modified: paymentDate now defaults to an empty string or dummy ISO format
 Invoice::Invoice() {
     this->invoiceId = "INV_UNKNOWN";
-    this->totalAmount = 0.0;
     this->taxRate = 0.0;
-    this->paymentDate = QDate::currentDate();
+    this->nights = 0; // Added: Initializing the new nights member variable
+    this->paymentDate = ""; // Modified: Using empty string instead of QDate::currentDate()
 }
 
 string Invoice::getInvoiceId() const {
@@ -25,59 +29,55 @@ std::shared_ptr<Booking> Invoice::getBooking() const {
     return booking.lock();
 }
 
+// Modified: Removed totalAmount recalculation logic since it's computed dynamically now
 void Invoice::setBooking(const std::shared_ptr<Booking>& booking) {
     // Store weak reference (does not increase refcount)
     this->booking = booking;
-    // Recalculate total when booking is set
-    if (booking != nullptr) {
-        double subtotal = calculateSubtotal();
-        totalAmount = subtotal * (1.0 + taxRate);
-    }
-    else {
-        totalAmount = 0.0;
-    }
 }
 
+// Modified: Cleaned up raw pointer overload to match the dynamic calculation architecture
 void Invoice::setBooking(Booking* booking) {
     // Legacy raw pointer overload - cannot create weak_ptr from raw pointer safely
     this->booking = std::weak_ptr<Booking>();
-    totalAmount = 0.0;
-}
-
-double Invoice::getTotalAmount() const {
-    return totalAmount;
-}
-void Invoice::setTotalAmount(double totalAmount) {
-    this->totalAmount = totalAmount;
 }
 
 double Invoice::getTaxRate() const {
     return taxRate;
 }
 
+// Modified: Removed totalAmount recalculation; setter simply updates the taxRate
 void Invoice::setTaxRate(double taxRate) {
     this->taxRate = taxRate;
-    // Recalculate total when tax rate is changed
-    auto lockedBooking = booking.lock();
-    if (lockedBooking != nullptr) {
-        double subtotal = calculateSubtotal();
-        totalAmount = subtotal * (1.0 + taxRate);
-    }
 }
 
-QDate Invoice::getPaymentDate() const {
+// Added: Getter implementation for nights
+int Invoice::getNights() const {
+    return nights;
+}
+
+// Added: Setter implementation for nights
+void Invoice::setNights(int nights) {
+    this->nights = nights;
+}
+
+// Modified: Returns std::string instead of QDate
+string Invoice::getPaymentDate() const {
     return paymentDate;
 }
-void Invoice::setPaymentDate(const QDate& paymentDate) {
+
+// Modified: Parameter type updated to const std::string&
+void Invoice::setPaymentDate(const string& paymentDate) {
     this->paymentDate = paymentDate;
 }
 
+// Modified: Validates booking existence, invoice data integrity, and duration validity
 bool Invoice::isValid() const {
     // Lock the weak_ptr and check if booking is valid
     auto lockedBooking = booking.lock();
-    return lockedBooking != nullptr && lockedBooking->isValid();
+    return lockedBooking != nullptr && !invoiceId.empty() && nights > 0;
 }
 
+// Modified: Computes subtotal on-the-fly using the locally stored 'nights' variable
 double Invoice::calculateSubtotal() const {
     auto lockedBooking = booking.lock();
     if (lockedBooking == nullptr)
@@ -87,60 +87,69 @@ double Invoice::calculateSubtotal() const {
     if (lockedRoom == nullptr)
         return 0.0;
 
-    int nights = lockedBooking->getDurationInNights();
     double roomPrice = lockedRoom->getBasePrice();
-    return nights * roomPrice;
+    return nights * roomPrice; // Modified: Using the nights property passed from View
 }
 
-QString Invoice::generateInvoiceDetails() {
-    QString details;
+// Added: Computes final total including tax rate dynamically
+double Invoice::calculateTotal() const {
+    return calculateSubtotal() * (1.0 + taxRate);
+}
 
-    details += "<h3>====== HOTEL BOOKING INVOICE ======</h3>";
-    details += "<b>Invoice ID:</b> " + QString::fromStdString(invoiceId) + "<br>";
-    details += "<b>Payment Date:</b> " + paymentDate.toString("dd/MM/yyyy") + "<br>";
-    details += "--------------------------------------------------<br>";
+// Modified: Refactored entirely to return std::string instead of QString using std::stringstream
+std::string Invoice::generateInvoiceDetails() const {
+    std::stringstream details;
+
+    details << "<h3>====== HOTEL BOOKING INVOICE ======</h3>";
+    details << "<b>Invoice ID:</b> " << invoiceId << "<br>";
+    details << "<b>Payment Date:</b> " << paymentDate << "<br>"; // Expected format: YYYY-MM-DD
+    details << "--------------------------------------------------<br>";
 
     // Lock the weak_ptr to get a shared_ptr
     auto lockedBooking = booking.lock();
 
     // Error handling for missing or expired booking
     if (lockedBooking == nullptr) {
-        details += "<font color='red'><b>Error: No booking data associated or booking has expired!</b></font><br>";
-        details += "=========================================<br>";
-        return details;
+        details << "<font color='red'><b>Error: No booking data associated or booking has expired!</b></font><br>";
+        details << "=========================================<br>";
+        return details.str();
     }
 
     // Customer information
     auto lockedCustomer = lockedBooking->getCustomer();
     if (lockedCustomer != nullptr) {
-        details += "<b>Customer Name:</b> " + QString::fromStdString(lockedCustomer->getName()) + "<br>";
+        details << "<b>Customer Name:</b> " << lockedCustomer->getName() << "<br>";
     }
     else {
-        details += "<b>Customer Name:</b> Unknown (or expired)<br>";
+        details << "<b>Customer Name:</b> Unknown (or expired)<br>";
     }
 
     // Room information
     auto lockedRoom = lockedBooking->getRoom();
     if (lockedRoom != nullptr) {
-        details += "<b>Room Number:</b> " + QString::fromStdString(lockedRoom->getRoomNumber()) + "<br>";
-        details += "<b>Base Price per Night:</b> $" + QString::number(lockedRoom->getBasePrice(), 'f', 2) + "<br>";
+        details << "<b>Room Number:</b> " << lockedRoom->getRoomNumber() << "<br>";
+        details << "<b>Base Price per Night:</b> $" << std::fixed << std::setprecision(2) << lockedRoom->getBasePrice() << "<br>";
     } else {
-        details += "<b>Room Info:</b> Not Assigned (or expired)<br>";
+        details << "<b>Room Info:</b> Not Assigned (or expired)<br>";
     }
 
-    details += "<b>Check-in Date:</b> " + lockedBooking->getCheckInDate().toString("dd/MM/yyyy") + "<br>";
-    details += "<b>Check-out Date:</b> " + lockedBooking->getCheckOutDate().toString("dd/MM/yyyy") + "<br>";
-    details += "<b>Duration:</b> " + QString::number(lockedBooking->getDurationInNights()) + " night(s)<br>";
+    // Modified: Booking schedule output formatted via direct string read
+    details << "<b>Check-in Date:</b> " << lockedBooking->getCheckInDate() << "<br>";
+    details << "<b>Check-out Date:</b> " << lockedBooking->getCheckOutDate() << "<br>";
+    details << "<b>Duration:</b> " << nights << " night(s)<br>";
 
     // Billing breakdown
     double subtotal = calculateSubtotal();
-    details += "--------------------------------------------------<br>";
-    details += "<b>Subtotal:</b> $" + QString::number(subtotal, 'f', 2) + "<br>";
-    details += "<b>Tax Rate:</b> " + QString::number(taxRate * 100, 'f', 1) + "%<br>";
-    details += "<b>Tax Amount:</b> $" + QString::number(subtotal * taxRate, 'f', 2) + "<br>";
-    details += "--------------------------------------------------<br>";
-    details += "<h2>TOTAL AMOUNT: $" + QString::number(totalAmount, 'f', 2) + "</h2>";
-    details += "=========================================<br>";
+    double taxAmount = subtotal * taxRate;
+    double totalAmount = calculateTotal(); // Dynamic calculation
 
-    return details;
+    details << "--------------------------------------------------<br>";
+    details << "<b>Subtotal:</b> $" << std::fixed << std::setprecision(2) << subtotal << "<br>";
+    details << "<b>Tax Rate:</b> " << std::fixed << std::setprecision(1) << (taxRate * 100) << "%<br>";
+    details << "<b>Tax Amount:</b> $" << std::fixed << std::setprecision(2) << taxAmount << "<br>";
+    details << "--------------------------------------------------<br>";
+    details << "<h2>TOTAL AMOUNT: $" << std::fixed << std::setprecision(2) << totalAmount << "</h2>";
+    details << "=========================================<br>";
+
+    return details.str();
 }
