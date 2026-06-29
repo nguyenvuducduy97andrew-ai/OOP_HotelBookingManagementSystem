@@ -37,7 +37,18 @@ private:
         const std::string& phone,
         std::string& errorMessage
     ) const;
+    bool validateBookingDates(
+        const std::string &checkIn,
+        const std::string &checkOut,
+        std::string &errorMessage
+    ) const;
 
+    bool isRoomFreeForDates(
+        const std::string &roomNumber,
+        const std::string &checkIn,
+        const std::string &checkOut,
+        std::string &errorMessage
+    ) const;
     bool validateBookingInput(
         const std::string& customerId,
         const std::string& roomNumber,

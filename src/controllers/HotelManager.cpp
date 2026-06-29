@@ -123,7 +123,45 @@ bool HotelManager::validateCustomerInput(
 
     return true;
 }
+bool HotelManager::validateBookingDates(
+    const std::string& checkIn,
+    const std::string& checkOut,
+    std::string& errorMessage) const
+{
+    if (checkIn.empty() || checkOut.empty()) {
+        errorMessage = "Dates cannot be empty.";
+        return false;
+    }
+    if (checkOut <= checkIn) {
+        errorMessage = "Check-out must be after check-in.";
+        return false;
+    }
+    return true;
+}
 
+bool HotelManager::isRoomFreeForDates(
+    const std::string& roomNumber,
+    const std::string& checkIn,
+    const std::string& checkOut,
+    std::string& errorMessage) const
+{
+    const auto checkInDate = QDate::fromString(QString::fromStdString(checkIn), Qt::ISODate);
+    const auto checkOutDate = QDate::fromString(QString::fromStdString(checkOut), Qt::ISODate);
+    for (const auto& booking : bookings) {
+        auto bookedRoom = booking->getRoom();
+        if (!bookedRoom || bookedRoom->getRoomNumber() != roomNumber) continue;
+
+        bool overlaps = checkInDate  < booking->getCheckOutDate() &&
+                        booking->getCheckInDate() < checkOutDate;
+        if (overlaps) {
+            errorMessage = "Room " + roomNumber + " is already booked from "
+                         + booking->getCheckInDate().toString().toStdString() + " to "
+                         + booking->getCheckOutDate().toString().toStdString() + ".";
+            return false;
+        }
+    }
+    return true;
+}
 bool HotelManager::validateBookingInput(
     const std::string &customerId,
     const std::string &roomNumber,
@@ -351,37 +389,26 @@ bool HotelManager::registerCustomer(
 }
 
 bool HotelManager::createBooking(
-    const std::string &customerId,
-    const std::string &roomNumber,
-    const std::string &checkInDate,
-    const std::string &checkOutDate,
-    std::string &errorMessage)
+    const std::string& customerId,
+    const std::string& roomNumber,
+    const std::string& checkIn,
+    const std::string& checkOut,
+    std::string& errorMessage)
 {
-    if (!validateBookingInput(
-            customerId,
-            roomNumber,
-            checkInDate,
-            checkOutDate,
-            errorMessage))
-    {
-        return false;
-    }
+    if (!validateBookingDates(checkIn, checkOut, errorMessage))   return false;
 
-    const auto customer = findCustomerById(customerId);
-    const auto room = findRoomByNumber(roomNumber);
+    auto room = findRoomByNumber(roomNumber);
+    if (!room)                { errorMessage = "Room not found.";      return false; }
+    if (!room->getIsAvailable()) { errorMessage = "Room unavailable.";    return false; }
 
-    const auto checkIn = QDate::fromString(QString::fromStdString(checkInDate), Qt::ISODate);
-    const auto checkOut = QDate::fromString(QString::fromStdString(checkOutDate), Qt::ISODate);
+    auto customer = findCustomerById(customerId);
+    if (!customer)            { errorMessage = "Customer not found.";  return false; }
 
-    auto booking = std::make_shared<Booking>();
-    booking->setCustomer(customer);  // Pass shared_ptr directly
-    booking->setRoom(room);          // Pass shared_ptr directly
-    booking->setCheckInDate(checkIn);
-    booking->setCheckOutDate(checkOut);
+    if (!isRoomFreeForDates(roomNumber, checkIn, checkOut, errorMessage)) return false;
 
-    room->setIsAvailable(false);
-    addBooking(booking);
-
+    // Commit — only reached if everything passed
+    auto newBooking = std::make_shared<Booking>(/* ... */);
+    bookings.push_back(newBooking);
     return true;
 }
 
@@ -500,12 +527,6 @@ bool HotelManager::deleteBooking(const std::string &bookingId, std::string &erro
         return false;
     }
 
-    // Mark the associated room as available
-    auto room = booking->getRoom();
-    if (room)
-    {
-        room->setIsAvailable(true);
-    }
 
     bookings.erase(std::remove(bookings.begin(), bookings.end(), booking), bookings.end());
     return true;
