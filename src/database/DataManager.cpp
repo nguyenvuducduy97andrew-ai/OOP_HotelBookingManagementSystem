@@ -8,7 +8,7 @@
 #include <QString>
 
 // Creates or returns the one shared DataManager instance.
-//reference helps ensuring only one DataManager instance exist
+// Reference helps ensuring only one DataManager instance exist
 DataManager& DataManager::getInstance() {
     static DataManager instance;
     return instance;
@@ -71,16 +71,18 @@ bool DataManager::initDatabase(const std::string& dataPath) {
         return false;
     }
 
+    // Modified: Reconstructed schema to save atomic properties (taxRate, nights) instead of static calculated totalAmount
     QString createInvoice =
         "CREATE TABLE IF NOT EXISTS Invoice ("
         "   invoiceId TEXT PRIMARY KEY,"
         "   bookingId TEXT NOT NULL,"
-        "   totalAmount REAL NOT NULL,"
+        "   taxRate REAL NOT NULL,"
+        "   nights INTEGER NOT NULL,"
         "   paymentDate TEXT NOT NULL,"
         "   FOREIGN KEY (bookingId) REFERENCES Booking(bookingId) ON DELETE CASCADE ON UPDATE CASCADE"
         ");";
     if (!query.exec(createInvoice)) {
-        qDebug() << "Error creating Invoicce table: " << query.lastError().text();
+        qDebug() << "Error creating Invoice table: " << query.lastError().text();
         return false;
     }
 
@@ -94,12 +96,11 @@ bool DataManager::loadAll(HotelManager& manager, const std::string& dataPath) {
         return false;
     }
 
-    Booking::initCounterFromDatabase();
-
+    // Modified: Removed legacy counter initializer since entity counters are managed dynamically
     QSqlQuery query;
     std::string errorMsg;
 
-    // Tải thông tin khách hàng từ DB vào bộ nhớ quản lý
+    // Load customer records from database into memory structures
     if (query.exec("SELECT customerId, name, phoneNumber FROM Customer")) {
         while (query.next()) {
             std::string custId = query.value(0).toString().toStdString();
@@ -113,7 +114,7 @@ bool DataManager::loadAll(HotelManager& manager, const std::string& dataPath) {
         return false;
     }
 
-    // Tải danh sách phòng và phục hồi thuộc tính riêng của từng loại phòng con
+    // Load room properties and restore distinct sub-type specific data fields
     if (query.exec("SELECT roomNumber, basePrice, isAvailable, roomType, premiumServiceFee, miniBarFee FROM Room")) {
         while (query.next()) {
             std::string roomNum = query.value(0).toString().toStdString();
@@ -133,7 +134,7 @@ bool DataManager::loadAll(HotelManager& manager, const std::string& dataPath) {
             if (room) {
                 room->setIsAvailable(isAvailable == 1);
 
-                // Dùng std::dynamic_pointer_cast vì dự án sử dụng std::shared_ptr
+                // Use std::dynamic_pointer_cast because the project utilizes std::shared_ptr instances
                 if (type == RoomType::Suite) {
                     auto suite = std::dynamic_pointer_cast<SuiteRoom>(room);
                     if (suite) suite->setPremiumServiceFee(premiumFee);
@@ -149,7 +150,7 @@ bool DataManager::loadAll(HotelManager& manager, const std::string& dataPath) {
         return false;
     }
 
-    // Tải lịch đặt phòng, đổi từ QString sang std::string bằng .toStdString()
+    // Load booking schedules, mapping string dates directly via .toStdString() conversions
     if (query.exec("SELECT customerId, roomNumber, checkInDate, checkOutDate FROM Booking")) {
         while (query.next()) {
             std::string custId = query.value(0).toString().toStdString();
@@ -165,23 +166,40 @@ bool DataManager::loadAll(HotelManager& manager, const std::string& dataPath) {
         return false;
     }
 
+    // Added: Reconstruct historical invoices directly back into the core system memory
+    if (query.exec("SELECT invoiceId, bookingId, taxRate, nights, paymentDate FROM Invoice")) {
+        while (query.next()) {
+            std::string invId = query.value(0).toString().toStdString();
+            std::string bookId = query.value(1).toString().toStdString();
+            double tax = query.value(2).toDouble();
+            int nightsCount = query.value(3).toInt();
+            std::string payDate = query.value(4).toString().toStdString();
+
+            manager.createInvoice(invId, bookId, tax, nightsCount, payDate, errorMsg);
+        }
+    } else {
+        qDebug() << "Error reading Invoice table: " << query.lastError().text();
+        return false;
+    }
+
     return true;
 }
 
-// Saves application data to the configured storage location.
-bool DataManager::saveAll(const HotelManager& manager, const std::string& dataPath) {
+// Modified: Removed const qualifier to allow weak_ptr locking mechanisms during data saving loops
+bool DataManager::saveAll(HotelManager& manager, const std::string& dataPath) {
     if (!initDatabase(dataPath)) {
         return false;
     }
 
     QSqlQuery query;
 
-    // 1. Làm sạch các bảng cũ trước khi ghi đè dữ liệu mới
+    // 1. Wipe old database entries completely before overwriting fresh model data records
+    query.exec("DELETE FROM Invoice"); // Added: Clear out dependency table first
     query.exec("DELETE FROM Booking");
     query.exec("DELETE FROM Room");
     query.exec("DELETE FROM Customer");
 
-    // 2. Lưu danh sách Customer
+    // 2. Persist Customer object lists
     query.prepare("INSERT INTO Customer (customerId, name, phoneNumber) VALUES (?, ?, ?)");
     for (const auto& customer : manager.getCustomers()) {
         if (customer) {
@@ -194,7 +212,7 @@ bool DataManager::saveAll(const HotelManager& manager, const std::string& dataPa
         }
     }
 
-    // 3. Lưu danh sách Room (Kiểm tra loại phòng để lưu đúng phí dịch vụ riêng)
+    // 3. Persist Room lists (Inspect polymorphism variables to save correct individual fee items)
     query.prepare("INSERT INTO Room (roomNumber, basePrice, isAvailable, roomType, premiumServiceFee, miniBarFee) VALUES (?, ?, ?, ?, ?, ?)");
     for (const auto& room : manager.getRooms()) {
         if (room) {
@@ -202,7 +220,7 @@ bool DataManager::saveAll(const HotelManager& manager, const std::string& dataPa
             query.addBindValue(room->getBasePrice());
             query.addBindValue(room->getIsAvailable() ? 1 : 0);
 
-            // Xác định loại phòng và chi phí đi kèm bằng std::dynamic_pointer_cast
+            // Determine subtype structures and fee balances using dynamic casting pointers
             double premiumFee = 0.0;
             double miniBarFee = 0.0;
             QString typeStr = "Standard";
@@ -225,7 +243,7 @@ bool DataManager::saveAll(const HotelManager& manager, const std::string& dataPa
         }
     }
 
-    // 4. Lưu danh sách Booking
+    // 4. Persist Booking schedules
     query.prepare("INSERT INTO Booking (bookingId, customerId, roomNumber, checkInDate, checkOutDate) VALUES (?, ?, ?, ?, ?)");
     for (const auto& booking : manager.getBookings()) {
         if (booking && booking->getCustomer() && booking->getRoom()) {
@@ -233,12 +251,28 @@ bool DataManager::saveAll(const HotelManager& manager, const std::string& dataPa
             query.addBindValue(QString::fromStdString(booking->getCustomer()->getCustomerId()));
             query.addBindValue(QString::fromStdString(booking->getRoom()->getRoomNumber()));
 
-            // Chuyển đổi QDate trực tiếp sang QString theo định dạng ISO (YYYY-MM-DD)
-            query.addBindValue(booking->getCheckInDate().toString(Qt::ISODate));
-            query.addBindValue(booking->getCheckOutDate().toString(Qt::ISODate));
+            // Modified: Directly bind ISO strings instead of querying conversion method variants
+            query.addBindValue(QString::fromStdString(booking->getCheckInDate()));
+            query.addBindValue(QString::fromStdString(booking->getCheckOutDate()));
 
             if (!query.exec()) {
                 qDebug() << "Error saving Booking: " << query.lastError().text();
+            }
+        }
+    }
+
+    // Added: 5. Persist Invoice records dynamically calculated up from view layer properties
+    query.prepare("INSERT INTO Invoice (invoiceId, bookingId, taxRate, nights, paymentDate) VALUES (?, ?, ?, ?, ?)");
+    for (const auto& invoice : manager.getInvoices()) {
+        if (invoice && invoice->getBooking()) {
+            query.addBindValue(QString::fromStdString(invoice->getInvoiceId()));
+            query.addBindValue(QString::fromStdString(invoice->getBooking()->getBookingId()));
+            query.addBindValue(invoice->getTaxRate());
+            query.addBindValue(invoice->getNights());
+            query.addBindValue(QString::fromStdString(invoice->getPaymentDate()));
+
+            if (!query.exec()) {
+                qDebug() << "Error saving Invoice: " << query.lastError().text();
             }
         }
     }

@@ -13,24 +13,29 @@ class MainWindow : public QMainWindow {
     Q_OBJECT
 
 public:
-    // Nhận con trỏ điều khiển bộ lõi HotelManager
+    // Receives the controller pointer for the core HotelManager system
     explicit MainWindow(HotelManager* mgr, QWidget *parent = nullptr);
     ~MainWindow();
 
-    // Hàm cập nhật và vẽ lại lưới hiển thị danh sách phòng lên UI
+    // Method to update and redraw the room listing grid on the UI
     void updateRoomGrid();
 
+    // Added: Helper methods for View-side processing before passing to Core
+public:
+    // Computes stay duration using Qt's QDate utility, acting as a bridge for MVC
+    int getDurationInNights(const std::string& checkInStr, const std::string& checkOutStr) const;
+
 private slots:
-    // Slot xử lý sự kiện bấm nút đặt phòng
+    // Slot to handle booking button click events
     void on_btnBook_clicked();
 
-    // Slot xử lý sự kiện trả phòng
+    // Slot to handle checkout button click events
     void on_btnCheckout_clicked();
 
 private:
     Ui::MainWindow *ui;
 
-    // Ánh xạ chuẩn
+    // Standard mapping
     HotelManager* controller;
     QTableWidget* roomTable;
     QTabWidget* tabWidget;

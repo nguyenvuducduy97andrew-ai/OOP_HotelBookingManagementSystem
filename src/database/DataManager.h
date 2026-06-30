@@ -7,7 +7,7 @@
 // This class is implemented as a singleton so the application uses one
 // shared data manager for all operations.
 class DataManager {
-    private:
+private:
     DataManager() = default;
     ~DataManager() = default;
 
@@ -20,15 +20,14 @@ public:
     // Returns the single shared DataManager instance.
     static DataManager& getInstance();
 
-    // Copying is disabled to preserve the singleton guarantee. 
+    // Copying is disabled to preserve the singleton guarantee.
     //=> Only ONE object of this class exist in the system
     //Assignment is disabled for the same reason.
     DataManager(const DataManager&) = delete;
     DataManager& operator=(const DataManager&) = delete;
 
     bool loadAll(HotelManager& manager, const std::string& dataPath = "hotel_data.db");
-    bool saveAll(const HotelManager& manager, const std::string& dataPath = "hotel_data.db");
 
+    // Modified: Removed 'const' from HotelManager reference to allow dynamic calculations during serialization
+    bool saveAll(HotelManager& manager, const std::string& dataPath = "hotel_data.db");
 };
-
-
