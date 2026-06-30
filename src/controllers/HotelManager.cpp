@@ -403,6 +403,7 @@ bool HotelManager::createBooking(
     const std::string& checkOut,
     std::string& errorMessage)
 {
+    if (!validateBookingInput(customerId, roomNumber, checkIn, checkOut, errorMessage)) return false;
     if (!validateBookingDates(checkIn, checkOut, errorMessage))   return false;
 
     auto room = findRoomByNumber(roomNumber);

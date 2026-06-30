@@ -130,6 +130,7 @@ Invoice
 - **Invoice**: Wraps booking for billing purposes with tax and payment tracking
 
 ### Design Patterns Used
+- **MVC Pattern** (Overall Structure) - Separate **models** (raw data), **controllers** (core logic) and **views** (UI/GUI) for developing and maintaining
 - **Factory Pattern** (RoomFactory) — Encapsulate room creation
 - **Singleton Pattern** (DataManager) — Single instance for data management
 - **Strategy Pattern** (Room subclasses) — Different pricing strategies
