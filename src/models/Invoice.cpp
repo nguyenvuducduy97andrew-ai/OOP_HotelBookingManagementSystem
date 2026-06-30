@@ -6,7 +6,6 @@
 #include <iomanip>
 #include <sstream> // Added for std::stringstream in generateInvoiceDetails
 
-using namespace std;
 
 // Modified: Updated default constructor to initialize 'nights' instead of 'totalAmount'
 // Modified: paymentDate now defaults to an empty string or dummy ISO format
@@ -61,12 +60,12 @@ void Invoice::setNights(int nights) {
 }
 
 // Modified: Returns std::string instead of QDate
-string Invoice::getPaymentDate() const {
+std::string Invoice::getPaymentDate() const {
     return paymentDate;
 }
 
 // Modified: Parameter type updated to const std::string&
-void Invoice::setPaymentDate(const string& paymentDate) {
+void Invoice::setPaymentDate(const std::string& paymentDate) {
     this->paymentDate = paymentDate;
 }
 
