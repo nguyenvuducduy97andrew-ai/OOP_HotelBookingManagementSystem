@@ -1,7 +1,6 @@
 #pragma once
 #include <string>
 #include <memory>
-#include <QDate>
 
 class Customer;
 class Room;
@@ -13,11 +12,13 @@ private:
     std::string bookingId;
     std::weak_ptr<Customer> customer;  // Weak reference to customer (owned by HotelManager)
     std::weak_ptr<Room> room;          // Weak reference to room (owned by HotelManager)
-    QDate checkInDate;
-    QDate checkOutDate;
+    std::string checkInDate;
+    std::string checkOutDate;
 
 public:
     Booking();
+
+    static void initCounterFromDatabase();
 
     std::string getBookingId() const;
     void setBookingId(const std::string &bookingId);
@@ -30,13 +31,12 @@ public:
     void setRoom(const std::shared_ptr<Room> &room);
     void setRoom(Room *room);  // Legacy overload for raw pointers
 
-    QDate getCheckInDate() const;
-    void setCheckInDate(const QDate &checkInDate);
+    std::string getCheckInDate() const;
+    void setCheckInDate(const std::string &checkInDate);
 
-    QDate getCheckOutDate() const;
-    void setCheckOutDate(const QDate &checkOutDate);
+    std::string getCheckOutDate() const;
+    void setCheckOutDate(const std::string &checkOutDate);
 
-    int getDurationInNights() const;
     bool isValid() const;  // Check if booking has valid (non-expired) customer and room
 };
 

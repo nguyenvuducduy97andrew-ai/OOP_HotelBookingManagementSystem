@@ -1,16 +1,46 @@
 #include "Booking.h"
 #include "Customer.h"
 #include "Room.h"
-
 #include <string>
+#include <iomanip>
+#include <sstream>
+#include <chrono>
+#include <QSqlQuery>
+#include <QVariant>
+#include <QSqlError>
+#include <QDebug>
 
 //The booking counter started at 1000 to be used as BookingID
 int Booking::bookingCounter = 1000;
+
 Booking::Booking() {
     bookingCounter++;
     this->bookingId = "BK" + std::to_string(bookingCounter);
-    this->checkInDate = QDate::currentDate();
-    this->checkOutDate = QDate::currentDate().addDays(2);
+#pragma warning(suppress : 4996)
+    std::time_t now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+    std::tm* t = std::localtime(&now);
+
+    std::stringstream ssIn;
+    ssIn << std::put_time(t, "%Y-%m-%d");
+    this->checkInDate = ssIn.str();
+
+    this->checkOutDate = "";
+}
+
+// Read SQLite to get the current largest code to accurately restore the private static counter variable
+void Booking::initCounterFromDatabase() {
+    QSqlQuery query;
+    if (query.exec("SELECT MAX(bookingId) FROM Booking")) {
+        if (query.next() && !query.value(0).isNull()) {
+            std::string maxId = query.value(0).toString().toStdString();
+            if (maxId.length() > 2 && maxId.substr(0, 2) == "BK") {
+                std::string numStr = maxId.substr(2);
+                bookingCounter = std::stoi(numStr);
+            }
+        }
+    } else {
+        qDebug() << "Error querying to reset the Booking counter:" << query.lastError().text();
+    }
 }
 
 std::string Booking::getBookingId() const{
@@ -48,32 +78,27 @@ void Booking::setRoom(Room* room) {
     this->room = std::weak_ptr<Room>();
 }
 
-QDate Booking::getCheckInDate() const {
+std::string Booking::getCheckInDate() const {
     return checkInDate;
 }
-void Booking::setCheckInDate(const QDate& checkInDate) {
+void Booking::setCheckInDate(const std::string& checkInDate) {
     this->checkInDate = checkInDate;
 }
 
-QDate Booking::getCheckOutDate() const {
+std::string Booking::getCheckOutDate() const {
     return checkOutDate;
 }
-void Booking::setCheckOutDate(const QDate& checkOutDate) {
+void Booking::setCheckOutDate(const std::string& checkOutDate) {
     this->checkOutDate = checkOutDate;
 }
 
-int Booking::getDurationInNights() const {
-    if (!checkInDate.isValid() || !checkOutDate.isValid()) return 0;
-    if (checkOutDate < checkInDate) return 0;
-    return checkInDate.daysTo(checkOutDate);
-}
-
 bool Booking::isValid() const {
-    // Check if both weak_ptrs are still valid (not expired)
     auto lockedCustomer = customer.lock();
     auto lockedRoom = room.lock();
 
-    return lockedCustomer != nullptr && lockedRoom != nullptr &&
-           checkInDate.isValid() && checkOutDate.isValid() &&
+    return lockedCustomer != nullptr &&
+           lockedRoom != nullptr &&
+           !checkInDate.empty() &&
+           !checkOutDate.empty() &&
            checkOutDate > checkInDate;
 }

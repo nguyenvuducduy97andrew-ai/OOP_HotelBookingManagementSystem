@@ -1,6 +1,6 @@
 # Architecture
 
-This document describes the structure and design decisions for the **Hotel Booking Management System** — a C++17 / Qt6 desktop application built with an MVC layout and a dedicated persistence layer.
+This document describes the structure and design decisions for the **Hotel Booking Management System** — a C++17 / Qt6 desktop application built with an MVC layout and a dedicated SQLite persistence layer.
 
 ## Directory Layout
 
@@ -22,7 +22,7 @@ Each layer has a single responsibility so team members can work in parallel with
 |---|---|
 | `models/` | What the system manages — rooms, customers, bookings, invoices |
 | `controllers/` | How the system behaves — create rooms, manage collections, enforce rules |
-| `database/` | Where data lives between sessions — JSON, CSV, or SQLite |
+| `database/` | Where data lives between sessions — SQLite |
 | `views/` | How the user interacts — Qt widgets, layouts, signals/slots |
 
 ## High-Level Data Flow
@@ -30,17 +30,16 @@ Each layer has a single responsibility so team members can work in parallel with
 ```text
 main.cpp (Demo)
   │
-  ├─► HotelManager::registerRoom()        // add rooms with validation
-  ├─► HotelManager::registerCustomer()    // add customers with validation
-  ├─► HotelManager::createBooking()       // create bookings with date/availability checks
-  ├─► Room::calculateTargetPrice()        // polymorphic pricing
-  ├─► HotelManager::setRoomAvailability() // manage room status
-  ├─► HotelManager::createInvoice()       // generate invoices with tax
-  ├─► HotelManager::find*()               // query system state
+  ├─► HotelManager::registerRoom()         // add rooms with validation
+  ├─► HotelManager::registerCustomer()     // add customers with validation
+  ├─► HotelManager::createBooking()        // create bookings with date/availability checks
+  ├─► Room::calculateTargetPrice()         // polymorphic pricing
+  ├─► HotelManager::setRoomAvailability()  // manage room status
+  ├─► HotelManager::createInvoice()        // generate invoices linked to bookings
+  ├─► HotelManager::delete*()        // remove objects from the in-memory collection
+  ├─► HotelManager::find*()                // query system state
   │
-  └─► DataManager::getInstance()          // persist data to disk
-        │
-        └─► Models (Room, Customer, Booking, Invoice)
+  └─► DataManager::loadAll()/saveAll()      // restore or persist core domain data in SQLite
 ```
 
 **main.cpp** is now a comprehensive demo program that:
@@ -49,9 +48,9 @@ main.cpp (Demo)
 3. Creates bookings with full validation
 4. Demonstrates polymorphic room pricing
 5. Shows room availability management
-6. Generates invoices with tax calculation
+6. Creates and deletes invoices through the controller
 7. Performs object queries and retrieval
-8. Persists all data using DataManager
+8. Persists core state using singleton DataManager
 
 The demo showcases all four OOP principles, design patterns, and the complete system workflow.
 
@@ -127,6 +126,17 @@ Every model class uses a `.h` (declaration) and `.cpp` (implementation) pair:
 
 ## Design Patterns
 
+### MVC Pattern - `System Overall Architecture`
+This separation of concerns improves code organization, maintainability, and scalability. Each component handles a specific responsibility, making the application easier to modify and extend.
+- Model: Manages application data and business logic.
+- View: Handles the user interface and presentation of data.
+- Controller: Processes user input and coordinates between Model and View.
+      
+**Why:** MVC provides several benefits that improve application design and development.
+- Clear separation of concerns improves maintainability.
+- Allows parallel development of UI and hotel managing logic.
+- Makes testing easier, especially unit testing.
+
 ### Factory Pattern — `RoomFactory`
 
 ```cpp
@@ -147,6 +157,8 @@ bool registerRoom(RoomType kind, const std::string& roomNumber, double baseRate,
 bool registerCustomer(const std::string& id, const std::string& name, const std::string& phone, std::string& errorMessage);
 bool createBooking(const std::string& customerId, const std::string& roomNumber, const std::string& checkInDate, const std::string& checkOutDate, std::string& errorMessage);
 bool setRoomAvailability(const std::string& roomNumber, bool available, std::string& errorMessage);
+std::shared_ptr<Invoice> createInvoice(const std::string& invoiceId, const std::string& bookingId, int days, double taxRate, std::string& errorMessage);
+
 ```
 
 **Why:** All public use-case methods perform input validation before modifying state. Errors are returned as strings rather than exceptions, making the system more resilient and testable.
@@ -155,22 +167,24 @@ bool setRoomAvailability(const std::string& roomNumber, bool available, std::str
 - `registerRoom()`, `registerCustomer()` — validate input, create objects, add to collections
 - `createBooking()` — validates customer exists, room is available, dates are valid, then marks room unavailable
 - `setRoomAvailability()` — prevents marking a booked room as available
-- `createInvoice()` — computes billing based on base price, duration, and tax rate
+- `createInvoice()` — validates invoice input and attaches the invoice to a booking
+
 
 ### Singleton Pattern — `DataManager`
 
 ```cpp
 static DataManager& getInstance();
-bool saveAll(const std::string& prefix);
-bool loadAll(const std::string& prefix);
+bool saveAll(const HotelManager& manager, const std::string& dataPath = "hotel_data.db");
+bool loadAll(HotelManager& manager, const std::string& dataPath = "hotel_data.db");
 ```
 
-**Why:** Persistence should have a single access point for loading and saving data, regardless of whether the backend is JSON, CSV, or SQLite.
+**Why:** Persistence should have a single access point for loading and saving data through the SQLite backend.
 
 **Benefits:**
 - One shared instance avoids duplicate file handles or conflicting writes.
 - Copy and assignment are deleted to prevent accidental second instances.
 - The rest of the application calls `DataManager::getInstance()` without managing its lifetime.
+- The data layer initializes the database schema automatically and restores persisted customers, rooms, and bookings.
 
 ### Non-Owning Reference Pattern — weak_ptr
 
