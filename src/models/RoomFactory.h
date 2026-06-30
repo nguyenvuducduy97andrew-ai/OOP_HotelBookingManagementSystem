@@ -12,5 +12,5 @@ enum class RoomType {
 
 class RoomFactory {
 public:
-    std::shared_ptr<Room> createRoom(RoomType type, std::string num, double basePrice);
+    static std::shared_ptr<Room> createRoom(RoomType type, std::string num, double basePrice);
 };

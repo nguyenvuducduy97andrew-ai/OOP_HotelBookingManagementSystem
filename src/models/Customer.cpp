@@ -1,5 +1,3 @@
-// Chỉ dùng để xác định lỗi trong class đang code, sau khi có code của Thảo Sương sẽ thế vào sau.
-
 #include "Customer.h"
 
 Customer::Customer() {
@@ -36,4 +34,7 @@ std::string Customer::getPhoneNumber() const {
 
 void Customer::setPhoneNumber(std::string phoneNumber) {
     this->phoneNumber = phoneNumber;
+}
+bool Customer::isValid() const {
+    return !customerId.empty() && !name.empty() && !phoneNumber.empty();
 }

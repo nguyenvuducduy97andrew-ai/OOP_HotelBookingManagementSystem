@@ -1,6 +1,6 @@
 # Architecture
 
-This document describes the structure and design decisions for the **Hotel Booking Management System** — a C++17 / Qt6 desktop application built with an MVC layout and a dedicated persistence layer.
+This document describes the structure and design decisions for the **Hotel Booking Management System** — a C++17 / Qt6 desktop application built with an MVC layout and a dedicated SQLite persistence layer.
 
 ## Directory Layout
 
@@ -28,20 +28,31 @@ Each layer has a single responsibility so team members can work in parallel with
 ## High-Level Data Flow
 
 ```text
-main.cpp
+main.cpp (Demo)
   │
-  ├─► DataManager::getInstance().loadAll()   // load persisted data on startup
+  ├─► HotelManager::registerRoom()         // add rooms with validation
+  ├─► HotelManager::registerCustomer()     // add customers with validation
+  ├─► HotelManager::createBooking()        // create bookings with date/availability checks
+  ├─► Room::calculateTargetPrice()         // polymorphic pricing
+  ├─► HotelManager::setRoomAvailability()  // manage room status
+  ├─► HotelManager::createInvoice()        // generate invoices linked to bookings
+  ├─► HotelManager::delete*()        // remove objects from the in-memory collection
+  ├─► HotelManager::find*()                // query system state
   │
-  └─► MainWindow                              // user interaction (View)
-        │
-        └─► HotelManager                      // business logic (Controller)
-              │
-              ├─► Models                      // Room, Customer, Booking, Invoice
-              │
-              └─► DataManager                 // save/load (Persistence)
+  └─► DataManager::loadAll()/saveAll()      // restore or persist core domain data in SQLite
 ```
 
-`main.cpp` stays thin: it initializes Qt, loads data, shows the window, and runs the event loop. It does not contain business rules.
+**main.cpp** is now a comprehensive demo program that:
+1. Registers rooms of different types (Standard, Deluxe, Suite)
+2. Registers customers
+3. Creates bookings with full validation
+4. Demonstrates polymorphic room pricing
+5. Shows room availability management
+6. Creates and deletes invoices through the controller
+7. Performs object queries and retrieval
+8. Persists core state using DataManager::saveAll() and reloads it with DataManager::loadAll()
+
+The demo showcases all four OOP principles, design patterns, and the complete system workflow.
 
 ## OOP Design (Models)
 
@@ -67,18 +78,18 @@ Room (abstract)
 `Room` declares a pure virtual method:
 
 ```cpp
-virtual double calculateRent(int days) const = 0;
+virtual double calculateTargetPrice() = 0;
 ```
 
 Each subclass overrides it with its own pricing rule:
 
 | Class | Formula |
 |---|---|
-| `StandardRoom` | `baseRate × days` |
-| `DeluxeRoom` | `baseRate × days × 1.2` |
-| `SuiteRoom` | `baseRate × days × 1.5` |
+| `StandardRoom` | `baseRate` (1.0x) |
+| `DeluxeRoom` | `baseRate × 1.2` (20% premium) |
+| `SuiteRoom` | `baseRate × 1.5` (50% premium) |
 
-Controller and view code can call `calculateRent()` on any `Room` without knowing the concrete type.
+Controller and view code can call `calculateTargetPrice()` on any `Room` without knowing the concrete type.
 
 ### Abstraction
 
@@ -87,14 +98,23 @@ Controller and view code can call `calculateRent()` on any `Room` without knowin
 ### Entity Relationships
 
 ```text
-Customer ──┐
-           ├── Booking ── Invoice
-Room ──────┘
+HotelManager (owns via shared_ptr)
+  ├─ Customer ─ ─ ─ ─ ┐
+  ├─ Room ─ ─ ─ ─ ┐   │
+  └─ Booking       ├─→ (weak references)
+        └─ Invoice ┘
 ```
 
 - **`Customer`** — identity and contact info (ID, name, phone). Kept separate so one customer can hold multiple bookings.
-- **`Booking`** — links a customer to a room with check-in and check-out dates. Represents the reservation itself.
-- **`Invoice`** — wraps a booking and computes subtotal, tax, and total. Separates billing from reservation logic.
+- **`Booking`** — links a customer to a room with check-in and check-out dates via weak references. Represents the reservation itself.
+  - Stores `weak_ptr<Customer>` and `weak_ptr<Room>` (non-owning references)
+- **`Invoice`** — wraps a booking and computes subtotal, tax, and total via a weak reference. Separates billing from reservation logic.
+  - Stores `weak_ptr<Booking>` (non-owning reference)
+
+This design ensures that:
+1. HotelManager maintains sole ownership of all objects
+2. Deleting a customer, room, or booking from HotelManager invalidates only the weak_ptrs
+3. No dangling pointers can occur — lock() returns nullptr if the object was deleted
 
 ### Header / Source Split
 
@@ -106,56 +126,238 @@ Every model class uses a `.h` (declaration) and `.cpp` (implementation) pair:
 
 ## Design Patterns
 
-### Factory Pattern — `HotelManager::createRoom()`
+### Factory Pattern — `RoomFactory`
 
 ```cpp
-static std::shared_ptr<Room> createRoom(RoomKind kind, int roomNumber, double baseRate = 0.0);
+static std::shared_ptr<Room> createRoom(RoomType type, std::string num, double basePrice);
 ```
 
-**Why:** GUI and controller code request a room by kind (`Standard`, `Deluxe`, `Suite`) instead of constructing concrete classes directly.
+**Why:** The system decouples room creation logic from the controller. Callers request a room by type enum (`Standard`, `Deluxe`, `Suite`) rather than constructing concrete classes directly.
 
 **Benefits:**
 - Callers depend on the `Room` abstraction, not specific subclasses.
-- Adding a new room type requires updating only the factory switch — not every caller.
-- Satisfies the lab requirement for at least one design pattern.
+- Adding a new room type requires updating only the factory — not every caller.
+- Encapsulates object creation logic in one place.
 
-Default base rates are applied inside the factory when `baseRate` is not provided (100 / 200 / 350).
+### Validation-First Controller Pattern — `HotelManager`
+
+```cpp
+bool registerRoom(RoomType kind, const std::string& roomNumber, double baseRate, std::string& errorMessage);
+bool registerCustomer(const std::string& id, const std::string& name, const std::string& phone, std::string& errorMessage);
+bool createBooking(const std::string& customerId, const std::string& roomNumber, const std::string& checkInDate, const std::string& checkOutDate, std::string& errorMessage);
+bool setRoomAvailability(const std::string& roomNumber, bool available, std::string& errorMessage);
+std::shared_ptr<Invoice> createInvoice(const std::string& invoiceId, const std::string& bookingId, int days, double taxRate, std::string& errorMessage);
+
+```
+
+**Why:** All public use-case methods perform input validation before modifying state. Errors are returned as strings rather than exceptions, making the system more resilient and testable.
+
+**Key Methods:**
+- `registerRoom()`, `registerCustomer()` — validate input, create objects, add to collections
+- `createBooking()` — validates customer exists, room is available, dates are valid, then marks room unavailable
+- `setRoomAvailability()` — prevents marking a booked room as available
+- `createInvoice()` — validates invoice input and attaches the invoice to a booking
+
 
 ### Singleton Pattern — `DataManager`
 
 ```cpp
 static DataManager& getInstance();
+bool saveAll(const HotelManager& manager, const std::string& dataPath = "hotel_data.db");
+bool loadAll(HotelManager& manager, const std::string& dataPath = "hotel_data.db");
 ```
 
-**Why:** Persistence should have a single access point for loading and saving data, regardless of whether the backend is JSON, CSV, or SQLite.
+**Why:** Persistence should have a single access point for loading and saving data through the SQLite backend.
 
 **Benefits:**
 - One shared instance avoids duplicate file handles or conflicting writes.
 - Copy and assignment are deleted to prevent accidental second instances.
 - The rest of the application calls `DataManager::getInstance()` without managing its lifetime.
+- The data layer initializes the database schema automatically and restores persisted customers, rooms, and bookings.
+
+### Non-Owning Reference Pattern — weak_ptr
+
+Model objects use `std::weak_ptr` to store non-owning references to entities:
+- `Booking` holds weak references to Customer and Room
+- `Invoice` holds a weak reference to Booking
+
+**Why weak_ptr instead of shared_ptr:**
+- Avoids circular reference problems and ensures HotelManager has clear ownership
+- `weak_ptr::lock()` safely returns `nullptr` if the referenced object was deleted
+- Prevents dangling pointer bugs when objects are removed from HotelManager
+- Forces callers to check validity before use, improving code safety
+
+**Example:**
+```cpp
+auto customer = booking->getCustomer();  // Returns shared_ptr (from lock())
+if (customer != nullptr) {
+    // Safe to use
+}
+// If HotelManager deleted the customer, lock() would return nullptr
+```
 
 ## Memory Management
 
-The project uses `std::shared_ptr` for heap-allocated model objects stored in `HotelManager`:
+The project uses a **non-owning reference pattern** with `std::weak_ptr` for model relationships, ensuring safe pointer semantics and preventing dangling pointer risks.
 
+### Smart Pointer Strategy
+
+**Ownership:**
+- `HotelManager` owns all model objects via `std::shared_ptr` vectors:
+  ```cpp
+  std::vector<std::shared_ptr<Room>> rooms;
+  std::vector<std::shared_ptr<Customer>> customers;
+  std::vector<std::shared_ptr<Booking>> bookings;
+  ```
+- Rooms, Customers, and Bookings are created, stored, and destroyed by HotelManager
+
+**References (Non-owning):**
+- `Booking` stores weak references to Customer and Room:
+  ```cpp
+  std::weak_ptr<Customer> customer;
+  std::weak_ptr<Room> room;
+  ```
+- `Invoice` stores a weak reference to Booking:
+  ```cpp
+  std::weak_ptr<Booking> booking;
+  ```
+
+### Why weak_ptr?
+
+**Problem with Raw Pointers:**
+- Raw pointers don't indicate ownership
+- If HotelManager deletes a Room but an Invoice still holds a raw pointer, accessing it causes undefined behavior (dangling pointer)
+- No way to detect at runtime if a pointer is still valid
+
+**Solution with weak_ptr:**
+- `weak_ptr` **does not prevent object deletion** — ownership remains solely with HotelManager
+- `weak_ptr::lock()` safely converts to `shared_ptr` and returns `nullptr` if the object was deleted
+- Callers can check validity before use
+- Eliminates dangling pointer risks
+
+### Usage Pattern
+
+**Setting references:**
 ```cpp
-std::vector<std::shared_ptr<Room>> rooms;
-std::vector<std::shared_ptr<Customer>> customers;
-std::vector<std::shared_ptr<Booking>> bookings;
+booking->setCustomer(managerCustomerSharedPtr);  // Pass shared_ptr
+booking->setRoom(managerRoomSharedPtr);          // Pass shared_ptr
 ```
 
-**Why `shared_ptr` and not raw pointers:**
-- `Room` is polymorphic — pointer semantics are required to store subclasses through a base pointer.
-- A `Booking` references the same `Customer` and `Room` objects held by the manager — shared ownership prevents use-after-free and double-delete.
-- No manual `delete` calls — satisfies the lab memory-management requirement cleanly.
+**Getting references:**
+```cpp
+auto customer = booking->getCustomer();  // Returns shared_ptr (locked)
+auto room = booking->getRoom();          // Returns shared_ptr (locked)
+
+if (customer) {
+    // Safe to use; customer is still alive
+    std::cout << customer->getName();
+}
+// After this block, shared_ptr auto-releases if no other owners
+```
+
+**In Invoice:**
+```cpp
+auto lockedBooking = invoice->getBooking();  // Lock weak_ptr safely
+if (lockedBooking != nullptr && lockedBooking->isValid()) {
+    // Booking and its Customer/Room are guaranteed valid in this scope
+}
+```
+
+### Validation Methods
+
+Both Booking and Invoice provide `isValid()` methods that safely lock all weak_ptrs:
+
+```cpp
+// Booking::isValid()
+bool Booking::isValid() const {
+    auto lockedCustomer = customer.lock();
+    auto lockedRoom = room.lock();
+    return lockedCustomer != nullptr && lockedRoom != nullptr &&
+           checkInDate.isValid() && checkOutDate.isValid() &&
+           checkOutDate > checkInDate;
+}
+```
+
+This ensures all referenced objects still exist before use.
+
+## HotelManager API
+
+### Core Methods
+
+**Room Management:**
+```cpp
+bool registerRoom(RoomType kind, const std::string& roomNumber, double baseRate, std::string& errorMessage);
+bool setRoomAvailability(const std::string& roomNumber, bool available, std::string& errorMessage);
+```
+
+**Customer Management:**
+```cpp
+bool registerCustomer(const std::string& id, const std::string& name, const std::string& phone, std::string& errorMessage);
+```
+
+**Booking Management:**
+```cpp
+bool createBooking(
+    const std::string& customerId,
+    const std::string& roomNumber,
+    const std::string& checkInDate,      // ISO format: "YYYY-MM-DD"
+    const std::string& checkOutDate,     // ISO format: "YYYY-MM-DD"
+    std::string& errorMessage
+);
+```
+
+**Invoice Generation:**
+```cpp
+std::shared_ptr<Invoice> createInvoice(
+    const std::string& invoiceId,
+    const std::string& bookingId,
+    int days,                             // duration in nights
+    double taxRate,                       // 0.1 = 10%
+    std::string& errorMessage
+) const;
+```
+
+### Query Methods
+
+```cpp
+const std::vector<std::shared_ptr<Room>>& getRooms() const;
+const std::vector<std::shared_ptr<Customer>>& getCustomers() const;
+const std::vector<std::shared_ptr<Booking>>& getBookings() const;
+
+std::shared_ptr<Room> findRoomByNumber(const std::string& roomNumber) const;
+std::shared_ptr<Customer> findCustomerById(const std::string& customerId) const;
+std::shared_ptr<Booking> findBookingById(const std::string& bookingId) const;
+
+std::vector<std::shared_ptr<Room>> getAvailableRooms() const;
+```
+
+### Validation & Error Handling
+
+All public methods validate inputs and return errors via reference parameter:
+
+- Invalid room numbers (empty, non-alphanumeric)
+- Duplicate room numbers or customer IDs
+- Invalid base rates (≤ 0)
+- Invalid date formats (must be ISO "YYYY-MM-DD")
+- Invalid date ranges (checkout ≤ checkin)
+- Room already booked
+- Customer or room not found
+
+This validation-first approach makes the system robust and testable.
 
 ## View Layer (Qt6)
 
-| File | Role |
-|---|---|
-| `MainWindow.ui` | Visual layout designed in Qt Designer |
-| `MainWindow.h` | Widget class declaration (`Q_OBJECT`, signals/slots) |
-| `MainWindow.cpp` | Behavior — connects UI events to controller logic |
+The view layer is currently in development with the following structure:
+
+| File | Role | Status |
+|---|---|---|
+| `MainWindow.ui` | Visual layout designed in Qt Designer | Scaffolding |
+| `MainWindow.h` | Widget class declaration (`Q_OBJECT`, signals/slots) | Scaffolding |
+| `MainWindow.cpp` | Behavior — connects UI events to controller logic | Scaffolding |
+
+**Current State:** The system runs as a comprehensive console demo in `main.cpp` that demonstrates all functionality. This allows validation of business logic before integrating with the Qt GUI.
+
+**Next Step:** Wire `MainWindow` signals/slots to `HotelManager` methods to provide interactive GUI control.
 
 The `.ui` file is compiled automatically by CMake (`AUTOUIC`). The generated `ui_MainWindow.h` is included in `MainWindow.cpp`, not edited by hand.
 
@@ -190,9 +392,19 @@ Keeping these boundaries strict makes the codebase easier to test, extend, and g
 
 ## Future Work
 
-The current scaffold provides compilable stubs. Expected next steps by layer:
+The current implementation provides:
 
-- **`database/`** — implement `loadAll()` / `saveAll()` with JSON, CSV, or SQLite
-- **`controllers/`** — booking validation, availability checks, invoice generation
-- **`views/`** — tabbed UI for rooms, customers, bookings; wire signals to `HotelManager`
-- **`main.cpp`** — call `saveAll()` on application exit
+✅ **Complete** — OOP design with all four pillars (encapsulation, inheritance, polymorphism, abstraction)
+✅ **Complete** — Factory Pattern (RoomFactory) and Singleton Pattern (DataManager)
+✅ **Complete** — Comprehensive validation and error handling in HotelManager
+✅ **Complete** — Polymorphic room pricing (calculateTargetPrice)
+✅ **Complete** — Invoice generation with tax calculation
+✅ **Complete** — Working demo in main.cpp
+
+**Next Steps:**
+
+- **`database/`** — implement `loadAll()` / `saveAll()` persistence layer (JSON, CSV, or SQLite)
+- **`views/`** — integrate MainWindow with HotelManager (tabbed UI for rooms, customers, bookings, invoices)
+- **Qt Integration** — connect GUI signals/slots to HotelManager methods for interactive use
+- **Error Display** — show validation errors in UI dialogs rather than console output
+- **Data Loading** — call `DataManager::getInstance().loadAll()` on MainWindow initialization

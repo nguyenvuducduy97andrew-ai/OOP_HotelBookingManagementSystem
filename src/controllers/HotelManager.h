@@ -7,12 +7,6 @@
 #include "Invoice.h"
 #include "Room.h"
 #include "RoomFactory.h"
-enum class RoomKind
-{
-    Standard,
-    Deluxe,
-    Suite
-};
 
 class HotelManager
 {
@@ -20,42 +14,116 @@ private:
     std::vector<std::shared_ptr<Room>> rooms;
     std::vector<std::shared_ptr<Customer>> customers;
     std::vector<std::shared_ptr<Booking>> bookings;
+    std::vector<std::shared_ptr<Invoice>> invoices;
+
+    // Validation helpers
+    bool isValidRoomNumber(const std::string& roomNumber) const;
+
+    bool validateRoomInput(
+        const std::string& roomNumber,
+        double baseRate,
+        std::string& errorMessage
+        ) const;
+
+    bool validateCustomerInput(
+        const std::string& id,
+        const std::string& name,
+        const std::string& phone,
+        std::string& errorMessage
+        ) const;
+
+    bool validateBookingInput(
+        const std::string& customerId,
+        const std::string& roomNumber,
+        const std::string& checkInDate,
+        const std::string& checkOutDate,
+        std::string& errorMessage
+        ) const;
+
+    // Modified: Added 'nights' and 'paymentDate' parameters to validation helper if needed
+    bool validateInvoiceInput(
+        const std::string& invoiceId,
+        const std::string& bookingId,
+        double taxRate,
+        int nights,
+        std::string& errorMessage
+        ) const;
 
 public:
     HotelManager();
 
-    static std::shared_ptr<Room> createRoom(RoomKind kind, int roomNumber, double baseRate = 0.0);//static là để gọi trực tiếp, không cần tạo object HotelManager
+    // Getters
+    const std::vector<std::shared_ptr<Room>>& getRooms() const;
+    const std::vector<std::shared_ptr<Customer>>& getCustomers() const;
+    const std::vector<std::shared_ptr<Booking>>& getBookings() const;
+    const std::vector<std::shared_ptr<Invoice>>& getInvoices() const;
 
-    void addRoom(std::shared_ptr<Room> room);//thêm phòng
-    const std::vector<std::shared_ptr<Room>> &getRooms() const;//truy xuất phòng, reference để không tạo copy, const để không cho phép thay đổi dữ liệu
+    // Modified: Moved internal add methods to public so DataManager can populate entities when loading database
+    void addRoom(std::shared_ptr<Room> room);
+    void addCustomer(std::shared_ptr<Customer> customer);
+    void addBooking(std::shared_ptr<Booking> booking);
+    void addInvoice(std::shared_ptr<Invoice> invoice);
 
-    void addCustomer(std::shared_ptr<Customer> customer);//thêm khách hàng
-    const std::vector<std::shared_ptr<Customer>> &getCustomers() const;//truy xuất khách hàng
+    // Existence checks
+    bool roomNumberExists(const std::string& roomNumber) const;
+    bool customerIdExists(const std::string& customerId) const;
+    bool bookingIdExists(const std::string& bookingId) const;
+    bool invoiceIdExists(const std::string& invoiceId) const;
 
-    void addBooking(std::shared_ptr<Booking> booking);//thêm dữ liệu book
-    const std::vector<std::shared_ptr<Booking>> &getBookings() const;//truy xuất dữ diệu book
-//Kiểm tra những object room, customer hay booking đã tồn tại hay chưa
-    bool roomNumberExists(int roomNumber) const;
-    bool customerIdExists(const std::string &customerId) const;
-    bool bookingIdExists(const std::string &bookingId) const;
-//Tìm các object theo ID/number
-    std::shared_ptr<Room> findRoomByNumber(int roomNumber) const;
-    std::shared_ptr<Customer> findCustomerById(const std::string &customerId) const;
-    std::shared_ptr<Booking> findBookingById(const std::string &bookingId) const;
-//Trả về danh sách những phòng trống
+    // Find methods
+    std::shared_ptr<Room> findRoomByNumber(const std::string& roomNumber) const;
+    std::shared_ptr<Customer> findCustomerById(const std::string& customerId) const;
+    std::shared_ptr<Booking> findBookingById(const std::string& bookingId) const;
+    std::shared_ptr<Invoice> findInvoiceById(const std::string& invoiceId) const;
+
+    // Queries
     std::vector<std::shared_ptr<Room>> getAvailableRooms() const;
-//Sinh thêm Booking ID và Invoice ID
-    std::string nextBookingId() const;
+
+    // Use-case methods
+    bool registerRoom(
+        RoomType kind,
+        const std::string& roomNumber,
+        double baseRate,
+        std::string& errorMessage
+        );
+
+    bool registerCustomer(
+        const std::string& id,
+        const std::string& name,
+        const std::string& phone,
+        std::string& errorMessage
+        );
+
+    bool createBooking(
+        const std::string& customerId,
+        const std::string& roomNumber,
+        const std::string& checkInDate,
+        const std::string& checkOutDate,
+        std::string& errorMessage
+        );
+
+    // Modified: Added 'nights' and 'paymentDate' so the view layer can pass down computed duration and billing timestamps
+    bool createInvoice(
+        const std::string& invoiceId,
+        const std::string& bookingId,
+        double taxRate,
+        int nights,
+        const std::string& paymentDate,
+        std::string& errorMessage
+        );
+
+    bool setRoomAvailability(
+        const std::string& roomNumber,
+        bool available,
+        std::string& errorMessage
+        );
+
+    // ID generation
     std::string nextInvoiceId() const;
 
-    bool addRoomIfValid(RoomKind kind, int roomNumber, double baseRate, std::string &errorMessage);
-    bool addCustomerIfValid(const std::string &id, const std::string &name, const std::string &phone,
-                            std::string &errorMessage);
-    bool addBookingIfValid(const std::string &bookingId, const std::string &customerId, int roomNumber,
-                           const std::string &checkInDate, const std::string &checkOutDate,
-                           std::string &errorMessage);
-    bool setRoomAvailability(int roomNumber, bool available, std::string &errorMessage);
-
-    std::shared_ptr<Invoice> createInvoice(const std::string &invoiceId, const std::string &bookingId, int days,
-                                           double taxRate, std::string &errorMessage) const;
+    // Delete methods
+    bool deleteRoom(const std::string& roomNumber, std::string& errorMessage);
+    bool deleteCustomer(const std::string& customerId, std::string& errorMessage);
+    bool deleteBooking(const std::string& bookingId, std::string& errorMessage);
+    bool deleteInvoice(const std::string& invoiceId, std::string& errorMessage);
 };
