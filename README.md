@@ -80,6 +80,18 @@ main.cpp
               └─► DataManager::saveAll()        ← Persist state to SQLite
 ```
 
+### Memory Management Strategy
+- **Ownership Model**: HotelManager owns all domain objects via `std::shared_ptr`
+- **Reference Integrity**: Business objects use `std::weak_ptr` to reference each other safely
+- **No Memory Leaks**: Automatic cleanup when objects are deleted from collections
+- **Safety**: weak_ptr::lock() prevents dangling pointer access
+
+### Data Persistence
+- **SQLite Database**: Automatic schema creation and management
+- **Singleton DataManager**: Central controller for all load/save operations
+- **Automatic Recovery**: Customer, room, and booking data restore on startup
+- **Safe Shutdown**: All in-memory state persists to database via DataManager::saveAll()
+
 ---
 
 ## 🎯 OOP Design Highlights
@@ -96,14 +108,26 @@ Each subclass inherits common attributes from `Room` and overrides `calculateTar
 
 ### Entity Relationships
 ```
-Customer ──┐
-           ├──► Booking ──► Invoice
-Room ──────┘
+Customer
+    ├─ Can create multiple Bookings
+    
+Room
+    ├─ Subject of multiple Bookings
+    ├─ Polymorphic pricing (Standard, Deluxe, Suite)
+    
+Booking
+    ├─ Links Customer + Room
+    ├─ Tracks availability conflicts
+    
+Invoice
+    ├─ Associated with one Booking
+    ├─ Calculates cost with tax
+    ├─ Persists payment metadata
 ```
 
 - **One-to-Many**: One customer can have multiple bookings
-- **Booking**: Junction entity linking customers to rooms
-- **Invoice**: Wraps booking for billing purposes
+- **Booking**: Junction entity linking customers to rooms with date ranges
+- **Invoice**: Wraps booking for billing purposes with tax and payment tracking
 
 ### Design Patterns Used
 - **Factory Pattern** (RoomFactory) — Encapsulate room creation
@@ -111,9 +135,37 @@ Room ──────┘
 - **Strategy Pattern** (Room subclasses) — Different pricing strategies
 - **Repository Pattern** (HotelManager) — Centralized collection access
 
+### Business Rules & Validation
+- **Room Number Uniqueness**: No two rooms can have the same number
+- **Customer ID Uniqueness**: Each customer has a unique identifier
+- **Date Validation**: Check-in must be before check-out; dates must be valid ISO format (YYYY-MM-DD)
+- **Availability Conflict Prevention**: Rooms cannot be double-booked for overlapping periods
+- **Tax Rate Validation**: Must be a valid percentage (0.0 to 1.0)
+- **Existence Verification**: Referenced entities (customer, room, booking) must exist before linking
+- **Error Reporting**: All validation failures return detailed error messages to caller
+
 ---
 
-## 🛠️ Technology Stack
+## � Data Persistence
+
+The SQLite database automatically stores and manages:
+
+| Table | Content |
+|---|---|
+| **rooms** | Room number, type (Standard/Deluxe/Suite), base price, availability status |
+| **customers** | Customer ID, name, phone number |
+| **bookings** | Booking ID, customer reference, room reference, check-in/check-out dates |
+| **invoices** | Invoice ID, booking reference, tax rate, nights stayed, payment date |
+
+**Persistence Workflow:**
+- **Startup**: `DataManager::loadAll()` restores all entities from database into HotelManager
+- **Runtime**: In-memory collections reflect current state
+- **Shutdown**: `DataManager::saveAll()` persists current state back to SQLite
+- **Schema Initialization**: Database tables are automatically created on first use if they don't exist
+
+---
+
+## �️ Technology Stack
 
 - **Language**: C++17
 - **Framework**: Qt6 (Core, Widgets, SQL)
