@@ -24,23 +24,28 @@ The system demonstrates core object-oriented programming concepts:
   - **Standard**: `baseRate × days`
   - **Deluxe**: `baseRate × days × 1.2` (20% premium)
   - **Suite**: `baseRate × days × 1.5` (50% premium)
-- **Availability Tracking**: Monitor room occupancy status
+- **Availability Tracking**: `isAvailable` marks maintenance/inspection status only — independent of whether a guest is currently staying in the room
 - **Room Factory Pattern**: Safe room creation with validation
 
 ### Customer Management
 - **Customer Records**: Store customer ID, name, and phone number
 - **Unique ID Enforcement**: Prevent duplicate customer entries
-- **Multi-booking Support**: One customer can hold multiple reservations
+- **Multi-booking Support**: One customer can hold multiple reservations, queryable via `getBookingsForCustomer()`
 
 ### Booking System
 - **Reservation Management**: Link customers to rooms with check-in/check-out dates
-- **Booking Validation**: Prevent invalid date ranges and double-booking
+- **Booking Validation**: Prevent invalid date ranges and double-booking (overlap checks skip cancelled bookings)
+- **Derived Status**: Upcoming/Active/Completed states are computed from dates at read time, never stored
+- **Cancellation**: `cancelBooking()` soft-cancels an upcoming reservation and cascades a void (not delete) to any attached invoice, so front-desk staff can cancel in one action without tracing invoices manually
+- **Occupancy Queries**: `getRoomsByOccupancy()`, `getTodayCheckIns()`, `getTodayCheckOuts()` derive real-time occupancy from bookings, independent of room availability
 - **Automatic ID Generation**: Unique booking identifiers
 - **Available Room Filtering**: Query empty rooms for specific periods
 
 ### Invoice & Billing
 - **Invoice Lifecycle**: Create, lookup, list, and delete invoices through HotelManager
+- **Flexible Timing**: Invoices can be generated at booking time (pay-first) or at checkout — not gated to a single booking state
 - **Billing Separation**: Invoices remain tied to bookings while preserving their own payment date and tax configuration
+- **Cancellation Handling**: If a booking with an existing invoice is cancelled, the invoice is voided (marked cancelled, not deleted) automatically, preserving an audit trail while excluding it from revenue totals
 
 ### Data Persistence
 - **SQLite-backed Persistence**: Load and save hotel state through DataManager::loadAll() and DataManager::saveAll()
@@ -80,18 +85,6 @@ main.cpp
               └─► DataManager::saveAll()        ← Persist state to SQLite
 ```
 
-### Memory Management Strategy
-- **Ownership Model**: HotelManager owns all domain objects via `std::shared_ptr`
-- **Reference Integrity**: Business objects use `std::weak_ptr` to reference each other safely
-- **No Memory Leaks**: Automatic cleanup when objects are deleted from collections
-- **Safety**: weak_ptr::lock() prevents dangling pointer access
-
-### Data Persistence
-- **SQLite Database**: Automatic schema creation and management
-- **Singleton DataManager**: Central controller for all load/save operations
-- **Automatic Recovery**: Customer, room, and booking data restore on startup
-- **Safe Shutdown**: All in-memory state persists to database via DataManager::saveAll()
-
 ---
 
 ## 🎯 OOP Design Highlights
@@ -108,65 +101,24 @@ Each subclass inherits common attributes from `Room` and overrides `calculateTar
 
 ### Entity Relationships
 ```
-Customer
-    ├─ Can create multiple Bookings
-    
-Room
-    ├─ Subject of multiple Bookings
-    ├─ Polymorphic pricing (Standard, Deluxe, Suite)
-    
-Booking
-    ├─ Links Customer + Room
-    ├─ Tracks availability conflicts
-    
-Invoice
-    ├─ Associated with one Booking
-    ├─ Calculates cost with tax
-    ├─ Persists payment metadata
+Customer ──┐
+           ├──► Booking ──► Invoice
+Room ──────┘
 ```
 
 - **One-to-Many**: One customer can have multiple bookings
-- **Booking**: Junction entity linking customers to rooms with date ranges
-- **Invoice**: Wraps booking for billing purposes with tax and payment tracking
+- **Booking**: Junction entity linking customers to rooms
+- **Invoice**: Wraps booking for billing purposes
 
 ### Design Patterns Used
-- **MVC Pattern** (Overall Structure) - Separate **models** (raw data), **controllers** (core logic) and **views** (UI/GUI) for developing and maintaining
 - **Factory Pattern** (RoomFactory) — Encapsulate room creation
 - **Singleton Pattern** (DataManager) — Single instance for data management
 - **Strategy Pattern** (Room subclasses) — Different pricing strategies
-- **Repository Pattern** (HotelManager) — Centralized collection access
-
-### Business Rules & Validation
-- **Room Number Uniqueness**: No two rooms can have the same number
-- **Customer ID Uniqueness**: Each customer has a unique identifier
-- **Date Validation**: Check-in must be before check-out; dates must be valid ISO format (YYYY-MM-DD)
-- **Availability Conflict Prevention**: Rooms cannot be double-booked for overlapping periods
-- **Tax Rate Validation**: Must be a valid percentage (0.0 to 1.0)
-- **Existence Verification**: Referenced entities (customer, room, booking) must exist before linking
-- **Error Reporting**: All validation failures return detailed error messages to caller
+- **Repository Pattern** (HotelManager) — Centralized collection access, including derived-state queries (booking status, room occupancy) computed on read rather than stored redundantly
 
 ---
 
-## � Data Persistence
-
-The SQLite database automatically stores and manages:
-
-| Table | Content |
-|---|---|
-| **rooms** | Room number, type (Standard/Deluxe/Suite), base price, availability status |
-| **customers** | Customer ID, name, phone number |
-| **bookings** | Booking ID, customer reference, room reference, check-in/check-out dates |
-| **invoices** | Invoice ID, booking reference, tax rate, nights stayed, payment date |
-
-**Persistence Workflow:**
-- **Startup**: `DataManager::loadAll()` restores all entities from database into HotelManager
-- **Runtime**: In-memory collections reflect current state
-- **Shutdown**: `DataManager::saveAll()` persists current state back to SQLite
-- **Schema Initialization**: Database tables are automatically created on first use if they don't exist
-
----
-
-## �️ Technology Stack
+## 🛠️ Technology Stack
 
 - **Language**: C++17
 - **Framework**: Qt6 (Core, Widgets, SQL)
@@ -238,14 +190,15 @@ Run the demo to see the system in action:
 
 Group 10, Class 25C10
 University of Science, Vietnam National University Ho Chi Minh City
+| `Student ID` |          `Name`         |
+|:----------:|:---------------------:|
+|  25127070  |     Le Quang Khai     |
+|  25127190  |   Nguyen Vu Duc Duy   |
+|  25127234  | Nguyen Thi Thao Suong |
+|  25127389  |    Nguyen Minh Khoi   |
+|  25127464  |    Nguyen Kim Phuc    |
+---
 
-| **Student ID** |        **Name**       | **Assigned Tasks**                                                                                              | **% Completed** |
-|:--------------:|:---------------------:|-----------------------------------------------------------------------------------------------------------------|-----------------|
-|    25127070    |     Le Quang Khai     | Base rooms class design and implementations                                                                     |                 |
-|    25127190    |   Nguyen Vu Duc Duy   | Backend system architecture design. Hotel management class implementation. Memory safety handling.              |                 |
-|    25127234    | Nguyen Thi Thao Suong | Customer class implementation.                                                                                  |                 |
-|    25127389    |    Nguyen Minh Khoi   | Booking and Invoice class implementation. Data management class design and implementation. User-flow designing. |                 |
-|    25127464    |    Nguyen Kim Phuc    | User-Interface research                                                                                         |                 |                                                                                       |                 |
 ## 📄 License
 
 Educational project for OOP coursework.

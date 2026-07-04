@@ -22,7 +22,7 @@ Each layer has a single responsibility so team members can work in parallel with
 |---|---|
 | `models/` | What the system manages — rooms, customers, bookings, invoices |
 | `controllers/` | How the system behaves — create rooms, manage collections, enforce rules |
-| `database/` | Where data lives between sessions — SQLite |
+| `database/` | Where data lives between sessions — JSON, CSV, or SQLite |
 | `views/` | How the user interacts — Qt widgets, layouts, signals/slots |
 
 ## High-Level Data Flow
@@ -32,11 +32,16 @@ main.cpp (Demo)
   │
   ├─► HotelManager::registerRoom()         // add rooms with validation
   ├─► HotelManager::registerCustomer()     // add customers with validation
-  ├─► HotelManager::createBooking()        // create bookings with date/availability checks
+  ├─► HotelManager::createBooking()        // create bookings with date/overlap checks
+  ├─► HotelManager::cancelBooking()        // soft-cancel an upcoming booking (cascades to invoice)
   ├─► Room::calculateTargetPrice()         // polymorphic pricing
-  ├─► HotelManager::setRoomAvailability()  // manage room status
-  ├─► HotelManager::createInvoice()        // generate invoices linked to bookings
-  ├─► HotelManager::delete*()        // remove objects from the in-memory collection
+  ├─► HotelManager::setRoomAvailability()  // manage maintenance status only (not occupancy)
+  ├─► HotelManager::createInvoice()        // generate invoices linked to bookings (any booking state)
+  ├─► HotelManager::getBookingState()      // derive Upcoming/Active/Completed/Cancelled
+  ├─► HotelManager::getRoomsByOccupancy()  // derive vacant/occupied from bookings, not Room state
+  ├─► HotelManager::getTodayCheckIns()/getTodayCheckOuts() // dashboard queries
+  ├─► HotelManager::getBookingsForCustomer() // per-customer booking lookup
+  ├─► HotelManager::delete*()        // hard-remove objects from the in-memory collection
   ├─► HotelManager::find*()                // query system state
   │
   └─► DataManager::loadAll()/saveAll()      // restore or persist core domain data in SQLite
@@ -50,7 +55,7 @@ main.cpp (Demo)
 5. Shows room availability management
 6. Creates and deletes invoices through the controller
 7. Performs object queries and retrieval
-8. Persists core state using singleton DataManager
+8. Persists core state using DataManager::saveAll() and reloads it with DataManager::loadAll()
 
 The demo showcases all four OOP principles, design patterns, and the complete system workflow.
 
@@ -108,8 +113,10 @@ HotelManager (owns via shared_ptr)
 - **`Customer`** — identity and contact info (ID, name, phone). Kept separate so one customer can hold multiple bookings.
 - **`Booking`** — links a customer to a room with check-in and check-out dates via weak references. Represents the reservation itself.
   - Stores `weak_ptr<Customer>` and `weak_ptr<Room>` (non-owning references)
+  - Stores a persisted `cancelled` flag (see [Booking Lifecycle & Cancellation](#booking-lifecycle--cancellation) below). All other status (upcoming/active/completed) is derived, never stored.
 - **`Invoice`** — wraps a booking and computes subtotal, tax, and total via a weak reference. Separates billing from reservation logic.
   - Stores `weak_ptr<Booking>` (non-owning reference)
+  - Stores a persisted `cancelled` flag, set when its parent booking is cancelled (void, not deleted — see below).
 
 This design ensures that:
 1. HotelManager maintains sole ownership of all objects
@@ -124,20 +131,35 @@ Every model class uses a `.h` (declaration) and `.cpp` (implementation) pair:
 - Cleaner interfaces — headers expose only what other modules need.
 - Matches standard C++ project conventions expected in grading.
 
-## Design Patterns
+## Booking Lifecycle & Cancellation
 
-### MVC Pattern - `System Overall Architecture`
-This separation of concerns improves code organization, maintainability, and scalability. Each component handles a specific responsibility, making the application easier to modify and extend.
-- Model: Manages application data and business logic.
-- View: Handles the user interface and presentation of data.
-- Controller: Processes user input and coordinates between Model and View.
-      
-**Why:** MVC provides several benefits that improve application design and development.
-- Clear separation of concerns improves maintainability.
-- Allows parallel development of UI and hotel managing logic.
-- Makes testing easier, especially unit testing.
+`Booking` status is a mix of **derived** and **stored** state — only what cannot be computed is persisted.
 
-### Factory Pattern — `RoomFactory`
+```cpp
+enum class BookingState { UPCOMING, ACTIVE, COMPLETED, CANCELLED };
+BookingState HotelManager::getBookingState(const Booking& booking) const;
+```
+
+- `UPCOMING` / `ACTIVE` / `COMPLETED` are derived at read time from `(checkInDate, checkOutDate, today)`. They are never stored, so there is no risk of a stale status drifting from the actual dates.
+- `CANCELLED` is the one fact dates alone can never express — it is a deliberate staff action, so `Booking` stores a persisted `cancelled` flag. `getBookingState()` checks this flag first, before falling back to the date-derived states.
+
+**Cancellation is a soft action, distinct from hard deletion:**
+
+```cpp
+bool cancelBooking(const std::string& bookingId, std::string& errorMessage);
+```
+
+- Only valid when the booking's current state is `UPCOMING` — a stay that has already started or finished cannot be "un-happened."
+- Sets `Booking::cancelled = true`. The booking record is kept (not removed) for history/audit purposes.
+- **Cascades to void, not delete, any attached invoice**: if the booking already has an invoice (pay-at-booking is supported, so an invoice can exist before checkout), that invoice's own `cancelled` flag is also set. The system locates and voids it automatically — reception staff do not need to search for and manually delete the correct invoice under time pressure (e.g. during rush-hour front-desk operations).
+- This is intentionally a fast, single-call, no-confirmation path. Voided invoices remain visible in invoice listings (styled distinctly, e.g. greyed out) rather than hidden, preserving an audit trail.
+- `deleteBooking()` remains a separate, unrelated hard-delete path (admin/data-cleanup use), and still cascades to *deleting* any associated invoice — it is not used by the normal cancellation flow.
+
+**Double-booking overlap checks must exclude cancelled bookings.** The existing overlap guard (`checkIn < existingCheckOut && existingCheckIn < checkOut`) skips any booking where `isCancelled()` is true — otherwise a cancelled booking would permanently block its original dates from being rebooked.
+
+**Revenue/statistics queries must exclude cancelled invoices.** Any method that sums, lists, or counts invoices as "paid" (dashboard totals, income reports) must filter out invoices where `isCancelled()` is true.
+
+
 
 ```cpp
 static std::shared_ptr<Room> createRoom(RoomType type, std::string num, double basePrice);
@@ -156,8 +178,10 @@ static std::shared_ptr<Room> createRoom(RoomType type, std::string num, double b
 bool registerRoom(RoomType kind, const std::string& roomNumber, double baseRate, std::string& errorMessage);
 bool registerCustomer(const std::string& id, const std::string& name, const std::string& phone, std::string& errorMessage);
 bool createBooking(const std::string& customerId, const std::string& roomNumber, const std::string& checkInDate, const std::string& checkOutDate, std::string& errorMessage);
+bool cancelBooking(const std::string& bookingId, std::string& errorMessage);
 bool setRoomAvailability(const std::string& roomNumber, bool available, std::string& errorMessage);
 std::shared_ptr<Invoice> createInvoice(const std::string& invoiceId, const std::string& bookingId, int days, double taxRate, std::string& errorMessage);
+BookingState getBookingState(const Booking& booking) const;
 
 ```
 
@@ -165,9 +189,11 @@ std::shared_ptr<Invoice> createInvoice(const std::string& invoiceId, const std::
 
 **Key Methods:**
 - `registerRoom()`, `registerCustomer()` — validate input, create objects, add to collections
-- `createBooking()` — validates customer exists, room is available, dates are valid, then marks room unavailable
-- `setRoomAvailability()` — prevents marking a booked room as available
-- `createInvoice()` — validates invoice input and attaches the invoice to a booking
+- `createBooking()` — validates customer exists, room and dates don't overlap with any *non-cancelled* existing booking for that room, then creates the booking. Does **not** touch `Room::isAvailable` — occupancy is derived from bookings, not stored on the room (see [Room Availability vs. Occupancy](#room-availability-vs-occupancy) below).
+- `cancelBooking()` — soft-cancels an `UPCOMING` booking and cascades a void to its invoice, if any (see [Booking Lifecycle & Cancellation](#booking-lifecycle--cancellation))
+- `setRoomAvailability()` — toggles maintenance status only; blocks marking a room unavailable while it has an `ACTIVE` booking (a guest currently checked in)
+- `createInvoice()` — validates invoice input and attaches the invoice to a booking; callable regardless of booking state, since payment may occur at booking time or at checkout
+- `getBookingState()` — derives `UPCOMING` / `ACTIVE` / `COMPLETED` from dates, or returns `CANCELLED` if the booking's persisted flag is set
 
 
 ### Singleton Pattern — `DataManager`
@@ -291,7 +317,19 @@ bool Booking::isValid() const {
 
 This ensures all referenced objects still exist before use.
 
+## Room Availability vs. Occupancy
+
+`Room::isAvailable` and "does this room currently have a guest" are **independent facts**, not the same flag wearing two hats:
+
+| Fact | Source of truth | Meaning |
+|---|---|---|
+| Occupancy (vacant/occupied) | Derived from `Booking` records via `getBookingState()` | Does an `ACTIVE` booking exist for this room today? |
+| Availability (`isAvailable`) | Stored on `Room`, toggled via `setRoomAvailability()` | Is the room blocked for maintenance/inspection/cleaning? |
+
+These can combine freely — a room can be vacant *and* under maintenance, or occupied *and* fully available for future booking once the current guest checks out. `createBooking()` never sets `isAvailable`; it only checks for date overlaps against existing non-cancelled bookings. `setRoomAvailability(false, ...)` (putting a room into maintenance) is blocked if the room currently has an `ACTIVE` booking — a room with a guest in it isn't a candidate for cleaning/inspection yet. `getRoomsByOccupancy(bool)` derives strictly from booking state and never reads `isAvailable`.
+
 ## HotelManager API
+
 
 ### Core Methods
 
@@ -300,6 +338,7 @@ This ensures all referenced objects still exist before use.
 bool registerRoom(RoomType kind, const std::string& roomNumber, double baseRate, std::string& errorMessage);
 bool setRoomAvailability(const std::string& roomNumber, bool available, std::string& errorMessage);
 ```
+`setRoomAvailability` governs maintenance status only (see [Room Availability vs. Occupancy](#room-availability-vs-occupancy)). Setting `available = false` is rejected if the room currently has an `ACTIVE` booking.
 
 **Customer Management:**
 ```cpp
@@ -315,6 +354,7 @@ bool createBooking(
     const std::string& checkOutDate,     // ISO format: "YYYY-MM-DD"
     std::string& errorMessage
 );
+bool cancelBooking(const std::string& bookingId, std::string& errorMessage);
 ```
 
 **Invoice Generation:**
@@ -340,6 +380,10 @@ std::shared_ptr<Customer> findCustomerById(const std::string& customerId) const;
 std::shared_ptr<Booking> findBookingById(const std::string& bookingId) const;
 
 std::vector<std::shared_ptr<Room>> getAvailableRooms() const;
+std::vector<std::shared_ptr<Room>> getRoomsByOccupancy(bool occupied) const;   // derived from bookings, not isAvailable
+std::vector<std::shared_ptr<Booking>> getTodayCheckIns() const;
+std::vector<std::shared_ptr<Booking>> getTodayCheckOuts() const;
+std::vector<std::shared_ptr<Booking>> getBookingsForCustomer(const std::string& customerId) const;
 ```
 
 ### Validation & Error Handling
@@ -409,13 +453,16 @@ The current implementation provides:
 ✅ **Complete** — Factory Pattern (RoomFactory) and Singleton Pattern (DataManager)
 ✅ **Complete** — Comprehensive validation and error handling in HotelManager
 ✅ **Complete** — Polymorphic room pricing (calculateTargetPrice)
-✅ **Complete** — Invoice generation with tax calculation
+✅ **Complete** — Invoice generation with tax calculation, callable independent of booking state
+✅ **Complete** — Booking cancellation (`cancelBooking`) with cascading invoice void and overlap-check exclusion
+✅ **Complete** — Room availability (maintenance) decoupled from booking occupancy
+✅ **Complete** — Dashboard/query helpers: `getRoomsByOccupancy`, `getTodayCheckIns`, `getTodayCheckOuts`, `getBookingsForCustomer`
 ✅ **Complete** — Working demo in main.cpp
 
 **Next Steps:**
 
-- **`database/`** — implement `loadAll()` / `saveAll()` persistence layer (JSON, CSV, or SQLite)
-- **`views/`** — integrate MainWindow with HotelManager (tabbed UI for rooms, customers, bookings, invoices)
+- **Revenue/statistics** — implement income summary methods over `Invoice`, with `isCancelled()` filtering applied everywhere invoices are summed or counted
+- **`views/`** — integrate MainWindow with HotelManager (tabbed UI for rooms, customers, bookings, invoices); cancelled bookings/invoices should remain visible but styled distinctly (e.g. greyed out) rather than hidden
 - **Qt Integration** — connect GUI signals/slots to HotelManager methods for interactive use
 - **Error Display** — show validation errors in UI dialogs rather than console output
-- **Data Loading** — call `DataManager::getInstance().loadAll()` on MainWindow initialization
+- **Room deletion safeguard** — add the same class of guard used for `setRoomAvailability` (block/cascade check) before allowing a room to be hard-deleted while it has active bookings
