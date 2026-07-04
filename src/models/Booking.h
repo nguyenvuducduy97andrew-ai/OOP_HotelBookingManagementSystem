@@ -5,6 +5,14 @@
 class Customer;
 class Room;
 
+// Updated documentation to enforce the business rule where Invoice is ONLY generated at the Completed stage
+enum class BookingStatus {
+    Upcoming,   // Reserved but not yet checked in (Invoice does not exist)
+    Active,     // Currently checked in and occupying the room (Invoice does not exist)
+    Completed,  // Checked out and fully settled (Triggers simultaneous Invoice generation)
+    Canceled    // Reservation invalidated before check-in (Soft deletion state, no Invoice generated)
+};
+
 class Booking
 {
 private:
@@ -14,6 +22,9 @@ private:
     std::weak_ptr<Room> room;          // Weak reference to room (owned by HotelManager)
     std::string checkInDate;
     std::string checkOutDate;
+
+    // Tracks the active workflow state of this specific reservation record
+    BookingStatus status;
 
 public:
     Booking();
@@ -37,6 +48,11 @@ public:
     std::string getCheckOutDate() const;
     void setCheckOutDate(const std::string &checkOutDate);
 
+    BookingStatus getStatus() const;
+    void setStatus(BookingStatus status);
+
+    // Helper utility to map enum values directly onto serialized string representations
+    std::string getStatusString() const;
+
     bool isValid() const;  // Check if booking has valid (non-expired) customer and room
 };
-

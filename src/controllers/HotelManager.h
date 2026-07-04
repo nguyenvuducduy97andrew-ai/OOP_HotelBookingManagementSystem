@@ -30,19 +30,19 @@ private:
         const std::string& name,
         const std::string& phone,
         std::string& errorMessage
-    ) const;
+        ) const;
     bool validateBookingDates(
         const std::string &checkIn,
         const std::string &checkOut,
         std::string &errorMessage
-    ) const;
+        ) const;
 
     bool isRoomFreeForDates(
         const std::string &roomNumber,
         const std::string &checkIn,
         const std::string &checkOut,
         std::string &errorMessage
-    ) const;
+        ) const;
     bool validateBookingInput(
         const std::string& customerId,
         const std::string& roomNumber,
@@ -94,6 +94,13 @@ public:
     std::vector<std::shared_ptr<Booking>> getTodayCheckOuts() const;
     std::vector<std::shared_ptr<Room>> getRoomsByOccupancy(bool occupied) const;
 
+    // Added: Filter bookings by their specific operational status for tabbed interface sub-pages
+    std::vector<std::shared_ptr<Booking>> getBookingsByStatus(BookingStatus status) const;
+
+    // Added: Fetch today's dynamic arrivals and departures targeting a custom date string for the Dashboard
+    std::vector<std::shared_ptr<Booking>> getArrivalsByDate(const std::string& dateStr) const;
+    std::vector<std::shared_ptr<Booking>> getDeparturesByDate(const std::string& dateStr) const;
+
     // Use-case methods
     bool registerRoom(
         RoomType kind,
@@ -132,6 +139,9 @@ public:
         bool available,
         std::string& errorMessage
         );
+
+    // Added: Soft-cancels a reservation by changing its status and releasing the assigned room back to inventory
+    bool cancelBooking(const std::string& bookingId, std::string& errorMessage);
 
     // ID generation
     std::string nextInvoiceId() const;
