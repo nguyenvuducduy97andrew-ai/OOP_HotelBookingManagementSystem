@@ -92,6 +92,14 @@ void Booking::setCheckOutDate(const std::string& checkOutDate) {
     this->checkOutDate = checkOutDate;
 }
 
+void Booking::setCancelled(bool c) {
+    cancelled = c;
+}
+
+bool Booking::isCancelled() const {
+    return cancelled;
+}
+
 bool Booking::isValid() const {
     auto lockedCustomer = customer.lock();
     auto lockedRoom = room.lock();

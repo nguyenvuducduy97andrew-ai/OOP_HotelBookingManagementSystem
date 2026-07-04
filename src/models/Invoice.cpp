@@ -69,6 +69,14 @@ void Invoice::setPaymentDate(const std::string& paymentDate) {
     this->paymentDate = paymentDate;
 }
 
+void Invoice::setCancelled(bool c) {
+    cancelled = c;
+}
+
+bool Invoice::isCancelled() const {
+    return cancelled;
+}
+
 // Modified: Validates booking existence, invoice data integrity, and duration validity
 bool Invoice::isValid() const {
     // Lock the weak_ptr and check if booking is valid

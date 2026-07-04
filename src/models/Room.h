@@ -5,7 +5,7 @@ class Room {
 private:
     std::string roomNumber;
     double basePrice;
-    bool isAvailable;
+    bool isAvailable; // Maintenance/inspection status only; does not indicate guest occupancy.
 
 public:
     Room(std::string roomNumber, double basePrice);

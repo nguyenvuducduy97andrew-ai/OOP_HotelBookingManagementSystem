@@ -8,6 +8,8 @@
 #include "Room.h"
 #include "RoomFactory.h"
 
+enum class BookingState { UPCOMING, ACTIVE, COMPLETED, CANCELLED };
+
 class HotelManager
 {
 private:
@@ -86,6 +88,7 @@ public:
     std::shared_ptr<Customer> findCustomerById(const std::string& customerId) const;
     std::shared_ptr<Booking> findBookingById(const std::string& bookingId) const;
     std::shared_ptr<Invoice> findInvoiceById(const std::string& invoiceId) const;
+    std::shared_ptr<Invoice> findInvoiceForBooking(const std::string& bookingId) const;
 
     // Queries
     std::vector<std::shared_ptr<Room>> getAvailableRooms() const;
@@ -93,6 +96,7 @@ public:
     std::vector<std::shared_ptr<Booking>> getTodayCheckIns() const;
     std::vector<std::shared_ptr<Booking>> getTodayCheckOuts() const;
     std::vector<std::shared_ptr<Room>> getRoomsByOccupancy(bool occupied) const;
+    BookingState getBookingState(const Booking& booking) const;
 
     // Use-case methods
     bool registerRoom(
@@ -127,11 +131,14 @@ public:
         std::string& errorMessage
         );
 
+    // Maintenance/inspection state only; guest occupancy is derived from bookings.
     bool setRoomAvailability(
         const std::string& roomNumber,
         bool available,
         std::string& errorMessage
         );
+
+    bool cancelBooking(const std::string& bookingId, std::string& errorMessage);
 
     // ID generation
     std::string nextInvoiceId() const;

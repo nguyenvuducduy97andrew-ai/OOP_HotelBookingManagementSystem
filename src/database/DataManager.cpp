@@ -63,6 +63,7 @@ bool DataManager::initDatabase(const std::string& dataPath) {
         "   roomNumber TEXT NOT NULL,"
         "   checkInDate TEXT NOT NULL,"
         "   checkOutDate TEXT NOT NULL,"
+        "   cancelled INTEGER DEFAULT 0,"
         "   FOREIGN KEY (customerId) REFERENCES Customer(customerId) ON DELETE CASCADE ON UPDATE CASCADE,"
         "   FOREIGN KEY (roomNumber) REFERENCES Room(roomNumber) ON DELETE RESTRICT ON UPDATE CASCADE"
         ");";
@@ -79,6 +80,7 @@ bool DataManager::initDatabase(const std::string& dataPath) {
         "   taxRate REAL NOT NULL,"
         "   nights INTEGER NOT NULL,"
         "   paymentDate TEXT NOT NULL,"
+        "   cancelled INTEGER DEFAULT 0,"
         "   FOREIGN KEY (bookingId) REFERENCES Booking(bookingId) ON DELETE CASCADE ON UPDATE CASCADE"
         ");";
     if (!query.exec(createInvoice)) {
@@ -151,15 +153,25 @@ bool DataManager::loadAll(HotelManager& manager, const std::string& dataPath) {
     }
 
     // Load booking schedules, mapping string dates directly via .toStdString() conversions
-    if (query.exec("SELECT customerId, roomNumber, checkInDate, checkOutDate FROM Booking")) {
+    if (query.exec("SELECT bookingId, customerId, roomNumber, checkInDate, checkOutDate, cancelled FROM Booking")) {
         while (query.next()) {
-            std::string custId = query.value(0).toString().toStdString();
-            std::string roomNum = query.value(1).toString().toStdString();
+            std::string bookingId = query.value(0).toString().toStdString();
+            std::string custId = query.value(1).toString().toStdString();
+            std::string roomNum = query.value(2).toString().toStdString();
 
-            std::string checkInStr = query.value(2).toString().toStdString();
-            std::string checkOutStr = query.value(3).toString().toStdString();
+            std::string checkInStr = query.value(3).toString().toStdString();
+            std::string checkOutStr = query.value(4).toString().toStdString();
 
+            const auto beforeCount = manager.getBookings().size();
             manager.createBooking(custId, roomNum, checkInStr, checkOutStr, errorMsg);
+
+            if (manager.getBookings().size() > beforeCount) {
+                auto booking = manager.getBookings().back();
+                if (booking) {
+                    booking->setBookingId(bookingId);
+                    booking->setCancelled(query.value(5).toInt() == 1);
+                }
+            }
         }
     } else {
         qDebug() << "Error reading Booking table: " << query.lastError().text();
@@ -167,7 +179,7 @@ bool DataManager::loadAll(HotelManager& manager, const std::string& dataPath) {
     }
 
     // Added: Reconstruct historical invoices directly back into the core system memory
-    if (query.exec("SELECT invoiceId, bookingId, taxRate, nights, paymentDate FROM Invoice")) {
+    if (query.exec("SELECT invoiceId, bookingId, taxRate, nights, paymentDate, cancelled FROM Invoice")) {
         while (query.next()) {
             std::string invId = query.value(0).toString().toStdString();
             std::string bookId = query.value(1).toString().toStdString();
@@ -176,6 +188,11 @@ bool DataManager::loadAll(HotelManager& manager, const std::string& dataPath) {
             std::string payDate = query.value(4).toString().toStdString();
 
             manager.createInvoice(invId, bookId, tax, nightsCount, payDate, errorMsg);
+
+            auto invoice = manager.findInvoiceById(invId);
+            if (invoice) {
+                invoice->setCancelled(query.value(5).toInt() == 1);
+            }
         }
     } else {
         qDebug() << "Error reading Invoice table: " << query.lastError().text();
@@ -244,7 +261,7 @@ bool DataManager::saveAll(HotelManager& manager, const std::string& dataPath) {
     }
 
     // 4. Persist Booking schedules
-    query.prepare("INSERT INTO Booking (bookingId, customerId, roomNumber, checkInDate, checkOutDate) VALUES (?, ?, ?, ?, ?)");
+    query.prepare("INSERT INTO Booking (bookingId, customerId, roomNumber, checkInDate, checkOutDate, cancelled) VALUES (?, ?, ?, ?, ?, ?)");
     for (const auto& booking : manager.getBookings()) {
         if (booking && booking->getCustomer() && booking->getRoom()) {
             query.addBindValue(QString::fromStdString(booking->getBookingId()));
@@ -254,6 +271,7 @@ bool DataManager::saveAll(HotelManager& manager, const std::string& dataPath) {
             // Modified: Directly bind ISO strings instead of querying conversion method variants
             query.addBindValue(QString::fromStdString(booking->getCheckInDate()));
             query.addBindValue(QString::fromStdString(booking->getCheckOutDate()));
+            query.addBindValue(booking->isCancelled() ? 1 : 0);
 
             if (!query.exec()) {
                 qDebug() << "Error saving Booking: " << query.lastError().text();
@@ -262,7 +280,7 @@ bool DataManager::saveAll(HotelManager& manager, const std::string& dataPath) {
     }
 
     // Added: 5. Persist Invoice records dynamically calculated up from view layer properties
-    query.prepare("INSERT INTO Invoice (invoiceId, bookingId, taxRate, nights, paymentDate) VALUES (?, ?, ?, ?, ?)");
+    query.prepare("INSERT INTO Invoice (invoiceId, bookingId, taxRate, nights, paymentDate, cancelled) VALUES (?, ?, ?, ?, ?, ?)");
     for (const auto& invoice : manager.getInvoices()) {
         if (invoice && invoice->getBooking()) {
             query.addBindValue(QString::fromStdString(invoice->getInvoiceId()));
@@ -270,6 +288,7 @@ bool DataManager::saveAll(HotelManager& manager, const std::string& dataPath) {
             query.addBindValue(invoice->getTaxRate());
             query.addBindValue(invoice->getNights());
             query.addBindValue(QString::fromStdString(invoice->getPaymentDate()));
+            query.addBindValue(invoice->isCancelled() ? 1 : 0);
 
             if (!query.exec()) {
                 qDebug() << "Error saving Invoice: " << query.lastError().text();

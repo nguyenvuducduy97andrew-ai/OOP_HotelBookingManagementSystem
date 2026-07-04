@@ -146,6 +146,8 @@ bool HotelManager::isRoomFreeForDates(
     std::string& errorMessage) const
 {
     for (const auto& booking : bookings) {
+        if (!booking || booking->isCancelled()) continue;
+
         auto bookedRoom = booking->getRoom();
         if (!bookedRoom || bookedRoom->getRoomNumber() != roomNumber) continue;
 
@@ -320,6 +322,19 @@ std::shared_ptr<Invoice> HotelManager::findInvoiceById(const std::string &invoic
 
     return nullptr;
 }
+
+std::shared_ptr<Invoice> HotelManager::findInvoiceForBooking(const std::string &bookingId) const
+{
+    for (const auto &invoice : invoices)
+    {
+        if (invoice && invoice->getBooking() && invoice->getBooking()->getBookingId() == bookingId)
+        {
+            return invoice;
+        }
+    }
+
+    return nullptr;
+}
 // =========================
 // Queries
 // =========================
@@ -395,6 +410,35 @@ std::vector<std::shared_ptr<Booking>> HotelManager::getTodayCheckOuts() const
     return checkOuts;
 }
 
+BookingState HotelManager::getBookingState(const Booking &booking) const
+{
+    if (booking.isCancelled())
+    {
+        return BookingState::CANCELLED;
+    }
+
+    const QDate today = QDate::currentDate();
+    const QDate checkIn = QDate::fromString(QString::fromStdString(booking.getCheckInDate()), Qt::ISODate);
+    const QDate checkOut = QDate::fromString(QString::fromStdString(booking.getCheckOutDate()), Qt::ISODate);
+
+    if (!checkIn.isValid() || !checkOut.isValid())
+    {
+        return BookingState::COMPLETED;
+    }
+
+    if (today < checkIn)
+    {
+        return BookingState::UPCOMING;
+    }
+
+    if (today < checkOut)
+    {
+        return BookingState::ACTIVE;
+    }
+
+    return BookingState::COMPLETED;
+}
+
 std::vector<std::shared_ptr<Room>> HotelManager::getRoomsByOccupancy(bool occupied) const
 {
     std::vector<std::shared_ptr<Room>> matchingRooms;
@@ -407,7 +451,7 @@ std::vector<std::shared_ptr<Room>> HotelManager::getRoomsByOccupancy(bool occupi
         bool isOccupied = false;
         for (const auto &booking : bookings)
         {
-            if (!booking || !booking->getRoom()) continue;
+            if (!booking || booking->isCancelled() || !booking->getRoom()) continue;
 
             if (booking->getRoom()->getRoomNumber() != room->getRoomNumber()) continue;
 
@@ -515,7 +559,6 @@ bool HotelManager::createBooking(
     booking->setCheckInDate(checkIn);
     booking->setCheckOutDate(checkOut);
 
-    room->setIsAvailable(false);
     addBooking(booking);
     return true;
 }
@@ -565,15 +608,17 @@ bool HotelManager::setRoomAvailability(
         return false;
     }
 
-    if (available)
+    if (!available)
     {
         for (const auto &booking : bookings)
         {
-            if (booking &&
-                booking->getRoom() &&
-                booking->getRoom()->getRoomNumber() == roomNumber)
+            if (!booking || booking->isCancelled()) continue;
+
+            if (!booking->getRoom() || booking->getRoom()->getRoomNumber() != roomNumber) continue;
+
+            if (getBookingState(*booking) == BookingState::ACTIVE)
             {
-                errorMessage = "Cannot mark room available while it has an active booking.";
+                errorMessage = "Cannot mark room unavailable while a guest is checked in";
                 return false;
             }
         }
@@ -583,6 +628,31 @@ bool HotelManager::setRoomAvailability(
     return true;
 }
 
+bool HotelManager::cancelBooking(const std::string &bookingId, std::string &errorMessage)
+{
+    const auto booking = findBookingById(bookingId);
+    if (!booking)
+    {
+        errorMessage = "Booking not found.";
+        return false;
+    }
+
+    if (getBookingState(*booking) != BookingState::UPCOMING)
+    {
+        errorMessage = "Only upcoming bookings can be cancelled";
+        return false;
+    }
+
+    booking->setCancelled(true);
+
+    const auto invoice = findInvoiceForBooking(bookingId);
+    if (invoice)
+    {
+        invoice->setCancelled(true);
+    }
+
+    return true;
+}
 
 // =========================
 // Delete methods

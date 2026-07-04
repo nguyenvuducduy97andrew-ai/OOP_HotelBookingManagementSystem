@@ -14,6 +14,7 @@ private:
     std::weak_ptr<Room> room;          // Weak reference to room (owned by HotelManager)
     std::string checkInDate;
     std::string checkOutDate;
+    bool cancelled = false;
 
 public:
     Booking();
@@ -36,6 +37,9 @@ public:
 
     std::string getCheckOutDate() const;
     void setCheckOutDate(const std::string &checkOutDate);
+
+    void setCancelled(bool c);
+    bool isCancelled() const;
 
     bool isValid() const;  // Check if booking has valid (non-expired) customer and room
 };

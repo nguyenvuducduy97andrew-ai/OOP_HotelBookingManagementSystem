@@ -13,6 +13,7 @@ private:
     double taxRate;
     int nights;                      // Number of nights stayed (passed down from MainWindow)
     std::string paymentDate;         // ISO date format string "YYYY-MM-DD"
+    bool cancelled = false;
 
 public:
     Invoice();
@@ -33,6 +34,9 @@ public:
 
     std::string getPaymentDate() const;
     void setPaymentDate(const std::string& paymentDate);
+
+    void setCancelled(bool c);
+    bool isCancelled() const;
 
     // Modified: Changed return type from QString to std::string to keep Core decoupled from Qt
     std::string generateInvoiceDetails() const;
