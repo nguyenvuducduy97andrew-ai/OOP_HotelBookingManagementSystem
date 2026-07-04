@@ -339,6 +339,97 @@ std::vector<std::shared_ptr<Room>> HotelManager::getAvailableRooms() const
     return availableRooms;
 }
 
+std::vector<std::shared_ptr<Booking>> HotelManager::getBookingsForCustomer(const std::string &customerId) const
+{
+    std::vector<std::shared_ptr<Booking>> customerBookings;
+
+    for (const auto &booking : bookings)
+    {
+        if (!booking) continue;
+
+        const auto customer = booking->getCustomer();
+        if (customer && customer->getCustomerId() == customerId)
+        {
+            customerBookings.push_back(booking);
+        }
+    }
+
+    return customerBookings;
+}
+
+std::vector<std::shared_ptr<Booking>> HotelManager::getTodayCheckIns() const
+{
+    std::vector<std::shared_ptr<Booking>> checkIns;
+    const QDate today = QDate::currentDate();
+
+    for (const auto &booking : bookings)
+    {
+        if (!booking) continue;
+
+        const QDate checkIn = QDate::fromString(QString::fromStdString(booking->getCheckInDate()), Qt::ISODate);
+        if (checkIn.isValid() && checkIn == today)
+        {
+            checkIns.push_back(booking);
+        }
+    }
+
+    return checkIns;
+}
+
+std::vector<std::shared_ptr<Booking>> HotelManager::getTodayCheckOuts() const
+{
+    std::vector<std::shared_ptr<Booking>> checkOuts;
+    const QDate today = QDate::currentDate();
+
+    for (const auto &booking : bookings)
+    {
+        if (!booking) continue;
+
+        const QDate checkOut = QDate::fromString(QString::fromStdString(booking->getCheckOutDate()), Qt::ISODate);
+        if (checkOut.isValid() && checkOut == today)
+        {
+            checkOuts.push_back(booking);
+        }
+    }
+
+    return checkOuts;
+}
+
+std::vector<std::shared_ptr<Room>> HotelManager::getRoomsByOccupancy(bool occupied) const
+{
+    std::vector<std::shared_ptr<Room>> matchingRooms;
+    const QDate today = QDate::currentDate();
+
+    for (const auto &room : rooms)
+    {
+        if (!room) continue;
+
+        bool isOccupied = false;
+        for (const auto &booking : bookings)
+        {
+            if (!booking || !booking->getRoom()) continue;
+
+            if (booking->getRoom()->getRoomNumber() != room->getRoomNumber()) continue;
+
+            const QDate checkIn = QDate::fromString(QString::fromStdString(booking->getCheckInDate()), Qt::ISODate);
+            const QDate checkOut = QDate::fromString(QString::fromStdString(booking->getCheckOutDate()), Qt::ISODate);
+
+            if (checkIn.isValid() && checkOut.isValid() && checkIn <= today && today < checkOut)
+            {
+                isOccupied = true;
+                break;
+            }
+        }
+
+        if (isOccupied == occupied)
+        {
+            matchingRooms.push_back(room);
+        }
+    }
+
+    return matchingRooms;
+}
+
 // =========================
 // ID generation
 // =========================

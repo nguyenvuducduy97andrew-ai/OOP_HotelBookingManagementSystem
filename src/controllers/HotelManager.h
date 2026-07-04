@@ -89,6 +89,10 @@ public:
 
     // Queries
     std::vector<std::shared_ptr<Room>> getAvailableRooms() const;
+    std::vector<std::shared_ptr<Booking>> getBookingsForCustomer(const std::string& customerId) const;
+    std::vector<std::shared_ptr<Booking>> getTodayCheckIns() const;
+    std::vector<std::shared_ptr<Booking>> getTodayCheckOuts() const;
+    std::vector<std::shared_ptr<Room>> getRoomsByOccupancy(bool occupied) const;
 
     // Use-case methods
     bool registerRoom(
