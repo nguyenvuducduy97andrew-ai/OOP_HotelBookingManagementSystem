@@ -26,8 +26,10 @@ public:
     DataManager(const DataManager&) = delete;
     DataManager& operator=(const DataManager&) = delete;
 
+    // Modified: Updated documentation to reflect that loading now populates the Booking lifecycle status
     bool loadAll(HotelManager& manager, const std::string& dataPath = "hotel_data.db");
 
     // Modified: Removed 'const' from HotelManager reference to allow dynamic calculations during serialization
+    // and to ensure the new Booking lifecycle state is correctly saved back to the database
     bool saveAll(HotelManager& manager, const std::string& dataPath = "hotel_data.db");
 };

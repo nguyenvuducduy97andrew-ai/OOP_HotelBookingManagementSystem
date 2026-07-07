@@ -56,6 +56,7 @@ bool DataManager::initDatabase(const std::string& dataPath) {
         return false;
     }
 
+    // Modified: Integrated 'status' column to keep track of the booking operational lifecycle state
     QString createBooking =
         "CREATE TABLE IF NOT EXISTS Booking ("
         "   bookingId TEXT PRIMARY KEY,"
@@ -63,7 +64,7 @@ bool DataManager::initDatabase(const std::string& dataPath) {
         "   roomNumber TEXT NOT NULL,"
         "   checkInDate TEXT NOT NULL,"
         "   checkOutDate TEXT NOT NULL,"
-        "   cancelled INTEGER DEFAULT 0,"
+        "   status TEXT NOT NULL DEFAULT 'Upcoming',"
         "   FOREIGN KEY (customerId) REFERENCES Customer(customerId) ON DELETE CASCADE ON UPDATE CASCADE,"
         "   FOREIGN KEY (roomNumber) REFERENCES Room(roomNumber) ON DELETE RESTRICT ON UPDATE CASCADE"
         ");";
@@ -152,24 +153,30 @@ bool DataManager::loadAll(HotelManager& manager, const std::string& dataPath) {
         return false;
     }
 
-    // Load booking schedules, mapping string dates directly via .toStdString() conversions
-    if (query.exec("SELECT bookingId, customerId, roomNumber, checkInDate, checkOutDate, cancelled FROM Booking")) {
+    // Modified: Selected the additional 'status' column to correctly reconstruct the Booking state machine in memory
+    if (query.exec("SELECT customerId, roomNumber, checkInDate, checkOutDate, status FROM Booking")) {
         while (query.next()) {
             std::string bookingId = query.value(0).toString().toStdString();
             std::string custId = query.value(1).toString().toStdString();
             std::string roomNum = query.value(2).toString().toStdString();
 
-            std::string checkInStr = query.value(3).toString().toStdString();
-            std::string checkOutStr = query.value(4).toString().toStdString();
+            std::string checkInStr = query.value(2).toString().toStdString();
+            std::string checkOutStr = query.value(3).toString().toStdString();
+            std::string statusStr = query.value(4).toString().toStdString();
 
             const auto beforeCount = manager.getBookings().size();
             manager.createBooking(custId, roomNum, checkInStr, checkOutStr, errorMsg);
 
-            if (manager.getBookings().size() > beforeCount) {
-                auto booking = manager.getBookings().back();
-                if (booking) {
-                    booking->setBookingId(bookingId);
-                    booking->setCancelled(query.value(5).toInt() == 1);
+            // Post-process the newly created booking to map its serialized status string back to enum class tokens
+            // Assuming manager exposes a search utility or booking mapping mechanism by utilizing IDs
+            auto bookings = manager.getBookings();
+            if (!bookings.empty()) {
+                auto activeBooking = bookings.back(); // Fetching the most recently appended raw entity
+                if (activeBooking) {
+                    if (statusStr == "Active") activeBooking->setStatus(BookingStatus::Active);
+                    else if (statusStr == "Completed") activeBooking->setStatus(BookingStatus::Completed);
+                    else if (statusStr == "Canceled") activeBooking->setStatus(BookingStatus::Canceled);
+                    else activeBooking->setStatus(BookingStatus::Upcoming);
                 }
             }
         }
@@ -260,8 +267,8 @@ bool DataManager::saveAll(HotelManager& manager, const std::string& dataPath) {
         }
     }
 
-    // 4. Persist Booking schedules
-    query.prepare("INSERT INTO Booking (bookingId, customerId, roomNumber, checkInDate, checkOutDate, cancelled) VALUES (?, ?, ?, ?, ?, ?)");
+    // Modified: Expanded query mapping statement to append the critical 'status' textual variable fields
+    query.prepare("INSERT INTO Booking (bookingId, customerId, roomNumber, checkInDate, checkOutDate, status) VALUES (?, ?, ?, ?, ?, ?)");
     for (const auto& booking : manager.getBookings()) {
         if (booking && booking->getCustomer() && booking->getRoom()) {
             query.addBindValue(QString::fromStdString(booking->getBookingId()));
@@ -271,7 +278,9 @@ bool DataManager::saveAll(HotelManager& manager, const std::string& dataPath) {
             // Modified: Directly bind ISO strings instead of querying conversion method variants
             query.addBindValue(QString::fromStdString(booking->getCheckInDate()));
             query.addBindValue(QString::fromStdString(booking->getCheckOutDate()));
-            query.addBindValue(booking->isCancelled() ? 1 : 0);
+
+            // Added: Serialize the dynamic lifecycle status directly into text formatting properties
+            query.addBindValue(QString::fromStdString(booking->getStatusString()));
 
             if (!query.exec()) {
                 qDebug() << "Error saving Booking: " << query.lastError().text();

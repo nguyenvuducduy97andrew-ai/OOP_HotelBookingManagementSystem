@@ -17,8 +17,17 @@ public:
     explicit MainWindow(HotelManager* mgr, QWidget *parent = nullptr);
     ~MainWindow();
 
-    // Method to update and redraw the room listing grid on the UI
+    // Methods to update and redraw the UI grids for all data entities across tabs
     void updateRoomGrid();
+
+    // Added: Refresh the booking tables based on their operational lifecycle state
+    void updateBookingGrids();
+
+    // Added: Refresh customer directories and historical CRM log layouts
+    void updateCustomerGrid();
+
+    // Added: Refresh the Dashboard metrics (Today's Arrivals / Departures statistics)
+    void updateDashboard();
 
     // Added: Helper methods for View-side processing before passing to Core
 public:
@@ -29,8 +38,17 @@ private slots:
     // Slot to handle booking button click events
     void on_btnBook_clicked();
 
-    // Slot to handle checkout button click events
+    // Slot to handle checkout button click events (Triggers Invoice generation & shifts state to Completed)
     void on_btnCheckout_clicked();
+
+    // Added: Slot to handle soft-cancellation request for upcoming bookings
+    void on_btnCancelBooking_clicked();
+
+    // Added: Slot to capture row-selection shifts on the customer table to render their specific booking logs (CRM)
+    void on_customerTable_itemSelectionChanged();
+
+    // Added: Slot to sync updates automatically whenever the user switches between tab views
+    void on_tabWidget_currentChanged(int index);
 
 private:
     Ui::MainWindow *ui;
