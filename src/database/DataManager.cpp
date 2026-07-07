@@ -153,26 +153,29 @@ bool DataManager::loadAll(HotelManager& manager, const std::string& dataPath) {
         return false;
     }
 
-    // Modified: Selected the additional 'status' column to correctly reconstruct the Booking state machine in memory
-    if (query.exec("SELECT customerId, roomNumber, checkInDate, checkOutDate, status FROM Booking")) {
+    // Rebuild the booking ID counter before restoring bookings so new IDs do not collide with persisted records
+    Booking::initCounterFromDatabase();
+
+    // Modified: Selected the additional 'bookingId' column to correctly reconstruct the Booking state machine in memory
+    if (query.exec("SELECT bookingId, customerId, roomNumber, checkInDate, checkOutDate, status FROM Booking")) {
         while (query.next()) {
             std::string bookingId = query.value(0).toString().toStdString();
             std::string custId = query.value(1).toString().toStdString();
             std::string roomNum = query.value(2).toString().toStdString();
+            std::string checkInStr = query.value(3).toString().toStdString();
+            std::string checkOutStr = query.value(4).toString().toStdString();
+            std::string statusStr = query.value(5).toString().toStdString();
 
-            std::string checkInStr = query.value(2).toString().toStdString();
-            std::string checkOutStr = query.value(3).toString().toStdString();
-            std::string statusStr = query.value(4).toString().toStdString();
+            if (!manager.createBooking(custId, roomNum, checkInStr, checkOutStr, errorMsg)) {
+                qDebug() << "Error restoring Booking record:" << QString::fromStdString(errorMsg);
+                return false;
+            }
 
-            const auto beforeCount = manager.getBookings().size();
-            manager.createBooking(custId, roomNum, checkInStr, checkOutStr, errorMsg);
-
-            // Post-process the newly created booking to map its serialized status string back to enum class tokens
-            // Assuming manager exposes a search utility or booking mapping mechanism by utilizing IDs
             auto bookings = manager.getBookings();
             if (!bookings.empty()) {
-                auto activeBooking = bookings.back(); // Fetching the most recently appended raw entity
+                auto activeBooking = bookings.back();
                 if (activeBooking) {
+                    activeBooking->setBookingId(bookingId);
                     if (statusStr == "Active") activeBooking->setStatus(BookingStatus::Active);
                     else if (statusStr == "Completed") activeBooking->setStatus(BookingStatus::Completed);
                     else if (statusStr == "Canceled") activeBooking->setStatus(BookingStatus::Canceled);
@@ -194,7 +197,10 @@ bool DataManager::loadAll(HotelManager& manager, const std::string& dataPath) {
             int nightsCount = query.value(3).toInt();
             std::string payDate = query.value(4).toString().toStdString();
 
-            manager.createInvoice(invId, bookId, tax, nightsCount, payDate, errorMsg);
+            if (!manager.createInvoice(invId, bookId, tax, nightsCount, payDate, errorMsg)) {
+                qDebug() << "Error restoring Invoice record:" << QString::fromStdString(errorMsg);
+                return false;
+            }
 
             auto invoice = manager.findInvoiceById(invId);
             if (invoice) {

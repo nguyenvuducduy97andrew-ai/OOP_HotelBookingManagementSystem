@@ -95,7 +95,7 @@ public:
     std::vector<std::shared_ptr<Booking>> getBookingsForCustomer(const std::string& customerId) const;
     std::vector<std::shared_ptr<Booking>> getTodayCheckIns() const;
     std::vector<std::shared_ptr<Booking>> getTodayCheckOuts() const;
-    BookingState HotelManager::getBookingState(const Booking &booking) const;
+    BookingState getBookingState(const Booking &booking) const;
     std::vector<std::shared_ptr<Room>> getRoomsByOccupancy(bool occupied) const;
 
     // Added: Filter bookings by their specific operational status for tabbed interface sub-pages

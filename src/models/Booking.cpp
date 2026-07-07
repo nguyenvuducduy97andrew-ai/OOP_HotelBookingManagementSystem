@@ -9,6 +9,7 @@
 #include <QVariant>
 #include <QSqlError>
 #include <QDebug>
+#include <QDate>
 
 //The booking counter started at 1000 to be used as BookingID
 int Booking::bookingCounter = 1000;
@@ -34,14 +35,20 @@ Booking::Booking() {
 // Read SQLite to get the current largest code to accurately restore the private static counter variable
 void Booking::initCounterFromDatabase() {
     QSqlQuery query;
-    if (query.exec("SELECT MAX(bookingId) FROM Booking")) {
-        if (query.next() && !query.value(0).isNull()) {
-            std::string maxId = query.value(0).toString().toStdString();
-            if (maxId.length() > 2 && maxId.substr(0, 2) == "BK") {
-                std::string numStr = maxId.substr(2);
-                bookingCounter = std::stoi(numStr);
+    if (query.exec("SELECT bookingId FROM Booking")) {
+        int maxValue = bookingCounter;
+        while (query.next()) {
+            const QString id = query.value(0).toString();
+            if (!id.startsWith("BK")) {
+                continue;
+            }
+            bool ok = false;
+            int numeric = id.mid(2).toInt(&ok);
+            if (ok && numeric > maxValue) {
+                maxValue = numeric;
             }
         }
+        bookingCounter = maxValue;
     } else {
         qDebug() << "Error querying to reset the Booking counter:" << query.lastError().text();
     }

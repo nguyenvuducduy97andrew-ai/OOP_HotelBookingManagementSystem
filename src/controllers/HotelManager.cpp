@@ -223,6 +223,12 @@ bool HotelManager::validateInvoiceInput(
         return false;
     }
 
+    if (invoiceIdExists(invoiceId))
+    {
+        errorMessage = "Invoice ID already exists.";
+        return false;
+    }
+
     if (taxRate < 0)
     {
         errorMessage = "Tax rate must not be negative.";
@@ -239,6 +245,18 @@ bool HotelManager::validateInvoiceInput(
     if (!booking)
     {
         errorMessage = "Booking not found.";
+        return false;
+    }
+
+    if (booking->getStatus() == BookingStatus::Canceled)
+    {
+        errorMessage = "Cannot create invoice for a canceled booking.";
+        return false;
+    }
+
+    if (findInvoiceForBooking(bookingId) != nullptr)
+    {
+        errorMessage = "An invoice already exists for this booking.";
         return false;
     }
 
@@ -496,7 +514,22 @@ std::vector<std::shared_ptr<Room>> HotelManager::getRoomsByOccupancy(bool occupi
 
 std::string HotelManager::nextInvoiceId() const
 {
-    return "INV" + std::to_string(invoices.size() + 1001);
+    int maxId = 1000;
+    for (const auto &invoice : invoices)
+    {
+        if (!invoice) continue;
+        const std::string id = invoice->getInvoiceId();
+        if (id.rfind("INV", 0) == 0 && id.size() > 3)
+        {
+            try {
+                int numeric = std::stoi(id.substr(3));
+                maxId = std::max(maxId, numeric);
+            } catch (...) {
+                continue;
+            }
+        }
+    }
+    return "INV" + std::to_string(maxId + 1);
 }
 
 // =========================
@@ -558,6 +591,12 @@ bool HotelManager::createBooking(
     auto room = findRoomByNumber(roomNumber);
     if (!room)                 { errorMessage = "Room not found.";      return false; }
 
+    if (!room->getIsAvailable())
+    {
+        errorMessage = "Room is currently unavailable for booking.";
+        return false;
+    }
+
     auto customer = findCustomerById(customerId);
     if (!customer)            { errorMessage = "Customer not found.";  return false; }
 
@@ -602,6 +641,12 @@ bool HotelManager::createInvoice(
         return false;
     }
 
+    if (booking->getStatus() == BookingStatus::Upcoming)
+    {
+        errorMessage = "Invoice can only be created after a booking has become active or completed.";
+        return false;
+    }
+
     auto invoice = std::make_shared<Invoice>();
     invoice->setInvoiceId(invoiceId);
     invoice->setBooking(booking);
@@ -609,8 +654,21 @@ bool HotelManager::createInvoice(
     invoice->setNights(nights);
     invoice->setPaymentDate(paymentDate);
 
+    if (!invoice->isValid())
+    {
+        errorMessage = "Failed to validate invoice details.";
+        return false;
+    }
+
     addInvoice(invoice);
 
+    if (booking->getStatus() != BookingStatus::Completed)
+    {
+        booking->setStatus(BookingStatus::Completed);
+    }
+
+
+    return true;
 }
 
 bool HotelManager::setRoomAvailability(
@@ -662,11 +720,6 @@ bool HotelManager::cancelBooking(const std::string &bookingId, std::string &erro
     // Process state shift to Canceled
     booking->setStatus(BookingStatus::Canceled);
 
-    // Release the link back into the pool safely
-    if (booking->getRoom()) {
-        booking->getRoom()->setIsAvailable(true);
-    }
-
     return true;
 }
 
@@ -684,10 +737,13 @@ bool HotelManager::deleteRoom(const std::string &roomNumber, std::string &errorM
 
     for (const auto &booking : bookings)
     {
-        if (booking && booking->getStatus() == BookingStatus::Active &&
-            booking->getRoom() && booking->getRoom()->getRoomNumber() == roomNumber)
+        if (!booking || !booking->getRoom()) continue;
+        if (booking->getRoom()->getRoomNumber() != roomNumber) continue;
+
+        if (booking->getStatus() == BookingStatus::Active ||
+            booking->getStatus() == BookingStatus::Upcoming)
         {
-            errorMessage = "Cannot delete room with active occupancy.";
+            errorMessage = "Cannot delete room with an active or upcoming reservation.";
             return false;
         }
     }
@@ -707,10 +763,13 @@ bool HotelManager::deleteCustomer(const std::string &customerId, std::string &er
 
     for (const auto &booking : bookings)
     {
-        if (booking && booking->getStatus() == BookingStatus::Active &&
-            booking->getCustomer() && booking->getCustomer()->getCustomerId() == customerId)
+        if (!booking || !booking->getCustomer()) continue;
+        if (booking->getCustomer()->getCustomerId() != customerId) continue;
+
+        if (booking->getStatus() == BookingStatus::Active ||
+            booking->getStatus() == BookingStatus::Upcoming)
         {
-            errorMessage = "Cannot delete customer with an active reservation stay.";
+            errorMessage = "Cannot delete customer with an active or upcoming reservation.";
             return false;
         }
     }
@@ -725,6 +784,12 @@ bool HotelManager::deleteBooking(const std::string &bookingId, std::string &erro
     if (!booking)
     {
         errorMessage = "Booking not found.";
+        return false;
+    }
+
+    if (booking->getStatus() == BookingStatus::Active)
+    {
+        errorMessage = "Cannot delete an active booking.";
         return false;
     }
 
