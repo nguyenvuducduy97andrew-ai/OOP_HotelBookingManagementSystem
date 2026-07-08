@@ -56,7 +56,6 @@ bool DataManager::initDatabase(const std::string& dataPath) {
         return false;
     }
 
-    // Modified: Integrated 'status' column to keep track of the booking operational lifecycle state
     QString createBooking =
         "CREATE TABLE IF NOT EXISTS Booking ("
         "   bookingId TEXT PRIMARY KEY,"
@@ -64,12 +63,42 @@ bool DataManager::initDatabase(const std::string& dataPath) {
         "   roomNumber TEXT NOT NULL,"
         "   checkInDate TEXT NOT NULL,"
         "   checkOutDate TEXT NOT NULL,"
-        "   status TEXT NOT NULL DEFAULT 'Upcoming',"
+        "   cancelled INTEGER NOT NULL DEFAULT 0,"
         "   FOREIGN KEY (customerId) REFERENCES Customer(customerId) ON DELETE CASCADE ON UPDATE CASCADE,"
         "   FOREIGN KEY (roomNumber) REFERENCES Room(roomNumber) ON DELETE RESTRICT ON UPDATE CASCADE"
         ");";
     if (!query.exec(createBooking)) {
         qDebug() << "Error creating Booking table: " << query.lastError().text();
+        return false;
+    }
+
+    QSqlQuery schemaQuery;
+    if (schemaQuery.exec("PRAGMA table_info(Booking)")) {
+        bool hasCancelled = false;
+        bool hasStatus = false;
+        while (schemaQuery.next()) {
+            const QString columnName = schemaQuery.value(1).toString();
+            if (columnName == "cancelled") {
+                hasCancelled = true;
+            } else if (columnName == "status") {
+                hasStatus = true;
+            }
+        }
+
+        if (!hasCancelled && hasStatus) {
+            if (!schemaQuery.exec("ALTER TABLE Booking ADD COLUMN cancelled INTEGER NOT NULL DEFAULT 0")) {
+                qDebug() << "Error adding cancelled column: " << schemaQuery.lastError().text();
+                return false;
+            }
+
+            QSqlQuery migrateQuery;
+            if (!migrateQuery.exec("UPDATE Booking SET cancelled = CASE WHEN status = 'Canceled' OR status = 'Cancelled' THEN 1 ELSE 0 END")) {
+                qDebug() << "Error migrating booking cancellation state: " << migrateQuery.lastError().text();
+                return false;
+            }
+        }
+    } else {
+        qDebug() << "Error inspecting Booking schema: " << schemaQuery.lastError().text();
         return false;
     }
 
@@ -156,15 +185,14 @@ bool DataManager::loadAll(HotelManager& manager, const std::string& dataPath) {
     // Rebuild the booking ID counter before restoring bookings so new IDs do not collide with persisted records
     Booking::initCounterFromDatabase();
 
-    // Modified: Selected the additional 'bookingId' column to correctly reconstruct the Booking state machine in memory
-    if (query.exec("SELECT bookingId, customerId, roomNumber, checkInDate, checkOutDate, status FROM Booking")) {
+    if (query.exec("SELECT bookingId, customerId, roomNumber, checkInDate, checkOutDate, cancelled FROM Booking")) {
         while (query.next()) {
             std::string bookingId = query.value(0).toString().toStdString();
             std::string custId = query.value(1).toString().toStdString();
             std::string roomNum = query.value(2).toString().toStdString();
             std::string checkInStr = query.value(3).toString().toStdString();
             std::string checkOutStr = query.value(4).toString().toStdString();
-            std::string statusStr = query.value(5).toString().toStdString();
+            bool cancelled = query.value(5).toInt() == 1;
 
             if (!manager.createBooking(custId, roomNum, checkInStr, checkOutStr, errorMsg)) {
                 qDebug() << "Error restoring Booking record:" << QString::fromStdString(errorMsg);
@@ -176,10 +204,7 @@ bool DataManager::loadAll(HotelManager& manager, const std::string& dataPath) {
                 auto activeBooking = bookings.back();
                 if (activeBooking) {
                     activeBooking->setBookingId(bookingId);
-                    if (statusStr == "Active") activeBooking->setStatus(BookingStatus::Active);
-                    else if (statusStr == "Completed") activeBooking->setStatus(BookingStatus::Completed);
-                    else if (statusStr == "Canceled") activeBooking->setStatus(BookingStatus::Canceled);
-                    else activeBooking->setStatus(BookingStatus::Upcoming);
+                    activeBooking->setCancelled(cancelled);
                 }
             }
         }
@@ -273,8 +298,7 @@ bool DataManager::saveAll(HotelManager& manager, const std::string& dataPath) {
         }
     }
 
-    // Modified: Expanded query mapping statement to append the critical 'status' textual variable fields
-    query.prepare("INSERT INTO Booking (bookingId, customerId, roomNumber, checkInDate, checkOutDate, status) VALUES (?, ?, ?, ?, ?, ?)");
+    query.prepare("INSERT INTO Booking (bookingId, customerId, roomNumber, checkInDate, checkOutDate, cancelled) VALUES (?, ?, ?, ?, ?, ?)");
     for (const auto& booking : manager.getBookings()) {
         if (booking && booking->getCustomer() && booking->getRoom()) {
             query.addBindValue(QString::fromStdString(booking->getBookingId()));
@@ -285,8 +309,7 @@ bool DataManager::saveAll(HotelManager& manager, const std::string& dataPath) {
             query.addBindValue(QString::fromStdString(booking->getCheckInDate()));
             query.addBindValue(QString::fromStdString(booking->getCheckOutDate()));
 
-            // Added: Serialize the dynamic lifecycle status directly into text formatting properties
-            query.addBindValue(QString::fromStdString(booking->getStatusString()));
+            query.addBindValue(booking->isCancelled() ? 1 : 0);
 
             if (!query.exec()) {
                 qDebug() << "Error saving Booking: " << query.lastError().text();

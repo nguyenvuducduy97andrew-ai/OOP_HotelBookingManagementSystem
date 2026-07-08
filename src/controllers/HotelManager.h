@@ -10,6 +10,8 @@
 
 enum class BookingState { UPCOMING, ACTIVE, COMPLETED, CANCELLED };
 
+std::string bookingStateToString(BookingState state);
+
 class HotelManager
 {
 private:
@@ -99,7 +101,7 @@ public:
     std::vector<std::shared_ptr<Room>> getRoomsByOccupancy(bool occupied) const;
 
     // Added: Filter bookings by their specific operational status for tabbed interface sub-pages
-    std::vector<std::shared_ptr<Booking>> getBookingsByStatus(BookingStatus status) const;
+    std::vector<std::shared_ptr<Booking>> getBookingsByStatus(BookingState state) const;
 
     // Added: Fetch today's dynamic arrivals and departures targeting a custom date string for the Dashboard
     std::vector<std::shared_ptr<Booking>> getArrivalsByDate(const std::string& dateStr) const;

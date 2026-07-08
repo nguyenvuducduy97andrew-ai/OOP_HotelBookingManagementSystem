@@ -72,7 +72,7 @@ void MainWindow::updateBookingGrids() {
         ui->bookingTable->setItem(row, 2, new QTableWidgetItem(b->getRoom() ? QString::fromStdString(b->getRoom()->getRoomNumber()) : "N/A"));
         ui->bookingTable->setItem(row, 3, new QTableWidgetItem(QString::fromStdString(b->getCheckInDate())));
         ui->bookingTable->setItem(row, 4, new QTableWidgetItem(QString::fromStdString(b->getCheckOutDate())));
-        ui->bookingTable->setItem(row, 5, new QTableWidgetItem(QString::fromStdString(b->getStatusString())));
+        ui->bookingTable->setItem(row, 5, new QTableWidgetItem(QString::fromStdString(bookingStateToString(controller->getBookingState(*b)))));
     }
 }
 
@@ -163,7 +163,7 @@ void MainWindow::on_btnCheckout_clicked() {
         return;
     }
 
-    if (activeBooking->getStatus() != BookingStatus::Active) {
+    if (controller->getBookingState(*activeBooking) != BookingState::ACTIVE) {
         QMessageBox::warning(this, "Checkout Error", "Only Active (Checked-in) bookings can be checked-out!");
         return;
     }
@@ -222,7 +222,7 @@ void MainWindow::on_customerTable_itemSelectionChanged() {
         ui->customerHistoryTable->setItem(r, 0, new QTableWidgetItem(QString::fromStdString(b->getBookingId())));
         ui->customerHistoryTable->setItem(r, 1, new QTableWidgetItem(b->getRoom() ? QString::fromStdString(b->getRoom()->getRoomNumber()) : "N/A"));
         ui->customerHistoryTable->setItem(r, 2, new QTableWidgetItem(QString::fromStdString(b->getCheckInDate() + " to " + b->getCheckOutDate())));
-        ui->customerHistoryTable->setItem(r, 3, new QTableWidgetItem(QString::fromStdString(b->getStatusString())));
+        ui->customerHistoryTable->setItem(r, 3, new QTableWidgetItem(QString::fromStdString(bookingStateToString(controller->getBookingState(*b)))));
     }
 }
 

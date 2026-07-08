@@ -17,9 +17,7 @@ int Booking::bookingCounter = 1000;
 Booking::Booking() {
     bookingCounter++;
     this->bookingId = "BK" + std::to_string(bookingCounter);
-
-    // Added: Initialize the dynamic lifecycle status to Upcoming by default (No Invoice exists yet)
-    this->status = BookingStatus::Upcoming;
+    this->cancelled = false;
 
 #pragma warning(suppress : 4996)
     std::time_t now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
@@ -103,25 +101,12 @@ void Booking::setCheckOutDate(const std::string& checkOutDate) {
     this->checkOutDate = checkOutDate;
 }
 
-// Added: Retreive the structural workflow state of this booking
-BookingStatus Booking::getStatus() const {
-    return status;
+bool Booking::isCancelled() const {
+    return cancelled;
 }
 
-// Added: Transition the booking state (Shifting to Completed will trigger Invoice generation)
-void Booking::setStatus(BookingStatus status) {
-    this->status = status;
-}
-
-// Added: Standardized string serialization for UI text formatting and database storage
-std::string Booking::getStatusString() const {
-    switch (status) {
-    case BookingStatus::Upcoming:  return "Upcoming";
-    case BookingStatus::Active:    return "Active";
-    case BookingStatus::Completed: return "Completed";
-    case BookingStatus::Canceled:  return "Canceled";
-    default:                       return "Unknown";
-    }
+void Booking::setCancelled(bool cancelled) {
+    this->cancelled = cancelled;
 }
 
 bool Booking::isValid() const {
