@@ -180,7 +180,7 @@ bool registerCustomer(const std::string& id, const std::string& name, const std:
 bool createBooking(const std::string& customerId, const std::string& roomNumber, const std::string& checkInDate, const std::string& checkOutDate, std::string& errorMessage);
 bool cancelBooking(const std::string& bookingId, std::string& errorMessage);
 bool setRoomAvailability(const std::string& roomNumber, bool available, std::string& errorMessage);
-std::shared_ptr<Invoice> createInvoice(const std::string& invoiceId, const std::string& bookingId, int days, double taxRate, std::string& errorMessage);
+std::shared_ptr<Invoice> createInvoice(const std::string& invoiceId, const std::string& bookingId, double taxRate, int nights, const std::string& paymentDate, std::string& errorMessage;
 BookingState getBookingState(const Booking& booking) const;
 
 ```

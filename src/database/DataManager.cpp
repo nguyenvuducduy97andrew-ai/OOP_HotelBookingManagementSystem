@@ -245,14 +245,35 @@ bool DataManager::saveAll(HotelManager& manager, const std::string& dataPath) {
     if (!initDatabase(dataPath)) {
         return false;
     }
-
+    if (!m_db.transaction())
+    {
+        qDebug() << "Failed to start transaction: " << m_db.lastError().text();
+        return false;
+    } // Start a transaction to ensure atomicity of the save operation
     QSqlQuery query;
 
     // 1. Wipe old database entries completely before overwriting fresh model data records
-    query.exec("DELETE FROM Invoice"); // Added: Clear out dependency table first
-    query.exec("DELETE FROM Booking");
-    query.exec("DELETE FROM Room");
-    query.exec("DELETE FROM Customer");
+    // Added: Clear out dependency table first
+    if (!query.exec("DELETE FROM Invoice")) {
+        m_db.rollback(); // Rollback transaction if anything happened that fails to maintain database integrity
+        qDebug() << "Can't delete from Invoice: " << query.lastError().text();
+        return false; // Always return false if the database is not in a valid state after a transaction, not allowing partial saves to occur
+    } 
+    if (!query.exec("DELETE FROM Booking")) {
+        m_db.rollback(); 
+        qDebug() << "Can't delete from Booking: " << query.lastError().text();
+        return false;
+    } 
+    if (!query.exec("DELETE FROM Room")) {
+        m_db.rollback(); 
+        qDebug() << "Can't delete from Room: " << query.lastError().text();
+        return false;
+    } 
+    if (!query.exec("DELETE FROM Customer")) {
+        m_db.rollback(); 
+        qDebug() << "Can't delete from Customer: " << query.lastError().text();
+        return false;
+    }
 
     // 2. Persist Customer object lists
     query.prepare("INSERT INTO Customer (customerId, name, phoneNumber) VALUES (?, ?, ?)");
@@ -262,7 +283,9 @@ bool DataManager::saveAll(HotelManager& manager, const std::string& dataPath) {
             query.addBindValue(QString::fromStdString(customer->getName()));
             query.addBindValue(QString::fromStdString(customer->getPhoneNumber()));
             if (!query.exec()) {
+                m_db.rollback();
                 qDebug() << "Error saving Customer: " << query.lastError().text();
+                return false;
             }
         }
     }
@@ -293,7 +316,9 @@ bool DataManager::saveAll(HotelManager& manager, const std::string& dataPath) {
             query.addBindValue(miniBarFee);
 
             if (!query.exec()) {
+                m_db.rollback();
                 qDebug() << "Error saving Room: " << query.lastError().text();
+                return false;
             }
         }
     }
@@ -312,7 +337,9 @@ bool DataManager::saveAll(HotelManager& manager, const std::string& dataPath) {
             query.addBindValue(booking->isCancelled() ? 1 : 0);
 
             if (!query.exec()) {
+                m_db.rollback();
                 qDebug() << "Error saving Booking: " << query.lastError().text();
+                return false;
             }
         }
     }
@@ -329,10 +356,17 @@ bool DataManager::saveAll(HotelManager& manager, const std::string& dataPath) {
             query.addBindValue(invoice->isCancelled() ? 1 : 0);
 
             if (!query.exec()) {
+                m_db.rollback();
                 qDebug() << "Error saving Invoice: " << query.lastError().text();
+                return false;
             }
         }
     }
-
+    if (!m_db.commit())
+    {
+        m_db.rollback();
+        qDebug() << "Failed to commit transaction: " << m_db.lastError().text();
+        return false;
+    }
     return true;
 }
