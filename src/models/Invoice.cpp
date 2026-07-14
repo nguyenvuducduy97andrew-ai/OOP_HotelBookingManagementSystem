@@ -94,8 +94,7 @@ double Invoice::calculateSubtotal() const {
     if (lockedRoom == nullptr)
         return 0.0;
 
-    double roomPrice = lockedRoom->getBasePrice();
-    return nights * roomPrice; // Modified: Using the nights property passed from View
+    return nights * lockedRoom->calculateTargetPrice();
 }
 
 // Added: Computes final total including tax rate dynamically

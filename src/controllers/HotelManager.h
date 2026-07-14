@@ -41,6 +41,11 @@ private:
         std::string &errorMessage
         ) const;
 
+    bool isValidDateString(
+        const std::string &dateString,
+        std::string &errorMessage
+        ) const;
+
     bool isRoomFreeForDates(
         const std::string &roomNumber,
         const std::string &checkIn,
@@ -61,6 +66,7 @@ private:
         const std::string& bookingId,
         double taxRate,
         int nights,
+        const std::string& paymentDate,
         std::string& errorMessage
         ) const;
 
@@ -78,6 +84,7 @@ public:
     void addCustomer(std::shared_ptr<Customer> customer);
     void addBooking(std::shared_ptr<Booking> booking);
     void addInvoice(std::shared_ptr<Invoice> invoice);
+    void clearAll();
 
     // Existence checks
     bool roomNumberExists(const std::string& roomNumber) const;
@@ -137,6 +144,12 @@ public:
         double taxRate,
         int nights,
         const std::string& paymentDate,
+        std::string& errorMessage
+        );
+
+    bool completeBooking(
+        const std::string& bookingId,
+        const std::string& checkoutDate,
         std::string& errorMessage
         );
 

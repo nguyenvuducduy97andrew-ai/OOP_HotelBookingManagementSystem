@@ -128,6 +128,8 @@ bool DataManager::loadAll(HotelManager& manager, const std::string& dataPath) {
         return false;
     }
 
+    manager.clearAll();
+
     // Modified: Removed legacy counter initializer since entity counters are managed dynamically
     QSqlQuery query;
     std::string errorMsg;
@@ -139,7 +141,9 @@ bool DataManager::loadAll(HotelManager& manager, const std::string& dataPath) {
             std::string name = query.value(1).toString().toStdString();
             std::string phone = query.value(2).toString().toStdString();
 
-            manager.registerCustomer(custId, name, phone, errorMsg);
+            if (!manager.registerCustomer(custId, name, phone, errorMsg)) {
+                qDebug() << "Skipped invalid customer during load:" << QString::fromStdString(errorMsg);
+            }
         }
     } else {
         qDebug() << "Error reading Customer table: " << query.lastError().text();
@@ -160,7 +164,10 @@ bool DataManager::loadAll(HotelManager& manager, const std::string& dataPath) {
             if (typeStr == "Deluxe") type = RoomType::Deluxe;
             else if (typeStr == "Suite") type = RoomType::Suite;
 
-            manager.registerRoom(type, roomNum, price, errorMsg);
+            if (!manager.registerRoom(type, roomNum, price, errorMsg)) {
+                qDebug() << "Skipped invalid room during load:" << QString::fromStdString(errorMsg);
+                continue;
+            }
 
             auto room = manager.findRoomByNumber(roomNum);
             if (room) {
@@ -195,8 +202,8 @@ bool DataManager::loadAll(HotelManager& manager, const std::string& dataPath) {
             bool cancelled = query.value(5).toInt() == 1;
 
             if (!manager.createBooking(custId, roomNum, checkInStr, checkOutStr, errorMsg)) {
-                qDebug() << "Error restoring Booking record:" << QString::fromStdString(errorMsg);
-                return false;
+                qDebug() << "Skipped invalid booking during load:" << QString::fromStdString(errorMsg);
+                continue;
             }
 
             auto bookings = manager.getBookings();
@@ -223,8 +230,8 @@ bool DataManager::loadAll(HotelManager& manager, const std::string& dataPath) {
             std::string payDate = query.value(4).toString().toStdString();
 
             if (!manager.createInvoice(invId, bookId, tax, nightsCount, payDate, errorMsg)) {
-                qDebug() << "Error restoring Invoice record:" << QString::fromStdString(errorMsg);
-                return false;
+                qDebug() << "Skipped invalid invoice during load:" << QString::fromStdString(errorMsg);
+                continue;
             }
 
             auto invoice = manager.findInvoiceById(invId);

@@ -42,6 +42,14 @@ void HotelManager::addInvoice(std::shared_ptr<Invoice> invoice)
     invoices.push_back(std::move(invoice));
 }
 
+void HotelManager::clearAll()
+{
+    rooms.clear();
+    customers.clear();
+    bookings.clear();
+    invoices.clear();
+}
+
 // =========================
 // Getters
 // =========================
@@ -136,15 +144,39 @@ bool HotelManager::validateCustomerInput(
     return true;
 }
 
+bool HotelManager::isValidDateString(
+    const std::string &dateString,
+    std::string &errorMessage) const
+{
+    if (dateString.empty())
+    {
+        errorMessage = "Date cannot be empty.";
+        return false;
+    }
+
+    const QDate date = QDate::fromString(QString::fromStdString(dateString), Qt::ISODate);
+    if (!date.isValid())
+    {
+        errorMessage = "Date must use ISO format (YYYY-MM-DD).";
+        return false;
+    }
+
+    return true;
+}
+
 bool HotelManager::validateBookingDates(
     const std::string& checkIn,
     const std::string& checkOut,
     std::string& errorMessage) const
 {
-    if (checkIn.empty() || checkOut.empty()) {
-        errorMessage = "Dates cannot be empty.";
+    if (!isValidDateString(checkIn, errorMessage)) {
         return false;
     }
+
+    if (!isValidDateString(checkOut, errorMessage)) {
+        return false;
+    }
+
     if (checkOut <= checkIn) {
         errorMessage = "Check-out must be after check-in.";
         return false;
@@ -221,6 +253,7 @@ bool HotelManager::validateInvoiceInput(
     const std::string &bookingId,
     double taxRate,
     int nights,
+    const std::string &paymentDate,
     std::string &errorMessage) const
 {
     if (invoiceId.empty())
@@ -244,6 +277,11 @@ bool HotelManager::validateInvoiceInput(
     if (nights <= 0)
     {
         errorMessage = "Stay duration in nights must be greater than zero.";
+        return false;
+    }
+
+    if (!isValidDateString(paymentDate, errorMessage))
+    {
         return false;
     }
 
@@ -366,7 +404,32 @@ std::vector<std::shared_ptr<Room>> HotelManager::getAvailableRooms() const
     std::vector<std::shared_ptr<Room>> availableRooms;
     for (const auto &room : rooms)
     {
-        if (room && room->getIsAvailable())
+        if (!room || !room->getIsAvailable())
+        {
+            continue;
+        }
+
+        bool isOccupied = false;
+        for (const auto &booking : bookings)
+        {
+            if (!booking || !booking->getRoom())
+            {
+                continue;
+            }
+
+            if (booking->getRoom()->getRoomNumber() != room->getRoomNumber())
+            {
+                continue;
+            }
+
+            if (getBookingState(*booking) == BookingState::ACTIVE)
+            {
+                isOccupied = true;
+                break;
+            }
+        }
+
+        if (!isOccupied)
         {
             availableRooms.push_back(room);
         }
@@ -614,6 +677,35 @@ bool HotelManager::createBooking(
     return true;
 }
 
+bool HotelManager::completeBooking(
+    const std::string &bookingId,
+    const std::string &checkoutDate,
+    std::string &errorMessage)
+{
+    auto booking = findBookingById(bookingId);
+    if (!booking)
+    {
+        errorMessage = "Booking not found.";
+        return false;
+    }
+
+    const BookingState currentState = getBookingState(*booking);
+    if (currentState != BookingState::ACTIVE)
+    {
+        errorMessage = "Only active bookings can be checked out.";
+        return false;
+    }
+
+    if (!isValidDateString(checkoutDate, errorMessage))
+    {
+        return false;
+    }
+
+    booking->setCheckOutDate(checkoutDate);
+    booking->setCancelled(false);
+    return true;
+}
+
 bool HotelManager::createInvoice(
     const std::string &invoiceId,
     const std::string &bookingId,
@@ -622,7 +714,7 @@ bool HotelManager::createInvoice(
     const std::string &paymentDate,
     std::string &errorMessage)
 {
-    if (!validateInvoiceInput(invoiceId, bookingId, taxRate, nights, errorMessage))
+    if (!validateInvoiceInput(invoiceId, bookingId, taxRate, nights, paymentDate, errorMessage))
     {
         return false;
     }
@@ -639,6 +731,11 @@ bool HotelManager::createInvoice(
     //     errorMessage = "Invoice can only be created after a booking has become active or completed.";
     //     return false;
     // }
+
+    if (!completeBooking(bookingId, paymentDate, errorMessage))
+    {
+        return false;
+    }
 
     auto invoice = std::make_shared<Invoice>();
     invoice->setInvoiceId(invoiceId);
@@ -746,12 +843,8 @@ bool HotelManager::deleteRoom(const std::string &roomNumber, std::string &errorM
         if (!booking || !booking->getRoom()) continue;
         if (booking->getRoom()->getRoomNumber() != roomNumber) continue;
 
-        const BookingState bookingState = getBookingState(*booking);
-        if (bookingState == BookingState::ACTIVE || bookingState == BookingState::UPCOMING)
-        {
-            errorMessage = "Cannot delete room with an active or upcoming reservation.";
-            return false;
-        }
+        errorMessage = "Cannot delete room because it still has associated bookings.";
+        return false;
     }
 
     rooms.erase(std::remove(rooms.begin(), rooms.end(), room), rooms.end());
@@ -772,12 +865,8 @@ bool HotelManager::deleteCustomer(const std::string &customerId, std::string &er
         if (!booking || !booking->getCustomer()) continue;
         if (booking->getCustomer()->getCustomerId() != customerId) continue;
 
-        const BookingState bookingState = getBookingState(*booking);
-        if (bookingState == BookingState::ACTIVE || bookingState == BookingState::UPCOMING)
-        {
-            errorMessage = "Cannot delete customer with an active or upcoming reservation.";
-            return false;
-        }
+        errorMessage = "Cannot delete customer because they still have associated bookings.";
+        return false;
     }
 
     customers.erase(std::remove(customers.begin(), customers.end(), customer), customers.end());
@@ -797,6 +886,12 @@ bool HotelManager::deleteBooking(const std::string &bookingId, std::string &erro
     {
         errorMessage = "Cannot delete an active booking.";
         return false;
+    }
+
+    auto invoice = findInvoiceForBooking(bookingId);
+    if (invoice)
+    {
+        invoices.erase(std::remove(invoices.begin(), invoices.end(), invoice), invoices.end());
     }
 
     bookings.erase(std::remove(bookings.begin(), bookings.end(), booking), bookings.end());

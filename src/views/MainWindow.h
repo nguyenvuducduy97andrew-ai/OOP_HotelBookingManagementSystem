@@ -29,6 +29,8 @@ public:
     // Added: Refresh the Dashboard metrics (Today's Arrivals / Departures statistics)
     void updateDashboard();
 
+    void refreshAllViews();
+
     // Added: Helper methods for View-side processing before passing to Core
 public:
     // Computes stay duration using Qt's QDate utility, acting as a bridge for MVC

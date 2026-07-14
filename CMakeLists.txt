@@ -32,6 +32,37 @@ file(GLOB SOURCE_FILES
 # Tạo gói thực thi từ danh sách file đã tự động quét được ở trên
 add_executable(HotelBookingManagement ${SOURCE_FILES})
 
+enable_testing()
+
+add_executable(HotelBookingManagementTests
+    tests/basic_tests.cpp
+    src/controllers/HotelManager.cpp
+    src/database/DataManager.cpp
+    src/models/Booking.cpp
+    src/models/Customer.cpp
+    src/models/DeluxeRoom.cpp
+    src/models/Invoice.cpp
+    src/models/Room.cpp
+    src/models/RoomFactory.cpp
+    src/models/StandardRoom.cpp
+    src/models/SuiteRoom.cpp
+)
+
+target_include_directories(HotelBookingManagementTests PRIVATE
+    src/models
+    src/controllers
+    src/database
+    src/views
+)
+
+target_link_libraries(HotelBookingManagementTests PRIVATE
+    Qt6::Core
+    Qt6::Sql
+    Qt6::Widgets
+)
+
+add_test(NAME HotelBookingManagementTests COMMAND HotelBookingManagementTests)
+
 # ================================================================
 # INCLUDE PATHS
 # ================================================================
