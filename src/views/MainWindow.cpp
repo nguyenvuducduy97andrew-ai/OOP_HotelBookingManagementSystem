@@ -4,6 +4,7 @@
 #include <QMessageBox>
 #include <QInputDialog>
 #include <QDebug>
+#include <algorithm>
 
 MainWindow::MainWindow(HotelManager* mgr, QWidget *parent)
     : QMainWindow(parent)
@@ -17,14 +18,19 @@ MainWindow::MainWindow(HotelManager* mgr, QWidget *parent)
     tabWidget = ui->tabWidget;
 
     // Immediately display and populate data across all interfaces when the app opens
-    updateRoomGrid();
-    updateBookingGrids();
-    updateCustomerGrid();
-    updateDashboard();
+    refreshAllViews();
 }
 
 MainWindow::~MainWindow() {
     delete ui;
+}
+
+void MainWindow::refreshAllViews()
+{
+    updateRoomGrid();
+    updateBookingGrids();
+    updateCustomerGrid();
+    updateDashboard();
 }
 
 // Update data from the controller (HotelManager) and dump it directly onto the public QTableWidget
@@ -35,6 +41,24 @@ void MainWindow::updateRoomGrid() {
     roomTable->setRowCount(0);
 
     const auto& rooms = controller->getRooms();
+    const auto availableRooms = controller->getAvailableRooms();
+    const auto occupiedRooms = controller->getRoomsByOccupancy(true);
+    std::vector<std::string> availableRoomNumbers;
+    availableRoomNumbers.reserve(availableRooms.size());
+    for (const auto& availableRoom : availableRooms) {
+        if (availableRoom) {
+            availableRoomNumbers.push_back(availableRoom->getRoomNumber());
+        }
+    }
+
+    std::vector<std::string> occupiedRoomNumbers;
+    occupiedRoomNumbers.reserve(occupiedRooms.size());
+    for (const auto& occupiedRoom : occupiedRooms) {
+        if (occupiedRoom) {
+            occupiedRoomNumbers.push_back(occupiedRoom->getRoomNumber());
+        }
+    }
+
     for (size_t i = 0; i < rooms.size(); ++i) {
         if (!rooms[i]) continue;
 
@@ -48,7 +72,14 @@ void MainWindow::updateRoomGrid() {
         roomTable->setItem(row, 1, new QTableWidgetItem(QString::number(rooms[i]->calculateTargetPrice(), 'f', 2)));
 
         // Column 2: Room Status
-        QString status = rooms[i]->getIsAvailable() ? "Available" : "Booked";
+        QString status = "Available";
+        if (!rooms[i]->getIsAvailable()) {
+            status = "Maintenance";
+        } else if (std::find(occupiedRoomNumbers.begin(), occupiedRoomNumbers.end(), rooms[i]->getRoomNumber()) != occupiedRoomNumbers.end()) {
+            status = "Occupied";
+        } else if (std::find(availableRoomNumbers.begin(), availableRoomNumbers.end(), rooms[i]->getRoomNumber()) == availableRoomNumbers.end()) {
+            status = "Reserved";
+        }
         roomTable->setItem(row, 2, new QTableWidgetItem(status));
     }
 }
@@ -72,7 +103,17 @@ void MainWindow::updateBookingGrids() {
         ui->bookingTable->setItem(row, 2, new QTableWidgetItem(b->getRoom() ? QString::fromStdString(b->getRoom()->getRoomNumber()) : "N/A"));
         ui->bookingTable->setItem(row, 3, new QTableWidgetItem(QString::fromStdString(b->getCheckInDate())));
         ui->bookingTable->setItem(row, 4, new QTableWidgetItem(QString::fromStdString(b->getCheckOutDate())));
-        ui->bookingTable->setItem(row, 5, new QTableWidgetItem(QString::fromStdString(bookingStateToString(controller->getBookingState(*b)))));
+        const BookingState status = controller->getBookingState(*b);
+        const std::string statusText = status == BookingState::UPCOMING
+            ? "Upcoming (Reserved)"
+            : status == BookingState::ACTIVE
+                ? "Active (Checked-in)"
+                : status == BookingState::COMPLETED
+                    ? "Completed (Checked-out)"
+                    : "Cancelled (Voided)";
+        QTableWidgetItem* statusItem = new QTableWidgetItem(QString::fromStdString(statusText));
+        statusItem->setFlags(statusItem->flags() & ~Qt::ItemIsEditable);
+        ui->bookingTable->setItem(row, 5, statusItem);
     }
 }
 
@@ -145,9 +186,7 @@ void MainWindow::on_btnBook_clicked() {
 
     if (success) {
         QMessageBox::information(this, "Success", "Room booked successfully!");
-        updateRoomGrid();      // Redraw vacant/occupied room UI
-        updateBookingGrids();  // Redraw updated reservation schedules
-        updateDashboard();     // Sync stats up to Dashboard counters
+        refreshAllViews();
     } else {
         QMessageBox::critical(this, "Error", QString::fromStdString(errorMsg));
     }
@@ -182,9 +221,7 @@ void MainWindow::on_btnCheckout_clicked() {
     // Core layer will auto-update Booking state to Completed and release the Room entity inside!
     if (controller->createInvoice(invId, activeBooking->getBookingId(), flatTaxRate, nights, paymentDate, errorMsg)) {
         QMessageBox::information(this, "Checkout Success", "Checkout processed and Invoice " + QString::fromStdString(invId) + " generated successfully!");
-        updateRoomGrid();
-        updateBookingGrids();
-        updateDashboard();
+        refreshAllViews();
     } else {
         QMessageBox::critical(this, "Error", "Invoice generation failed: " + QString::fromStdString(errorMsg));
     }
@@ -197,9 +234,7 @@ void MainWindow::on_btnCancelBooking_clicked() {
 
     if (controller->cancelBooking(bookingId, errorMsg)) {
         QMessageBox::information(this, "Canceled Success", "The booking reservation has been successfully canceled!");
-        updateRoomGrid();
-        updateBookingGrids();
-        updateDashboard();
+        refreshAllViews();
     } else {
         QMessageBox::critical(this, "Cancellation Error", QString::fromStdString(errorMsg));
     }
@@ -229,8 +264,116 @@ void MainWindow::on_customerTable_itemSelectionChanged() {
 // Added: Global visual refresh dispatcher synchronized when shifting focus across app tab indexes
 void MainWindow::on_tabWidget_currentChanged(int index) {
     Q_UNUSED(index);
-    updateRoomGrid();
-    updateBookingGrids();
-    updateCustomerGrid();
-    updateDashboard();
+    refreshAllViews();
+}
+
+void MainWindow::on_btnAddRoom_clicked() {
+    const std::string roomNumber = ui->txtNewRoomNumber->text().toStdString();
+    const double baseRate = ui->spinBaseRate->value();
+    RoomType roomType = RoomType::Standard;
+
+    switch (ui->comboRoomType->currentIndex()) {
+    case 1:
+        roomType = RoomType::Suite;
+        break;
+    case 2:
+        roomType = RoomType::Deluxe;
+        break;
+    default:
+        break;
+    }
+
+    std::string errorMessage;
+    if (controller->registerRoom(roomType, roomNumber, baseRate, errorMessage)) {
+        QMessageBox::information(this, "Success", "Room added successfully.");
+        ui->txtNewRoomNumber->clear();
+        ui->spinBaseRate->setValue(120.0);
+        ui->comboRoomType->setCurrentIndex(0);
+        refreshAllViews();
+    } else {
+        QMessageBox::critical(this, "Error", QString::fromStdString(errorMessage));
+    }
+}
+
+void MainWindow::on_btnAddCustomer_clicked() {
+    const std::string customerId = ui->txtNewCustomerId->text().toStdString();
+    const std::string customerName = ui->txtNewCustomerName->text().toStdString();
+    const std::string customerPhone = ui->txtNewCustomerPhone->text().toStdString();
+    std::string errorMessage;
+
+    if (controller->registerCustomer(customerId, customerName, customerPhone, errorMessage)) {
+        QMessageBox::information(this, "Success", "Customer added successfully.");
+        ui->txtNewCustomerId->clear();
+        ui->txtNewCustomerName->clear();
+        ui->txtNewCustomerPhone->clear();
+        refreshAllViews();
+    } else {
+        QMessageBox::critical(this, "Error", QString::fromStdString(errorMessage));
+    }
+}
+
+void MainWindow::on_btnDeleteRoom_clicked() {
+    const int row = ui->roomTable->currentRow();
+    if (row < 0) {
+        QMessageBox::warning(this, "Delete Room", "Please select a room row first.");
+        return;
+    }
+
+    const auto item = ui->roomTable->item(row, 0);
+    if (!item) {
+        QMessageBox::warning(this, "Delete Room", "No valid room selected.");
+        return;
+    }
+
+    std::string errorMessage;
+    if (controller->deleteRoom(item->text().toStdString(), errorMessage)) {
+        QMessageBox::information(this, "Success", "Room deleted successfully.");
+        refreshAllViews();
+    } else {
+        QMessageBox::critical(this, "Error", QString::fromStdString(errorMessage));
+    }
+}
+
+void MainWindow::on_btnDeleteCustomer_clicked() {
+    const int row = ui->customerTable->currentRow();
+    if (row < 0) {
+        QMessageBox::warning(this, "Delete Customer", "Please select a customer row first.");
+        return;
+    }
+
+    const auto item = ui->customerTable->item(row, 0);
+    if (!item) {
+        QMessageBox::warning(this, "Delete Customer", "No valid customer selected.");
+        return;
+    }
+
+    std::string errorMessage;
+    if (controller->deleteCustomer(item->text().toStdString(), errorMessage)) {
+        QMessageBox::information(this, "Success", "Customer deleted successfully.");
+        refreshAllViews();
+    } else {
+        QMessageBox::critical(this, "Error", QString::fromStdString(errorMessage));
+    }
+}
+
+void MainWindow::on_btnDeleteBooking_clicked() {
+    const int row = ui->bookingTable->currentRow();
+    if (row < 0) {
+        QMessageBox::warning(this, "Delete Booking", "Please select a booking row first.");
+        return;
+    }
+
+    const auto item = ui->bookingTable->item(row, 0);
+    if (!item) {
+        QMessageBox::warning(this, "Delete Booking", "No valid booking selected.");
+        return;
+    }
+
+    std::string errorMessage;
+    if (controller->deleteBooking(item->text().toStdString(), errorMessage)) {
+        QMessageBox::information(this, "Success", "Booking deleted successfully.");
+        refreshAllViews();
+    } else {
+        QMessageBox::critical(this, "Error", QString::fromStdString(errorMessage));
+    }
 }

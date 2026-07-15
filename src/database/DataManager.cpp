@@ -19,6 +19,11 @@ bool DataManager::initDatabase(const std::string& dataPath) {
         return true;
     }
 
+    if (!QSqlDatabase::isDriverAvailable("QSQLITE")) {
+        qDebug() << "QSQLITE driver is not available. Please ensure the Qt SQLite plugin is deployed.";
+        return false;
+    }
+
     m_db = QSqlDatabase::addDatabase("QSQLITE");
     m_db.setDatabaseName(QString::fromStdString(dataPath));
 
@@ -167,6 +172,8 @@ bool DataManager::loadAll(HotelManager& manager, const std::string& dataPath) {
         return false;
     }
 
+    manager.clearAll();
+
     // Modified: Removed legacy counter initializer since entity counters are managed dynamically
     QSqlQuery query;
     std::string errorMsg;
@@ -205,7 +212,10 @@ bool DataManager::loadAll(HotelManager& manager, const std::string& dataPath) {
             if (typeStr == "Deluxe") type = RoomType::Deluxe;
             else if (typeStr == "Suite") type = RoomType::Suite;
 
-            manager.registerRoom(type, roomNum, price, errorMsg);
+            if (!manager.registerRoom(type, roomNum, price, errorMsg)) {
+                qDebug() << "Skipped invalid room during load:" << QString::fromStdString(errorMsg);
+                continue;
+            }
 
             auto room = manager.findRoomByNumber(roomNum);
             if (room) {
@@ -241,8 +251,8 @@ bool DataManager::loadAll(HotelManager& manager, const std::string& dataPath) {
             bool cancelled = query.value(5).toInt() == 1;
 
             if (!manager.createBooking(custId, roomNum, checkInStr, checkOutStr, errorMsg)) {
-                qDebug() << "Error restoring Booking record:" << QString::fromStdString(errorMsg);
-                return false;
+                qDebug() << "Skipped invalid booking during load:" << QString::fromStdString(errorMsg);
+                continue;
             }
 
             auto bookings = manager.getBookings();
@@ -269,8 +279,8 @@ bool DataManager::loadAll(HotelManager& manager, const std::string& dataPath) {
             std::string payDate = query.value(4).toString().toStdString();
 
             if (!manager.createInvoice(invId, bookId, tax, nightsCount, payDate, errorMsg)) {
-                qDebug() << "Error restoring Invoice record:" << QString::fromStdString(errorMsg);
-                return false;
+                qDebug() << "Skipped invalid invoice during load:" << QString::fromStdString(errorMsg);
+                continue;
             }
 
             auto invoice = manager.findInvoiceById(invId);
