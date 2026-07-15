@@ -19,6 +19,11 @@ bool DataManager::initDatabase(const std::string& dataPath) {
         return true;
     }
 
+    if (!QSqlDatabase::isDriverAvailable("QSQLITE")) {
+        qDebug() << "QSQLITE driver is not available. Please ensure the Qt SQLite plugin is deployed.";
+        return false;
+    }
+
     m_db = QSqlDatabase::addDatabase("QSQLITE");
     m_db.setDatabaseName(QString::fromStdString(dataPath));
 

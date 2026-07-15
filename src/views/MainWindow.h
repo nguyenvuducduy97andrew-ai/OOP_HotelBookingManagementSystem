@@ -52,6 +52,12 @@ private slots:
     // Added: Slot to sync updates automatically whenever the user switches between tab views
     void on_tabWidget_currentChanged(int index);
 
+    void on_btnAddRoom_clicked();
+    void on_btnAddCustomer_clicked();
+    void on_btnDeleteRoom_clicked();
+    void on_btnDeleteCustomer_clicked();
+    void on_btnDeleteBooking_clicked();
+
 private:
     Ui::MainWindow *ui;
 

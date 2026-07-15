@@ -111,7 +111,9 @@ void MainWindow::updateBookingGrids() {
                 : status == BookingState::COMPLETED
                     ? "Completed (Checked-out)"
                     : "Cancelled (Voided)";
-        ui->bookingTable->setItem(row, 5, new QTableWidgetItem(QString::fromStdString(statusText)));
+        QTableWidgetItem* statusItem = new QTableWidgetItem(QString::fromStdString(statusText));
+        statusItem->setFlags(statusItem->flags() & ~Qt::ItemIsEditable);
+        ui->bookingTable->setItem(row, 5, statusItem);
     }
 }
 
@@ -263,4 +265,115 @@ void MainWindow::on_customerTable_itemSelectionChanged() {
 void MainWindow::on_tabWidget_currentChanged(int index) {
     Q_UNUSED(index);
     refreshAllViews();
+}
+
+void MainWindow::on_btnAddRoom_clicked() {
+    const std::string roomNumber = ui->txtNewRoomNumber->text().toStdString();
+    const double baseRate = ui->spinBaseRate->value();
+    RoomType roomType = RoomType::Standard;
+
+    switch (ui->comboRoomType->currentIndex()) {
+    case 1:
+        roomType = RoomType::Suite;
+        break;
+    case 2:
+        roomType = RoomType::Deluxe;
+        break;
+    default:
+        break;
+    }
+
+    std::string errorMessage;
+    if (controller->registerRoom(roomType, roomNumber, baseRate, errorMessage)) {
+        QMessageBox::information(this, "Success", "Room added successfully.");
+        ui->txtNewRoomNumber->clear();
+        ui->spinBaseRate->setValue(120.0);
+        ui->comboRoomType->setCurrentIndex(0);
+        refreshAllViews();
+    } else {
+        QMessageBox::critical(this, "Error", QString::fromStdString(errorMessage));
+    }
+}
+
+void MainWindow::on_btnAddCustomer_clicked() {
+    const std::string customerId = ui->txtNewCustomerId->text().toStdString();
+    const std::string customerName = ui->txtNewCustomerName->text().toStdString();
+    const std::string customerPhone = ui->txtNewCustomerPhone->text().toStdString();
+    std::string errorMessage;
+
+    if (controller->registerCustomer(customerId, customerName, customerPhone, errorMessage)) {
+        QMessageBox::information(this, "Success", "Customer added successfully.");
+        ui->txtNewCustomerId->clear();
+        ui->txtNewCustomerName->clear();
+        ui->txtNewCustomerPhone->clear();
+        refreshAllViews();
+    } else {
+        QMessageBox::critical(this, "Error", QString::fromStdString(errorMessage));
+    }
+}
+
+void MainWindow::on_btnDeleteRoom_clicked() {
+    const int row = ui->roomTable->currentRow();
+    if (row < 0) {
+        QMessageBox::warning(this, "Delete Room", "Please select a room row first.");
+        return;
+    }
+
+    const auto item = ui->roomTable->item(row, 0);
+    if (!item) {
+        QMessageBox::warning(this, "Delete Room", "No valid room selected.");
+        return;
+    }
+
+    std::string errorMessage;
+    if (controller->deleteRoom(item->text().toStdString(), errorMessage)) {
+        QMessageBox::information(this, "Success", "Room deleted successfully.");
+        refreshAllViews();
+    } else {
+        QMessageBox::critical(this, "Error", QString::fromStdString(errorMessage));
+    }
+}
+
+void MainWindow::on_btnDeleteCustomer_clicked() {
+    const int row = ui->customerTable->currentRow();
+    if (row < 0) {
+        QMessageBox::warning(this, "Delete Customer", "Please select a customer row first.");
+        return;
+    }
+
+    const auto item = ui->customerTable->item(row, 0);
+    if (!item) {
+        QMessageBox::warning(this, "Delete Customer", "No valid customer selected.");
+        return;
+    }
+
+    std::string errorMessage;
+    if (controller->deleteCustomer(item->text().toStdString(), errorMessage)) {
+        QMessageBox::information(this, "Success", "Customer deleted successfully.");
+        refreshAllViews();
+    } else {
+        QMessageBox::critical(this, "Error", QString::fromStdString(errorMessage));
+    }
+}
+
+void MainWindow::on_btnDeleteBooking_clicked() {
+    const int row = ui->bookingTable->currentRow();
+    if (row < 0) {
+        QMessageBox::warning(this, "Delete Booking", "Please select a booking row first.");
+        return;
+    }
+
+    const auto item = ui->bookingTable->item(row, 0);
+    if (!item) {
+        QMessageBox::warning(this, "Delete Booking", "No valid booking selected.");
+        return;
+    }
+
+    std::string errorMessage;
+    if (controller->deleteBooking(item->text().toStdString(), errorMessage)) {
+        QMessageBox::information(this, "Success", "Booking deleted successfully.");
+        refreshAllViews();
+    } else {
+        QMessageBox::critical(this, "Error", QString::fromStdString(errorMessage));
+    }
 }

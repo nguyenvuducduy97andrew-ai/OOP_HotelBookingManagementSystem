@@ -1,0 +1,501 @@
+// Đây chỉ là code chạy thử sinh file database, nào có giao diện UI thì sẽ thay vô
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MainWindow</class>
+ <widget class="QMainWindow" name="MainWindow">
+  <property name="windowTitle">
+   <string>Hotel Booking Management</string>
+  </property>
+  <widget class="QWidget" name="centralwidget">
+   <layout class="QVBoxLayout" name="verticalLayout">
+    <item>
+     <widget class="QTabWidget" name="tabWidget">
+      <property name="currentIndex">
+       <number>0</number>
+      </property>
+      <widget class="QWidget" name="dashboardTab">
+       <attribute name="title">
+        <string>Dashboard</string>
+       </attribute>
+       <layout class="QVBoxLayout" name="dashboardLayout">
+        <item>
+         <layout class="QGridLayout" name="statsGrid">
+          <item row="0" column="0">
+           <widget class="QGroupBox" name="groupBoxDashboard">
+            <property name="title">
+             <string>Today Overview</string>
+            </property>
+            <layout class="QGridLayout" name="gridLayout_2">
+             <item row="0" column="0">
+              <widget class="QLabel" name="label_1">
+               <property name="text">
+                <string>Arrivals:</string>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="1">
+              <widget class="QLabel" name="lblTodayArrivals">
+               <property name="text">
+                <string>0</string>
+               </property>
+              </widget>
+             </item>
+             <item row="1" column="0">
+              <widget class="QLabel" name="label_2">
+               <property name="text">
+                <string>Departures:</string>
+               </property>
+              </widget>
+             </item>
+             <item row="1" column="1">
+              <widget class="QLabel" name="lblTodayDepartures">
+               <property name="text">
+                <string>0</string>
+               </property>
+              </widget>
+             </item>
+             <item row="2" column="0">
+              <widget class="QLabel" name="label_3">
+               <property name="text">
+                <string>Available Rooms:</string>
+               </property>
+              </widget>
+             </item>
+             <item row="2" column="1">
+              <widget class="QLabel" name="lblAvailableRooms">
+               <property name="text">
+                <string>0</string>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </widget>
+          </item>
+          <item row="0" column="1">
+           <widget class="QGroupBox" name="groupBoxActions">
+            <property name="title">
+             <string>Quick Actions</string>
+            </property>
+            <layout class="QVBoxLayout" name="verticalLayout_2">
+             <item>
+              <widget class="QGroupBox" name="groupBoxBooking">
+               <property name="title">
+                <string>New Booking</string>
+               </property>
+               <layout class="QFormLayout" name="formLayoutBooking">
+                <item row="0" column="0">
+                 <widget class="QLabel" name="labelCustomerId">
+                  <property name="text">
+                   <string>Customer ID</string>
+                  </property>
+                 </widget>
+                </item>
+                <item row="0" column="1">
+                 <widget class="QLineEdit" name="txtCustomerId"/>
+                </item>
+                <item row="1" column="0">
+                 <widget class="QLabel" name="labelRoomNumber">
+                  <property name="text">
+                   <string>Room Number</string>
+                  </property>
+                 </widget>
+                </item>
+                <item row="1" column="1">
+                 <widget class="QLineEdit" name="txtRoomNumber"/>
+                </item>
+                <item row="2" column="0">
+                 <widget class="QLabel" name="labelCheckIn">
+                  <property name="text">
+                   <string>Check-in</string>
+                  </property>
+                 </widget>
+                </item>
+                <item row="2" column="1">
+                 <widget class="QDateEdit" name="dateCheckIn">
+                  <property name="calendarPopup">
+                   <bool>true</bool>
+                  </property>
+                 </widget>
+                </item>
+                <item row="3" column="0">
+                 <widget class="QLabel" name="labelCheckOut">
+                  <property name="text">
+                   <string>Check-out</string>
+                  </property>
+                 </widget>
+                </item>
+                <item row="3" column="1">
+                 <widget class="QDateEdit" name="dateCheckOut">
+                  <property name="calendarPopup">
+                   <bool>true</bool>
+                  </property>
+                 </widget>
+                </item>
+                <item row="4" column="1">
+                 <widget class="QPushButton" name="btnBook">
+                  <property name="text">
+                   <string>Create Booking</string>
+                  </property>
+                 </widget>
+                </item>
+               </layout>
+              </widget>
+             </item>
+            </layout>
+           </widget>
+          </item>
+         </layout>
+        </item>
+       </layout>
+      </widget>
+      <widget class="QWidget" name="roomsTab">
+       <attribute name="title">
+        <string>Rooms</string>
+       </attribute>
+       <layout class="QVBoxLayout" name="roomsLayout">
+        <item>
+         <widget class="QGroupBox" name="groupBoxRoomActions">
+          <property name="title">
+           <string>Room Operations</string>
+          </property>
+          <layout class="QHBoxLayout" name="horizontalLayoutRoomActions">
+           <item>
+            <widget class="QLabel" name="labelNewRoomNumber">
+             <property name="text">
+              <string>Room No.</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QLineEdit" name="txtNewRoomNumber"/>
+           </item>
+           <item>
+            <widget class="QLabel" name="labelRoomType">
+             <property name="text">
+              <string>Type</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QComboBox" name="comboRoomType">
+             <item>
+              <property name="text">
+               <string>Standard</string>
+              </property>
+             </item>
+             <item>
+              <property name="text">
+               <string>Suite</string>
+              </property>
+             </item>
+             <item>
+              <property name="text">
+               <string>Deluxe</string>
+              </property>
+             </item>
+            </widget>
+           </item>
+           <item>
+            <widget class="QLabel" name="labelBaseRate">
+             <property name="text">
+              <string>Base Rate</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QDoubleSpinBox" name="spinBaseRate">
+             <property name="minimum">
+              <double>1.000000000000000</double>
+             </property>
+             <property name="maximum">
+              <double>10000.000000000000000</double>
+             </property>
+             <property name="value">
+              <double>120.000000000000000</double>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QPushButton" name="btnAddRoom">
+             <property name="text">
+              <string>Add Room</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QPushButton" name="btnDeleteRoom">
+             <property name="text">
+              <string>Delete</string>
+             </property>
+            </widget>
+           </item>
+          </layout>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="labelRoomsTitle">
+          <property name="text">
+           <string>Room Inventory</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QTableWidget" name="roomTable">
+          <column>
+           <property name="text">
+            <string>Room Number</string>
+           </property>
+          </column>
+          <column>
+           <property name="text">
+            <string>Price</string>
+           </property>
+          </column>
+          <column>
+           <property name="text">
+            <string>Status</string>
+           </property>
+          </column>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+      <widget class="QWidget" name="bookingsTab">
+       <attribute name="title">
+        <string>Bookings</string>
+       </attribute>
+       <layout class="QVBoxLayout" name="bookingsLayout">
+        <item>
+         <widget class="QTableWidget" name="bookingTable">
+          <column>
+           <property name="text">
+            <string>Booking ID</string>
+           </property>
+          </column>
+          <column>
+           <property name="text">
+            <string>Customer ID</string>
+           </property>
+          </column>
+          <column>
+           <property name="text">
+            <string>Room</string>
+           </property>
+          </column>
+          <column>
+           <property name="text">
+            <string>Check-in</string>
+           </property>
+          </column>
+          <column>
+           <property name="text">
+            <string>Check-out</string>
+           </property>
+          </column>
+          <column>
+           <property name="text">
+            <string>Status</string>
+           </property>
+          </column>
+         </widget>
+        </item>
+        <item>
+         <layout class="QGridLayout" name="bookingActionsLayout">
+          <item row="0" column="0">
+           <widget class="QGroupBox" name="groupBoxCheckout">
+            <property name="title">
+             <string>Checkout</string>
+            </property>
+            <layout class="QHBoxLayout" name="horizontalLayoutCheckout">
+             <item>
+              <widget class="QLabel" name="labelCheckoutBookingId">
+               <property name="text">
+                <string>Booking ID</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QLineEdit" name="txtCheckoutBookingId"/>
+             </item>
+             <item>
+              <widget class="QPushButton" name="btnCheckout">
+               <property name="text">
+                <string>Checkout</string>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </widget>
+          </item>
+          <item row="0" column="1">
+           <widget class="QGroupBox" name="groupBoxCancel">
+            <property name="title">
+             <string>Cancel Booking</string>
+            </property>
+            <layout class="QHBoxLayout" name="horizontalLayoutCancel">
+             <item>
+              <widget class="QLabel" name="labelCancelBookingId">
+               <property name="text">
+                <string>Booking ID</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QLineEdit" name="txtCancelBookingId"/>
+             </item>
+             <item>
+              <widget class="QPushButton" name="btnCancelBooking">
+               <property name="text">
+                <string>Cancel</string>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <widget class="QGroupBox" name="groupBoxDeleteBooking">
+          <property name="title">
+           <string>Delete Booking</string>
+          </property>
+          <layout class="QHBoxLayout" name="horizontalLayoutDeleteBooking">
+           <item>
+            <widget class="QLabel" name="labelDeleteBookingHint">
+             <property name="text">
+              <string>Select a booking row and press delete.</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QPushButton" name="btnDeleteBooking">
+             <property name="text">
+              <string>Delete</string>
+             </property>
+            </widget>
+           </item>
+          </layout>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+      <widget class="QWidget" name="customersTab">
+       <attribute name="title">
+        <string>Customers</string>
+       </attribute>
+       <layout class="QVBoxLayout" name="customersLayout">
+        <item>
+         <widget class="QGroupBox" name="groupBoxCustomerActions">
+          <property name="title">
+           <string>Customer Operations</string>
+          </property>
+          <layout class="QHBoxLayout" name="horizontalLayoutCustomerActions">
+           <item>
+            <widget class="QLabel" name="labelNewCustomerId">
+             <property name="text">
+              <string>ID</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QLineEdit" name="txtNewCustomerId"/>
+           </item>
+           <item>
+            <widget class="QLabel" name="labelNewCustomerName">
+             <property name="text">
+              <string>Name</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QLineEdit" name="txtNewCustomerName"/>
+           </item>
+           <item>
+            <widget class="QLabel" name="labelNewCustomerPhone">
+             <property name="text">
+              <string>Phone</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QLineEdit" name="txtNewCustomerPhone"/>
+           </item>
+           <item>
+            <widget class="QPushButton" name="btnAddCustomer">
+             <property name="text">
+              <string>Add Customer</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QPushButton" name="btnDeleteCustomer">
+             <property name="text">
+              <string>Delete</string>
+             </property>
+            </widget>
+           </item>
+          </layout>
+         </widget>
+        </item>
+        <item>
+         <widget class="QTableWidget" name="customerTable">
+          <column>
+           <property name="text">
+            <string>Customer ID</string>
+           </property>
+          </column>
+          <column>
+           <property name="text">
+            <string>Name</string>
+           </property>
+          </column>
+          <column>
+           <property name="text">
+            <string>Phone</string>
+           </property>
+          </column>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="labelCustomerHistory">
+          <property name="text">
+           <string>Booking History</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QTableWidget" name="customerHistoryTable">
+          <column>
+           <property name="text">
+            <string>Booking ID</string>
+           </property>
+          </column>
+          <column>
+           <property name="text">
+            <string>Room</string>
+           </property>
+          </column>
+          <column>
+           <property name="text">
+            <string>Date Range</string>
+           </property>
+          </column>
+          <column>
+           <property name="text">
+            <string>Status</string>
+           </property>
+          </column>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+     </widget>
+    </item>
+   </layout>
+  </widget>
+  <widget class="QStatusBar" name="statusbar"/>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

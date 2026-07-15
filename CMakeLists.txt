@@ -74,6 +74,23 @@ target_include_directories(HotelBookingManagement PRIVATE
     src/views
 )
 
+find_file(QSQLITE_PLUGIN_DLL
+    NAMES qsqlite.dll
+    PATHS
+        "${Qt6_DIR}/../../../plugins/sqldrivers"
+        "$ENV{QTDIR}/plugins/sqldrivers"
+        "C:/Qt/6.11.1/mingw_64/plugins/sqldrivers"
+        "C:/Qt/Tools/QtCreator/bin/plugins/sqldrivers"
+)
+
+if(QSQLITE_PLUGIN_DLL)
+    add_custom_command(TARGET HotelBookingManagement POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${QSQLITE_PLUGIN_DLL}"
+            "$<TARGET_FILE_DIR:HotelBookingManagement>"
+    )
+endif()
+
 # ================================================================
 # LINK LIBRARIES
 # ================================================================
