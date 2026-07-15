@@ -4,7 +4,8 @@
 Room::Room(std::string roomNumber, double basePrice)
     : roomNumber(roomNumber),
       basePrice(basePrice),
-      isAvailable(true) {
+      isAvailable(true),
+      archived(false) {
 }
 void Room::setRoomNumber(std::string roomNumber) {
     this->roomNumber = roomNumber;
@@ -28,4 +29,12 @@ void Room::setIsAvailable(bool isAvailable) {
 
 bool Room::getIsAvailable() const {
     return this->isAvailable;
+}
+
+bool Room::isArchived() const {
+    return archived;
+}
+
+void Room::setArchived(bool archived) {
+    this->archived = archived;
 }

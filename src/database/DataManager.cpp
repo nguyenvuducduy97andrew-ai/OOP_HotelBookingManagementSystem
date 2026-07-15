@@ -28,6 +28,7 @@ bool DataManager::initDatabase(const std::string& dataPath) {
     }
 
     QSqlQuery query;
+    QSqlQuery schemaQuery;
 
     query.exec("PRAGMA foreign_keys = ON;");
 
@@ -35,10 +36,29 @@ bool DataManager::initDatabase(const std::string& dataPath) {
         "CREATE TABLE IF NOT EXISTS Customer ("
         "   customerId TEXT PRIMARY KEY,"
         "   name TEXT NOT NULL,"
-        "   phoneNumber TEXT"
+        "   phoneNumber TEXT,"
+        "   archived INTEGER NOT NULL DEFAULT 0"
         ");";
     if (!query.exec(createCustomer)) {
         qDebug() << "Error creating Customer table: " << query.lastError().text();
+        return false;
+    }
+
+    if (schemaQuery.exec("PRAGMA table_info(Customer)")) {
+        bool hasArchived = false;
+        while (schemaQuery.next()) {
+            if (schemaQuery.value(1).toString() == "archived") {
+                hasArchived = true;
+            }
+        }
+        if (!hasArchived) {
+            if (!schemaQuery.exec("ALTER TABLE Customer ADD COLUMN archived INTEGER NOT NULL DEFAULT 0")) {
+                qDebug() << "Error adding archived column to Customer: " << schemaQuery.lastError().text();
+                return false;
+            }
+        }
+    } else {
+        qDebug() << "Error inspecting Customer schema: " << schemaQuery.lastError().text();
         return false;
     }
 
@@ -47,12 +67,31 @@ bool DataManager::initDatabase(const std::string& dataPath) {
         "   roomNumber TEXT PRIMARY KEY,"
         "   basePrice REAL NOT NULL,"
         "   isAvailable INTEGER DEFAULT 1,"
+        "   archived INTEGER NOT NULL DEFAULT 0,"
         "   roomType TEXT NOT NULL,"
         "   premiumServiceFee REAL,"
         "   miniBarFee REAL"
         ");";
     if (!query.exec(createRoom)) {
         qDebug() << "Error creating Room table: " << query.lastError().text();
+        return false;
+    }
+
+    if (schemaQuery.exec("PRAGMA table_info(Room)")) {
+        bool hasArchived = false;
+        while (schemaQuery.next()) {
+            if (schemaQuery.value(1).toString() == "archived") {
+                hasArchived = true;
+            }
+        }
+        if (!hasArchived) {
+            if (!schemaQuery.exec("ALTER TABLE Room ADD COLUMN archived INTEGER NOT NULL DEFAULT 0")) {
+                qDebug() << "Error adding archived column to Room: " << schemaQuery.lastError().text();
+                return false;
+            }
+        }
+    } else {
+        qDebug() << "Error inspecting Room schema: " << schemaQuery.lastError().text();
         return false;
     }
 
@@ -72,12 +111,12 @@ bool DataManager::initDatabase(const std::string& dataPath) {
         return false;
     }
 
-    QSqlQuery schemaQuery;
-    if (schemaQuery.exec("PRAGMA table_info(Booking)")) {
+    QSqlQuery bookingSchemaQuery;
+    if (bookingSchemaQuery.exec("PRAGMA table_info(Booking)")) {
         bool hasCancelled = false;
         bool hasStatus = false;
-        while (schemaQuery.next()) {
-            const QString columnName = schemaQuery.value(1).toString();
+        while (bookingSchemaQuery.next()) {
+            const QString columnName = bookingSchemaQuery.value(1).toString();
             if (columnName == "cancelled") {
                 hasCancelled = true;
             } else if (columnName == "status") {
@@ -86,8 +125,8 @@ bool DataManager::initDatabase(const std::string& dataPath) {
         }
 
         if (!hasCancelled && hasStatus) {
-            if (!schemaQuery.exec("ALTER TABLE Booking ADD COLUMN cancelled INTEGER NOT NULL DEFAULT 0")) {
-                qDebug() << "Error adding cancelled column: " << schemaQuery.lastError().text();
+            if (!bookingSchemaQuery.exec("ALTER TABLE Booking ADD COLUMN cancelled INTEGER NOT NULL DEFAULT 0")) {
+                qDebug() << "Error adding cancelled column: " << bookingSchemaQuery.lastError().text();
                 return false;
             }
 
@@ -98,7 +137,7 @@ bool DataManager::initDatabase(const std::string& dataPath) {
             }
         }
     } else {
-        qDebug() << "Error inspecting Booking schema: " << schemaQuery.lastError().text();
+        qDebug() << "Error inspecting Booking schema: " << bookingSchemaQuery.lastError().text();
         return false;
     }
 
@@ -133,13 +172,18 @@ bool DataManager::loadAll(HotelManager& manager, const std::string& dataPath) {
     std::string errorMsg;
 
     // Load customer records from database into memory structures
-    if (query.exec("SELECT customerId, name, phoneNumber FROM Customer")) {
+    if (query.exec("SELECT customerId, name, phoneNumber, archived FROM Customer")) {
         while (query.next()) {
             std::string custId = query.value(0).toString().toStdString();
             std::string name = query.value(1).toString().toStdString();
             std::string phone = query.value(2).toString().toStdString();
+            bool archived = query.value(3).toInt() == 1;
 
             manager.registerCustomer(custId, name, phone, errorMsg);
+            auto customer = manager.findCustomerById(custId);
+            if (customer) {
+                customer->setArchived(archived);
+            }
         }
     } else {
         qDebug() << "Error reading Customer table: " << query.lastError().text();
@@ -147,14 +191,15 @@ bool DataManager::loadAll(HotelManager& manager, const std::string& dataPath) {
     }
 
     // Load room properties and restore distinct sub-type specific data fields
-    if (query.exec("SELECT roomNumber, basePrice, isAvailable, roomType, premiumServiceFee, miniBarFee FROM Room")) {
+    if (query.exec("SELECT roomNumber, basePrice, isAvailable, archived, roomType, premiumServiceFee, miniBarFee FROM Room")) {
         while (query.next()) {
             std::string roomNum = query.value(0).toString().toStdString();
             double price = query.value(1).toDouble();
             int isAvailable = query.value(2).toInt();
-            std::string typeStr = query.value(3).toString().toStdString();
-            double premiumFee = query.value(4).toDouble();
-            double miniBarFee = query.value(5).toDouble();
+            bool archived = query.value(3).toInt() == 1;
+            std::string typeStr = query.value(4).toString().toStdString();
+            double premiumFee = query.value(5).toDouble();
+            double miniBarFee = query.value(6).toDouble();
 
             RoomType type = RoomType::Standard;
             if (typeStr == "Deluxe") type = RoomType::Deluxe;
@@ -165,6 +210,7 @@ bool DataManager::loadAll(HotelManager& manager, const std::string& dataPath) {
             auto room = manager.findRoomByNumber(roomNum);
             if (room) {
                 room->setIsAvailable(isAvailable == 1);
+                room->setArchived(archived);
 
                 // Use std::dynamic_pointer_cast because the project utilizes std::shared_ptr instances
                 if (type == RoomType::Suite) {
@@ -241,6 +287,7 @@ bool DataManager::loadAll(HotelManager& manager, const std::string& dataPath) {
 }
 
 // Modified: Removed const qualifier to allow weak_ptr locking mechanisms during data saving loops
+//           saveAll() refuses to persist invalid object graphs instead of silently dropping broken bookings or invoices.
 bool DataManager::saveAll(HotelManager& manager, const std::string& dataPath) {
     if (!initDatabase(dataPath)) {
         return false;
@@ -276,12 +323,13 @@ bool DataManager::saveAll(HotelManager& manager, const std::string& dataPath) {
     }
 
     // 2. Persist Customer object lists
-    query.prepare("INSERT INTO Customer (customerId, name, phoneNumber) VALUES (?, ?, ?)");
+    query.prepare("INSERT INTO Customer (customerId, name, phoneNumber, archived) VALUES (?, ?, ?, ?)");
     for (const auto& customer : manager.getCustomers()) {
         if (customer) {
             query.addBindValue(QString::fromStdString(customer->getCustomerId()));
             query.addBindValue(QString::fromStdString(customer->getName()));
             query.addBindValue(QString::fromStdString(customer->getPhoneNumber()));
+            query.addBindValue(customer->isArchived() ? 1 : 0);
             if (!query.exec()) {
                 m_db.rollback();
                 qDebug() << "Error saving Customer: " << query.lastError().text();
@@ -291,12 +339,13 @@ bool DataManager::saveAll(HotelManager& manager, const std::string& dataPath) {
     }
 
     // 3. Persist Room lists (Inspect polymorphism variables to save correct individual fee items)
-    query.prepare("INSERT INTO Room (roomNumber, basePrice, isAvailable, roomType, premiumServiceFee, miniBarFee) VALUES (?, ?, ?, ?, ?, ?)");
+    query.prepare("INSERT INTO Room (roomNumber, basePrice, isAvailable, archived, roomType, premiumServiceFee, miniBarFee) VALUES (?, ?, ?, ?, ?, ?, ?)");
     for (const auto& room : manager.getRooms()) {
         if (room) {
             query.addBindValue(QString::fromStdString(room->getRoomNumber()));
             query.addBindValue(room->getBasePrice());
             query.addBindValue(room->getIsAvailable() ? 1 : 0);
+            query.addBindValue(room->isArchived() ? 1 : 0);
 
             // Determine subtype structures and fee balances using dynamic casting pointers
             double premiumFee = 0.0;
@@ -325,41 +374,60 @@ bool DataManager::saveAll(HotelManager& manager, const std::string& dataPath) {
 
     query.prepare("INSERT INTO Booking (bookingId, customerId, roomNumber, checkInDate, checkOutDate, cancelled) VALUES (?, ?, ?, ?, ?, ?)");
     for (const auto& booking : manager.getBookings()) {
-        if (booking && booking->getCustomer() && booking->getRoom()) {
-            query.addBindValue(QString::fromStdString(booking->getBookingId()));
-            query.addBindValue(QString::fromStdString(booking->getCustomer()->getCustomerId()));
-            query.addBindValue(QString::fromStdString(booking->getRoom()->getRoomNumber()));
+        if (!booking) {
+            continue;
+        }
 
-            // Modified: Directly bind ISO strings instead of querying conversion method variants
-            query.addBindValue(QString::fromStdString(booking->getCheckInDate()));
-            query.addBindValue(QString::fromStdString(booking->getCheckOutDate()));
+        auto customer = booking->getCustomer();
+        auto room = booking->getRoom();
+        if (!customer || !room) {
+            m_db.rollback();
+            qDebug() << "Invalid Booking object graph: booking references a missing customer or room.";
+            return false;
+        }
 
-            query.addBindValue(booking->isCancelled() ? 1 : 0);
+        query.addBindValue(QString::fromStdString(booking->getBookingId()));
+        query.addBindValue(QString::fromStdString(customer->getCustomerId()));
+        query.addBindValue(QString::fromStdString(room->getRoomNumber()));
 
-            if (!query.exec()) {
-                m_db.rollback();
-                qDebug() << "Error saving Booking: " << query.lastError().text();
-                return false;
-            }
+        // Modified: Directly bind ISO strings instead of querying conversion method variants
+        query.addBindValue(QString::fromStdString(booking->getCheckInDate()));
+        query.addBindValue(QString::fromStdString(booking->getCheckOutDate()));
+
+        query.addBindValue(booking->isCancelled() ? 1 : 0);
+
+        if (!query.exec()) {
+            m_db.rollback();
+            qDebug() << "Error saving Booking: " << query.lastError().text();
+            return false;
         }
     }
 
     // Added: 5. Persist Invoice records dynamically calculated up from view layer properties
     query.prepare("INSERT INTO Invoice (invoiceId, bookingId, taxRate, nights, paymentDate, cancelled) VALUES (?, ?, ?, ?, ?, ?)");
     for (const auto& invoice : manager.getInvoices()) {
-        if (invoice && invoice->getBooking()) {
-            query.addBindValue(QString::fromStdString(invoice->getInvoiceId()));
-            query.addBindValue(QString::fromStdString(invoice->getBooking()->getBookingId()));
-            query.addBindValue(invoice->getTaxRate());
-            query.addBindValue(invoice->getNights());
-            query.addBindValue(QString::fromStdString(invoice->getPaymentDate()));
-            query.addBindValue(invoice->isCancelled() ? 1 : 0);
+        if (!invoice) {
+            continue;
+        }
 
-            if (!query.exec()) {
-                m_db.rollback();
-                qDebug() << "Error saving Invoice: " << query.lastError().text();
-                return false;
-            }
+        auto booking = invoice->getBooking();
+        if (!booking) {
+            m_db.rollback();
+            qDebug() << "Invalid Invoice object graph: invoice references a missing booking.";
+            return false;
+        }
+
+        query.addBindValue(QString::fromStdString(invoice->getInvoiceId()));
+        query.addBindValue(QString::fromStdString(booking->getBookingId()));
+        query.addBindValue(invoice->getTaxRate());
+        query.addBindValue(invoice->getNights());
+        query.addBindValue(QString::fromStdString(invoice->getPaymentDate()));
+        query.addBindValue(invoice->isCancelled() ? 1 : 0);
+
+        if (!query.exec()) {
+            m_db.rollback();
+            qDebug() << "Error saving Invoice: " << query.lastError().text();
+            return false;
         }
     }
     if (!m_db.commit())

@@ -6,6 +6,7 @@ private:
     std::string roomNumber;
     double basePrice;
     bool isAvailable; // Maintenance/inspection status only; does not indicate guest occupancy.
+    bool archived = false;
 
 public:
     Room(std::string roomNumber, double basePrice);
@@ -19,6 +20,9 @@ public:
 
     void setIsAvailable(bool isAvailable);
     bool getIsAvailable() const;
+
+    bool isArchived() const;
+    void setArchived(bool archived);
 
     virtual double calculateTargetPrice() = 0;
 };

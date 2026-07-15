@@ -6,6 +6,7 @@ private:
     std::string customerId;
     std::string name;
     std::string phoneNumber;
+    bool archived = false;
     // QList<Booking*> bookingHistory;
 public:
     Customer();
@@ -21,5 +22,9 @@ public:
 
     std::string getPhoneNumber() const;
     void setPhoneNumber(std::string phoneNumber);
+
+    bool isArchived() const;
+    void setArchived(bool archived);
+
     bool isValid() const;
 };
