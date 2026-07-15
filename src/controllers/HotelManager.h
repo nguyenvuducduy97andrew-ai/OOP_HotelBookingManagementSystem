@@ -147,6 +147,11 @@ public:
         std::string& errorMessage
         );
 
+    bool archiveRoom(const std::string& roomNumber, std::string& errorMessage);
+    bool archiveCustomer(const std::string& customerId, std::string& errorMessage);
+    bool restoreRoom(const std::string& roomNumber, std::string& errorMessage);
+    bool restoreCustomer(const std::string& customerId, std::string& errorMessage);
+
     // Added: Soft-cancels a reservation by changing its status and releasing the assigned room back to inventory
     bool cancelBooking(const std::string& bookingId, std::string& errorMessage);
 

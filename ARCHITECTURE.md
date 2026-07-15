@@ -182,8 +182,9 @@ bool cancelBooking(const std::string& bookingId, std::string& errorMessage);
 bool setRoomAvailability(const std::string& roomNumber, bool available, std::string& errorMessage);
 std::shared_ptr<Invoice> createInvoice(const std::string& invoiceId, const std::string& bookingId, double taxRate, int nights, const std::string& paymentDate, std::string& errorMessage;
 BookingState getBookingState(const Booking& booking) const;
-
 ```
+
+- Hard delete operations exist only for admin/data-cleanup. The recommended mechanism for retiring rooms and customers is archive mode, which preserves booking and invoice history while hiding old entities from normal availability queries.
 
 **Why:** All public use-case methods perform input validation before modifying state. Errors are returned as strings rather than exceptions, making the system more resilient and testable.
 
@@ -211,6 +212,7 @@ bool loadAll(HotelManager& manager, const std::string& dataPath = "hotel_data.db
 - Copy and assignment are deleted to prevent accidental second instances.
 - The rest of the application calls `DataManager::getInstance()` without managing its lifetime.
 - The data layer initializes the database schema automatically and restores persisted customers, rooms, and bookings.
+- `saveAll()` enforces object graph integrity; it refuses to persist broken bookings or invoices and rolls back the transaction instead of silently dropping invalid child records.
 
 ### Non-Owning Reference Pattern — weak_ptr
 

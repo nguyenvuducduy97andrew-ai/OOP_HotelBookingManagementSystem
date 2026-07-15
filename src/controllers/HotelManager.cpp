@@ -366,7 +366,7 @@ std::vector<std::shared_ptr<Room>> HotelManager::getAvailableRooms() const
     std::vector<std::shared_ptr<Room>> availableRooms;
     for (const auto &room : rooms)
     {
-        if (room && room->getIsAvailable())
+        if (room && room->getIsAvailable()&& !room->isArchived())
         {
             availableRooms.push_back(room);
         }
@@ -580,16 +580,21 @@ bool HotelManager::registerCustomer(
 }
 
 bool HotelManager::createBooking(
-    const std::string& customerId,
-    const std::string& roomNumber,
-    const std::string& checkIn,
-    const std::string& checkOut,
-    std::string& errorMessage)
+    const std::string &customerId,
+    const std::string &roomNumber,
+    const std::string &checkIn,
+    const std::string &checkOut,
+    std::string &errorMessage)
 {
-    if (!validateBookingInput(customerId, roomNumber, checkIn, checkOut, errorMessage)) return false;
+    if (!validateBookingInput(customerId, roomNumber, checkIn, checkOut, errorMessage))
+        return false;
 
     auto room = findRoomByNumber(roomNumber);
-    if (!room)                 { errorMessage = "Room not found.";      return false; }
+    if (!room)
+    {
+        errorMessage = "Room not found.";
+        return false;
+    }
 
     if (!room->getIsAvailable())
     {
@@ -598,10 +603,25 @@ bool HotelManager::createBooking(
     }
 
     auto customer = findCustomerById(customerId);
-    if (!customer)            { errorMessage = "Customer not found.";  return false; }
+    if (!customer)
+    {
+        errorMessage = "Customer not found.";
+        return false;
+    }
 
-    if (!isRoomFreeForDates(roomNumber, checkIn, checkOut, errorMessage)) return false;
+    if (!isRoomFreeForDates(roomNumber, checkIn, checkOut, errorMessage))
+        return false;
+    if (customer->isArchived())
+    {
+        errorMessage = "Cannot create booking for an archived customer.";
+        return false;
+    }
 
+    if (room->isArchived())
+    {
+        errorMessage = "Cannot create booking for an archived room.";
+        return false;
+    }
     // Commit — only reached if everything passed
     auto booking = std::make_shared<Booking>();
     booking->setCustomer(customer);
@@ -689,6 +709,88 @@ bool HotelManager::setRoomAvailability(
     return true;
 }
 
+// Added: Archive a room or customer to hide them from active listings without deleting historical data
+bool HotelManager::archiveRoom(const std::string& roomNumber, std::string& errorMessage)
+{
+    auto room = findRoomByNumber(roomNumber);
+    if (!room)
+    {
+        errorMessage = "Room not found.";
+        return false;
+    }
+
+    for (const auto& booking : bookings)
+    {
+        if (!booking || booking->isCancelled()) continue;
+
+        auto bookedRoom = booking->getRoom();
+        if (!bookedRoom || bookedRoom->getRoomNumber() != roomNumber) continue;
+
+        if (getBookingState(*booking) == BookingState::ACTIVE)
+        {
+            errorMessage = "Cannot archive room while a guest is checked in.";
+            return false;
+        }
+    }
+
+    room->setArchived(true);
+    return true;
+}
+
+bool HotelManager::archiveCustomer(const std::string& customerId, std::string& errorMessage)
+{
+    auto customer = findCustomerById(customerId);
+    if (!customer)
+    {
+        errorMessage = "Customer not found.";
+        return false;
+    }
+
+    for (const auto& booking : bookings)
+    {
+        if (!booking || booking->isCancelled()) continue;
+
+        auto bookingCustomer = booking->getCustomer();
+        if (!bookingCustomer || bookingCustomer->getCustomerId() != customerId) continue;
+
+        if (getBookingState(*booking) == BookingState::ACTIVE)
+        {
+            errorMessage = "Cannot archive customer while they have an active booking.";
+            return false;
+        }
+    }
+
+    customer->setArchived(true);
+    return true;
+}
+
+// Added: Unarchive a room or customer to restore them to active listings
+bool HotelManager::restoreRoom(const std::string& roomNumber, std::string& errorMessage)
+{
+    auto room = findRoomByNumber(roomNumber);
+    if (!room)
+    {
+        errorMessage = "Room not found.";
+        return false;
+    }
+
+    room->setArchived(false);
+    return true;
+}
+
+bool HotelManager::restoreCustomer(const std::string& customerId, std::string& errorMessage)
+{
+    auto customer = findCustomerById(customerId);
+    if (!customer)
+    {
+        errorMessage = "Customer not found.";
+        return false;
+    }
+
+    customer->setArchived(false);
+    return true;
+}
+
 // Added: Soft-cancels an online/upcoming booking safely without dropping db entries
 bool HotelManager::cancelBooking(const std::string &bookingId, std::string &errorMessage)
 {
@@ -743,13 +845,12 @@ bool HotelManager::deleteRoom(const std::string &roomNumber, std::string &errorM
 
     for (const auto &booking : bookings)
     {
-        if (!booking || !booking->getRoom()) continue;
-        if (booking->getRoom()->getRoomNumber() != roomNumber) continue;
+        if (!booking || !booking->getRoom())
+            continue;
 
-        const BookingState bookingState = getBookingState(*booking);
-        if (bookingState == BookingState::ACTIVE || bookingState == BookingState::UPCOMING)
+        if (booking->getRoom()->getRoomNumber() == roomNumber)
         {
-            errorMessage = "Cannot delete room with an active or upcoming reservation.";
+            errorMessage = "Cannot delete room because it is referenced by booking history.";
             return false;
         }
     }
@@ -769,13 +870,12 @@ bool HotelManager::deleteCustomer(const std::string &customerId, std::string &er
 
     for (const auto &booking : bookings)
     {
-        if (!booking || !booking->getCustomer()) continue;
-        if (booking->getCustomer()->getCustomerId() != customerId) continue;
+        if (!booking || !booking->getCustomer())
+            continue;
 
-        const BookingState bookingState = getBookingState(*booking);
-        if (bookingState == BookingState::ACTIVE || bookingState == BookingState::UPCOMING)
+        if (booking->getCustomer()->getCustomerId() == customerId)
         {
-            errorMessage = "Cannot delete customer with an active or upcoming reservation.";
+            errorMessage = "Cannot delete customer because they are referenced by booking history.";
             return false;
         }
     }
@@ -796,6 +896,11 @@ bool HotelManager::deleteBooking(const std::string &bookingId, std::string &erro
     if (getBookingState(*booking) == BookingState::ACTIVE)
     {
         errorMessage = "Cannot delete an active booking.";
+        return false;
+    }
+    if (findInvoiceForBooking(bookingId))
+    {
+        errorMessage = "Cannot delete booking because an invoice exists for it.";
         return false;
     }
 

@@ -26,6 +26,7 @@ The system demonstrates core object-oriented programming concepts:
   - **Suite**: `baseRate × days × 1.5` (50% premium)
 - **Availability Tracking**: `isAvailable` marks maintenance/inspection status only — independent of whether a guest is currently staying in the room
 - **Room Factory Pattern**: Safe room creation with validation
+- **Archive-first cleanup**: Hard delete is restricted and intended only for admin/data-cleanup. Archiving rooms or customers is the preferred way to hide old entities while preserving booking and invoice history.
 
 ### Customer Management
 - **Customer Records**: Store customer ID, name, and phone number
@@ -51,6 +52,7 @@ The system demonstrates core object-oriented programming concepts:
 - **SQLite-backed Persistence**: Load and save hotel state through DataManager::loadAll() and DataManager::saveAll()
 - **Automatic Database Setup**: The data layer creates the required tables on first use
 - **Core Domain Recovery**: Customer, room, and booking data are restored from the database on startup
+- **Strict Persistence Integrity**: `saveAll()` refuses to persist invalid object graphs and rolls back on broken booking or invoice references, instead of silently dropping bad child records.
 
 ---
 
