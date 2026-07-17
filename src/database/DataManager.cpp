@@ -187,6 +187,10 @@ bool DataManager::loadAll(HotelManager& manager, const std::string& dataPath) {
             bool archived = query.value(3).toInt() == 1;
 
             manager.registerCustomer(custId, name, phone, errorMsg);
+            if (!manager.customerIdExists(custId)) {
+                qDebug() << "Skipped invalid customer during load:" << QString::fromStdString(errorMsg);
+                continue;
+            }
             auto customer = manager.findCustomerById(custId);
             if (customer) {
                 customer->setArchived(archived);
@@ -250,19 +254,11 @@ bool DataManager::loadAll(HotelManager& manager, const std::string& dataPath) {
             std::string checkOutStr = query.value(4).toString().toStdString();
             bool cancelled = query.value(5).toInt() == 1;
 
-            if (!manager.createBooking(custId, roomNum, checkInStr, checkOutStr, errorMsg)) {
+            if (!manager.restoreBookingFromDatabase(bookingId, custId, roomNum, checkInStr, checkOutStr, cancelled, errorMsg)) {
                 qDebug() << "Skipped invalid booking during load:" << QString::fromStdString(errorMsg);
                 continue;
             }
 
-            auto bookings = manager.getBookings();
-            if (!bookings.empty()) {
-                auto activeBooking = bookings.back();
-                if (activeBooking) {
-                    activeBooking->setBookingId(bookingId);
-                    activeBooking->setCancelled(cancelled);
-                }
-            }
         }
     } else {
         qDebug() << "Error reading Booking table: " << query.lastError().text();
@@ -276,16 +272,12 @@ bool DataManager::loadAll(HotelManager& manager, const std::string& dataPath) {
             std::string bookId = query.value(1).toString().toStdString();
             double tax = query.value(2).toDouble();
             int nightsCount = query.value(3).toInt();
-            std::string payDate = query.value(4).toString().toStdString();
+            std::string payDate = query.value(4).toString().toStdString();\
+            bool cancelled = query.value(5).toInt() == 1;
 
-            if (!manager.createInvoice(invId, bookId, tax, nightsCount, payDate, errorMsg)) {
+            if (!manager.restoreInvoiceFromDatabase(invId, bookId, tax, nightsCount, payDate, cancelled, errorMsg)) {
                 qDebug() << "Skipped invalid invoice during load:" << QString::fromStdString(errorMsg);
                 continue;
-            }
-
-            auto invoice = manager.findInvoiceById(invId);
-            if (invoice) {
-                invoice->setCancelled(query.value(5).toInt() == 1);
             }
         }
     } else {

@@ -165,6 +165,25 @@ public:
     bool restoreRoom(const std::string& roomNumber, std::string& errorMessage);
     bool restoreCustomer(const std::string& customerId, std::string& errorMessage);
 
+    //Data Manager integration methods for persistence, only used by DataManager to restore objects from database
+    bool restoreBookingFromDatabase(
+        const std::string& bookingId,
+        const std::string& customerId,
+        const std::string& roomNumber,
+        const std::string& checkInDate,
+        const std::string& checkOutDate,
+        bool cancelled,
+        std::string& errorMessage
+    );
+    bool restoreInvoiceFromDatabase(
+        const std::string& invoiceId,
+        const std::string& bookingId,
+        double taxRate,
+        int nights,
+        const std::string& paymentDate,
+        bool cancelled,
+        std::string& errorMessage
+    );
     // Added: Soft-cancels a reservation by changing its status and releasing the assigned room back to inventory
     bool cancelBooking(const std::string& bookingId, std::string& errorMessage);
 
