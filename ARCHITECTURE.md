@@ -25,6 +25,11 @@ Each layer has a single responsibility so team members can work in parallel with
 | `database/` | Where data lives between sessions — JSON, CSV, or SQLite |
 | `views/` | How the user interacts — Qt widgets, layouts, signals/slots |
 
+### View Layer / Qt UI
+The `views/` folder contains the application’s Qt desktop interface. It includes the main window, dashboard page, reservation management page, room management page, room status overview, and supporting dialogs such as reservation, room, invoice, confirmation, and success dialogs.
+
+The UI layer is intentionally separated from controller logic: view classes emit user events and invoke `HotelManager` operations, while business rules and persistence remain inside the controller and model layers.
+
 ## High-Level Data Flow
 
 ```text

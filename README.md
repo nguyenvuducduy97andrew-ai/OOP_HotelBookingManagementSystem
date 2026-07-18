@@ -89,6 +89,22 @@ main.cpp
 
 ---
 
+## 🖥️ UI Layer
+The project now includes a complete Qt desktop interface in `src/views/`, with separated view classes that keep the user experience distinct from business logic.
+
+Key UI components:
+- `MainWindow` — application shell and navigation
+- `DashboardWidget` — summary cards and room/booking charts
+- `ReservationsPageWidget` — booking list, filtering, and appointment actions
+- `RoomPageWidget` — room listing, details, add/edit/delete workflows
+- `RoomStatusPageWidget` — room status overview and maintenance controls
+- `ReservationDialog`, `RoomDialog`, `InvoiceDialog` — modal forms for creating and editing entities
+- `CustomConfirmDialog`, `CustomSuccessDialog` — reusable confirmation and success feedback dialogs
+
+This UI layer operates on English interface text while preserving existing controller and model behavior.
+
+---
+
 ## 🎯 OOP Design Highlights
 
 ### Inheritance Hierarchy

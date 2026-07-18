@@ -1,13 +1,14 @@
 #include <QApplication>
 #include <QMessageBox>
-#include "MainWindow.h"
+// Force rebuild comment
+#include "mainwindow.h"
 #include "HotelManager.h"
 #include "DataManager.h"
 
 int main(int argc, char *argv[]) {
-// Khởi tạo ứng dụng Qt
+    // Khởi tạo ứng dụng Qt
     QApplication app(argc, argv);
-// Tạo một đối tượng HotelManager để quản lý dữ liệu khách sạn
+    // Tạo một đối tượng HotelManager để quản lý dữ liệu khách sạn
     HotelManager hotelManager;
 
     // Load initial hotel database records into the core engine state at startup
