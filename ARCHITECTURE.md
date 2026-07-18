@@ -139,7 +139,7 @@ bool cancelBooking(const std::string& bookingId, std::string& errorMessage);
 
 - Only valid when the booking's current state is `UPCOMING` — a stay that has already started or finished cannot be "un-happened."
 - Sets `Booking::cancelled = true`. The booking record is kept (not removed) for history/audit purposes.
-- **Cascades to void, not delete, any attached invoice**: if the booking already has an invoice (pay-at-booking is supported, so an invoice can exist before checkout), that invoice's own `cancelled` flag is also set. The system locates and voids it automatically — reception staff do not need to search for and manually delete the correct invoice under time pressure (e.g. during rush-hour front-desk operations).
+- Insurance: **Cascades to void, not delete, any attached invoice**: if somehow the booking already has an invoice is cancelled, that invoice's own `cancelled` flag is also set. The system locates and voids it automatically — reception staff do not need to search for and manually delete the correct invoice under time pressure (e.g. during rush-hour front-desk operations).
 - This is intentionally a fast, single-call, no-confirmation path. Voided invoices remain visible in invoice listings (styled distinctly, e.g. greyed out) rather than hidden, preserving an audit trail.
 - `deleteBooking()` remains a separate, unrelated hard-delete path (admin/data-cleanup use), and still cascades to *deleting* any associated invoice — it is not used by the normal cancellation flow.
 
@@ -181,7 +181,7 @@ BookingState getBookingState(const Booking& booking) const;
 - `createBooking()` — validates customer exists, room and dates don't overlap with any *non-cancelled* existing booking for that room, then creates the booking. Does **not** touch `Room::isAvailable` — occupancy is derived from bookings, not stored on the room (see [Room Availability vs. Occupancy](#room-availability-vs-occupancy) below).
 - `cancelBooking()` — soft-cancels an `UPCOMING` booking and cascades a void to its invoice, if any (see [Booking Lifecycle & Cancellation](#booking-lifecycle--cancellation))
 - `setRoomAvailability()` — toggles maintenance status only; blocks marking a room unavailable while it has an `ACTIVE` booking (a guest currently checked in)
-- `createInvoice()` — validates invoice input and attaches the invoice to a booking; callable regardless of booking state, since payment may occur at booking time or at checkout
+- - `createInvoice()` — validates invoice input and attaches the invoice to a booking; only allowed once the booking is `ACTIVE` or `COMPLETED`. Pay-first invoicing on `UPCOMING` bookings is intentionally rejected.
 - `getBookingState()` — derives `UPCOMING` / `ACTIVE` / `COMPLETED` from dates, or returns `CANCELLED` if the booking's persisted flag is set
 
 
@@ -442,7 +442,7 @@ The current implementation provides:
 ✅ **Complete** — Factory Pattern (RoomFactory) and Singleton Pattern (DataManager)
 ✅ **Complete** — Comprehensive validation and error handling in HotelManager
 ✅ **Complete** — Polymorphic room pricing (calculateTargetPrice)
-✅ **Complete** — Invoice generation with tax calculation, callable independent of booking state
++ ✅ **Complete** — Invoice generation with tax calculation, restricted to `ACTIVE`/`COMPLETED` bookings (pay-first invoicing intentionally unsupported)
 ✅ **Complete** — Booking cancellation (`cancelBooking`) with cascading invoice void and overlap-check exclusion
 ✅ **Complete** — Room availability (maintenance) decoupled from booking occupancy
 ✅ **Complete** — Dashboard/query helpers: `getRoomsByOccupancy`, `getTodayCheckIns`, `getTodayCheckOuts`, `getBookingsForCustomer`

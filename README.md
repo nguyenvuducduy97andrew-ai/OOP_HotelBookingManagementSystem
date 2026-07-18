@@ -44,9 +44,9 @@ The system demonstrates core object-oriented programming concepts:
 
 ### Invoice & Billing
 - **Invoice Lifecycle**: Create, lookup, list, and delete invoices through HotelManager
-- **Flexible Timing**: Invoices can be generated at booking time (pay-first) or at checkout — not gated to a single booking state
+- **Post-Stay Billing**: Invoices are only generated once a stay is `ACTIVE` or `COMPLETED` — pay-first invoicing on upcoming reservations is not supported
 - **Billing Separation**: Invoices remain tied to bookings while preserving their own payment date and tax configuration
-- **Cancellation Handling**: If a booking with an existing invoice is cancelled, the invoice is voided (marked cancelled, not deleted) automatically, preserving an audit trail while excluding it from revenue totals
+- **Cancellation Handling**: If a booking with an existing invoice is cancelled, the invoice is voided (marked cancelled, not deleted) automatically, preserving an audit trail while excluding it from revenue totals. Although this is not likely to happen due to invoice creation validation.
 
 ### Data Persistence
 - **SQLite-backed Persistence**: Load and save hotel state through DataManager::loadAll() and DataManager::saveAll()
