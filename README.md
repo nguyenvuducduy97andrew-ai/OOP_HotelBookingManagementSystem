@@ -182,15 +182,15 @@ cmake --build .
 
 ## 📝 Demo
 
-The project includes a comprehensive console demo (`main.cpp`) showcasing:
-1. Adding rooms (Standard, Deluxe, Suite)
-2. Registering customers
-3. Creating bookings
-4. Generating invoices
-5. Listing and deleting invoices when needed
-6. Persisting and reloading state with DataManager::saveAll()/loadAll()
+The project includes a Qt desktop application entry point in `main.cpp` with the following flow:
+1. Initialize the `QApplication` runtime
+2. Construct `HotelManager` as the core controller state
+3. Load persisted hotel data from SQLite via `DataManager::loadAll()`
+4. Inject `HotelManager` into `MainWindow`
+5. Display the user interface and process user actions in the Qt event loop
+6. Persist in-memory changes before shutdown via `DataManager::saveAll()`
 
-Run the demo to see the system in action:
+Run the application to see the UI in action:
 ```bash
 ./HotelBookingManagement
 ```

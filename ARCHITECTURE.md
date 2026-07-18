@@ -33,36 +33,19 @@ The UI layer is intentionally separated from controller logic: view classes emit
 ## High-Level Data Flow
 
 ```text
-main.cpp (Demo)
-  │
-  ├─► HotelManager::registerRoom()         // add rooms with validation
-  ├─► HotelManager::registerCustomer()     // add customers with validation
-  ├─► HotelManager::createBooking()        // create bookings with date/overlap checks
-  ├─► HotelManager::cancelBooking()        // soft-cancel an upcoming booking (cascades to invoice)
-  ├─► Room::calculateTargetPrice()         // polymorphic pricing
-  ├─► HotelManager::setRoomAvailability()  // manage maintenance status only (not occupancy)
-  ├─► HotelManager::createInvoice()        // generate invoices linked to bookings (any booking state)
-  ├─► HotelManager::getBookingState()      // derive Upcoming/Active/Completed/Cancelled
-  ├─► HotelManager::getRoomsByOccupancy()  // derive vacant/occupied from bookings, not Room state
-  ├─► HotelManager::getTodayCheckIns()/getTodayCheckOuts() // dashboard queries
-  ├─► HotelManager::getBookingsForCustomer() // per-customer booking lookup
-  ├─► HotelManager::delete*()        // hard-remove objects from the in-memory collection
-  ├─► HotelManager::find*()                // query system state
-  │
-  └─► DataManager::loadAll()/saveAll()      // restore or persist core domain data in SQLite
+main.cpp
+  ├─► QApplication app(argc, argv)           // start Qt runtime
+  ├─► HotelManager hotelManager               // create core controller state
+  ├─► DataManager::getInstance().loadAll()    // load persisted hotel state from SQLite
+  ├─► MainWindow mainWindow(&hotelManager)     // inject controller into Qt UI
+  ├─► mainWindow.show()                       // display the desktop interface
+  ├─► app.exec()                              // Qt event loop processes user actions
+  │     ├─► views/                           // UI widgets send commands to HotelManager
+  │     └─► HotelManager                      // business logic updates models
+  └─► DataManager::getInstance().saveAll()    // persist changes at shutdown
 ```
 
-**main.cpp** is now a comprehensive demo program that:
-1. Registers rooms of different types (Standard, Deluxe, Suite)
-2. Registers customers
-3. Creates bookings with full validation
-4. Demonstrates polymorphic room pricing
-5. Shows room availability management
-6. Creates and deletes invoices through the controller
-7. Performs object queries and retrieval
-8. Persists core state using DataManager::saveAll() and reloads it with DataManager::loadAll()
-
-The demo showcases all four OOP principles, design patterns, and the complete system workflow.
+This startup and shutdown flow reflects the current Qt desktop app architecture: persisted data is loaded before the main window is shown, the view layer operates against `HotelManager`, and changes are saved when the application exits.
 
 ## OOP Design (Models)
 
@@ -405,7 +388,7 @@ All public methods validate inputs and return errors via reference parameter:
 - Room already booked
 - Customer or room not found
 
-This validation-first approach makes the system robust and testable.
+This validation-first approach makes the system clean and testable.
 
 ## View Layer (Qt6)
 
@@ -417,13 +400,12 @@ The view layer is currently in development with the following structure:
 | `MainWindow.h` | Widget class declaration (`Q_OBJECT`, signals/slots) | Scaffolding |
 | `MainWindow.cpp` | Behavior — connects UI events to controller logic | Scaffolding |
 
-**Current State:** The system runs as a comprehensive console demo in `main.cpp` that demonstrates all functionality. This allows validation of business logic before integrating with the Qt GUI.
+**Current State:** The system has a comperhensive demo using Qt6 UI. Wired `MainWindow` signals/slots to `HotelManager` methods to provide interactive GUI control. 
 
-**Next Step:** Wire `MainWindow` signals/slots to `HotelManager` methods to provide interactive GUI control.
+**Next Step:** Currently in furthur development to improve users' experience.
 
 The `.ui` file is compiled automatically by CMake (`AUTOUIC`). The generated `ui_MainWindow.h` is included in `MainWindow.cpp`, not edited by hand.
 
-**Why Widget + `.ui`:** Matches the lab requirement for Qt6 QWidget, UI files, and the signal/slot mechanism. Layout changes stay in Designer; logic stays in C++.
 
 ## Build System (CMake)
 
@@ -464,12 +446,10 @@ The current implementation provides:
 ✅ **Complete** — Booking cancellation (`cancelBooking`) with cascading invoice void and overlap-check exclusion
 ✅ **Complete** — Room availability (maintenance) decoupled from booking occupancy
 ✅ **Complete** — Dashboard/query helpers: `getRoomsByOccupancy`, `getTodayCheckIns`, `getTodayCheckOuts`, `getBookingsForCustomer`
-✅ **Complete** — Working demo in main.cpp
+✅ **Complete** — **`views/`** Integrated MainWindow with HotelManager (tabbed UI for rooms, customers, bookings, invoices); cancelled bookings/invoices should remain visible but styled distinctly (e.g. greyed out) rather than hidden
 
 **Next Steps:**
 
-- **Revenue/statistics** — implement income summary methods over `Invoice`, with `isCancelled()` filtering applied everywhere invoices are summed or counted
-- **`views/`** — integrate MainWindow with HotelManager (tabbed UI for rooms, customers, bookings, invoices); cancelled bookings/invoices should remain visible but styled distinctly (e.g. greyed out) rather than hidden
-- **Qt Integration** — connect GUI signals/slots to HotelManager methods for interactive use
-- **Error Display** — show validation errors in UI dialogs rather than console output
-- **Room deletion safeguard** — add the same class of guard used for `setRoomAvailability` (block/cascade check) before allowing a room to be hard-deleted while it has active bookings
+- **Revenue/statistics** — implement income summary methods over `Invoice`
+- **Invoice** - add interactive display method for invoices
+- **`views/`** - Honing the existing display method accroding to UX.
