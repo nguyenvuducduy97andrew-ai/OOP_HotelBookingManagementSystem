@@ -10,7 +10,7 @@ class CustomSuccessDialog : public QDialog {
 public:
     explicit CustomSuccessDialog(const QString& message, QWidget* parent = nullptr) 
         : QDialog(parent) {
-        setWindowTitle("Thành công");
+        setWindowTitle("Success");
         setFixedSize(340, 190);
         
         // Hide standard window icon, keep close button
@@ -58,7 +58,7 @@ public:
         msgLabel->setAlignment(Qt::AlignCenter);
         layout->addWidget(msgLabel);
 
-        auto* btnOk = new QPushButton("Tuyệt vời!", this);
+        auto* btnOk = new QPushButton("Excellent", this);
         btnOk->setObjectName("btnOk");
         connect(btnOk, &QPushButton::clicked, this, &QDialog::accept);
         layout->addWidget(btnOk, 0, Qt::AlignCenter);

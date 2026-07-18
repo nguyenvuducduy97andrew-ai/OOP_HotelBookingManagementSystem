@@ -1,5 +1,4 @@
-#ifndef DASHBOARDWIDGETS_H
-#define DASHBOARDWIDGETS_H
+#pragma once
 
 #include <QFrame>
 #include <QString>
@@ -69,4 +68,4 @@ private:
     QLabel *m_badgeLabel;
 };
 
-#endif // DASHBOARDWIDGETS_H
+

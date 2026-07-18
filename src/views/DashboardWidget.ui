@@ -364,22 +364,22 @@ QComboBox#cmbDateRange QAbstractItemView {
         </property>
         <item>
          <property name="text">
-          <string>Hôm nay</string>
+          <string>Today</string>
          </property>
         </item>
         <item>
          <property name="text">
-          <string>Tuần này</string>
+          <string>This week</string>
          </property>
         </item>
         <item>
          <property name="text">
-          <string>Tháng này</string>
+          <string>This month</string>
          </property>
         </item>
         <item>
          <property name="text">
-          <string>Năm nay</string>
+          <string>This year</string>
          </property>
         </item>
        </widget>
@@ -402,7 +402,7 @@ QPushButton#btnExport:hover {
 }</string>
         </property>
         <property name="text">
-         <string>⭳  Xuất báo cáo</string>
+         <string>⭳ Export Report</string>
         </property>
        </widget>
       </item>
@@ -478,7 +478,7 @@ QPushButton#btnExport:hover {
         <item>
          <widget class="QLabel" name="trendTitleLabel">
           <property name="objectName"><string notr="true">ChartTitle</string></property>
-          <property name="text"><string>Xu hướng đặt phòng theo tháng — 2026 so với 2025</string></property>
+          <property name="text"><string>Monthly Booking Trend — 2026 vs 2025</string></property>
          </widget>
         </item>
         <item>
@@ -502,7 +502,7 @@ QPushButton#btnExport:hover {
           <item>
            <widget class="QLabel" name="barTitleLabel">
             <property name="objectName"><string notr="true">ChartTitle</string></property>
-            <property name="text"><string>Tỷ trọng đặt phòng theo loại</string></property>
+            <property name="text"><string>Booking Distribution by Room Type</string></property>
            </widget>
           </item>
           <item>
@@ -522,7 +522,7 @@ QPushButton#btnExport:hover {
           <item>
            <widget class="QLabel" name="roomListTitleLabel">
             <property name="objectName"><string notr="true">ChartTitle</string></property>
-            <property name="text"><string>Phòng nổi bật tháng này</string></property>
+            <property name="text"><string>Featured Rooms This Month</string></property>
            </widget>
           </item>
           <item><widget class="RoomListItem" name="roomItem1" native="true"/></item>

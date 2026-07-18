@@ -11,7 +11,7 @@ class InvoiceDialog : public QDialog {
 public:
     explicit InvoiceDialog(const QString& invoiceDetails, QWidget* parent = nullptr) 
         : QDialog(parent) {
-        setWindowTitle("Hóa đơn thanh toán");
+        setWindowTitle("Payment Invoice");
         setFixedSize(460, 560);
         setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
 
@@ -52,7 +52,7 @@ public:
         layout->setContentsMargins(24, 20, 24, 20);
         layout->setSpacing(14);
 
-        auto* titleLabel = new QLabel("📄 CHI TIẾT HÓA ĐƠN THANH TOÁN", this);
+        auto* titleLabel = new QLabel("📄 PAYMENT INVOICE DETAILS", this);
         titleLabel->setObjectName("titleLabel");
         titleLabel->setAlignment(Qt::AlignCenter);
         layout->addWidget(titleLabel);
@@ -62,7 +62,7 @@ public:
         textEdit->setPlainText(invoiceDetails);
         layout->addWidget(textEdit);
 
-        auto* btnConfirm = new QPushButton("Xác nhận & Hoàn tất", this);
+        auto* btnConfirm = new QPushButton("Confirm & Complete", this);
         btnConfirm->setObjectName("btnConfirm");
         connect(btnConfirm, &QPushButton::clicked, this, &QDialog::accept);
         layout->addWidget(btnConfirm, 0, Qt::AlignCenter);

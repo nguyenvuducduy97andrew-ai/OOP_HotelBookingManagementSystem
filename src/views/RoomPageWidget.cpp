@@ -162,9 +162,9 @@ void RoomPageWidget::setupUI() {
     auto* searchRow = new QHBoxLayout();
     m_searchEdit = new QLineEdit(this);
     m_searchEdit->setObjectName("searchEdit");
-    m_searchEdit->setPlaceholderText("Tìm kiếm phòng...");
+    m_searchEdit->setPlaceholderText("Search rooms...");
     
-    m_addRoomBtn = new QPushButton("Thêm phòng", this);
+    m_addRoomBtn = new QPushButton("Add Room", this);
     m_addRoomBtn->setObjectName("btnAddRoom");
 
     searchRow->addWidget(m_searchEdit);
@@ -173,7 +173,7 @@ void RoomPageWidget::setupUI() {
 
     // Filter Buttons Row
     auto* filterRow = new QHBoxLayout();
-    m_filterAllBtn = new QPushButton("Tất cả", this);
+    m_filterAllBtn = new QPushButton("All", this);
     m_filterAllBtn->setProperty("class", "filterBtn");
     m_filterAllBtn->setProperty("active", true);
 
@@ -211,11 +211,11 @@ void RoomPageWidget::setupUI() {
 
     // Title Row
     auto* detailHeader = new QHBoxLayout();
-    auto* titleLabel = new QLabel("Chi tiết phòng", this);
+    auto* titleLabel = new QLabel("Room Details", this);
     titleLabel->setStyleSheet("font-size: 14px; font-weight: 700; color: #A3AED0;");
-    m_editRoomBtn = new QPushButton("Sửa", this);
+    m_editRoomBtn = new QPushButton("Edit", this);
     m_editRoomBtn->setObjectName("btnEdit");
-    m_deleteRoomBtn = new QPushButton("Xóa", this);
+    m_deleteRoomBtn = new QPushButton("Delete", this);
     m_deleteRoomBtn->setObjectName("btnDelete");
 
     detailHeader->addWidget(titleLabel);
@@ -232,7 +232,7 @@ void RoomPageWidget::setupUI() {
 
     // Room Name & Status
     auto* nameRow = new QHBoxLayout();
-    m_detailTitleLabel = new QLabel("Phòng 101", this);
+    m_detailTitleLabel = new QLabel("Room 101", this);
     m_detailTitleLabel->setObjectName("detailTitle");
     m_detailStatusLabel = new QLabel("Available", this);
     m_detailStatusLabel->setObjectName("detailBadgeAvailable");
@@ -271,7 +271,7 @@ void RoomPageWidget::setupUI() {
     contentLayout->addWidget(m_detailExtraFeeLabel);
 
     // Description
-    auto* descHeader = new QLabel("Mô tả phòng", this);
+    auto* descHeader = new QLabel("Room Description", this);
     descHeader->setStyleSheet("font-size: 13px; font-weight: 700; color: #2B3674;");
     m_detailDescLabel = new QLabel(this);
     m_detailDescLabel->setWordWrap(true);
@@ -281,9 +281,9 @@ void RoomPageWidget::setupUI() {
     contentLayout->addWidget(m_detailDescLabel);
 
     // Features
-    auto* featHeader = new QLabel("Tiện nghi", this);
+    auto* featHeader = new QLabel("Amenities", this);
     featHeader->setStyleSheet("font-size: 13px; font-weight: 700; color: #2B3674;");
-    auto* featDesc = new QLabel("✔ Free Wi-Fi  ·  ✔ Smart TV  ·  ✔ Điều hòa nhiệt độ  ·  ✔ Phòng tắm riêng", this);
+    auto* featDesc = new QLabel("✔ Free Wi-Fi  ·  ✔ Smart TV  ·  ✔ Air Conditioning  ·  ✔ Private bathroom", this);
     featDesc->setStyleSheet("font-size: 11px; color: #A3AED0;");
     contentLayout->addWidget(featHeader);
     contentLayout->addWidget(featDesc);
@@ -369,7 +369,7 @@ QWidget* RoomPageWidget::createRoomCard(const std::shared_ptr<Room>& room) {
     auto* textCol = new QVBoxLayout();
     textCol->setSpacing(2);
     
-    auto* titleLabel = new QLabel("Phòng " + QString::fromStdString(room->getRoomNumber()), card);
+    auto* titleLabel = new QLabel("Room " + QString::fromStdString(room->getRoomNumber()), card);
     titleLabel->setStyleSheet("font-size: 14px; font-weight: 700; color: #2B3674;");
     
     auto* typeBadge = new QLabel(typeLabel, card);
@@ -403,13 +403,13 @@ QWidget* RoomPageWidget::createRoomCard(const std::shared_ptr<Room>& room) {
 
     auto* statusBadge = new QLabel(card);
     if (!room->getIsAvailable()) {
-        statusBadge->setText("Bảo trì");
+        statusBadge->setText("Maintenance");
         statusBadge->setStyleSheet("background-color: #FEF2F2; color: #EF4444; border-radius: 4px; padding: 2px 6px; font-size: 10px; font-weight: 700;");
     } else if (isOccupied) {
-        statusBadge->setText("Đang ở");
+        statusBadge->setText("Occupied");
         statusBadge->setStyleSheet("background-color: #FFFBEB; color: #D97706; border-radius: 4px; padding: 2px 6px; font-size: 10px; font-weight: 700;");
     } else {
-        statusBadge->setText("Trống");
+        statusBadge->setText("Available");
         statusBadge->setStyleSheet("background-color: #ECFDF5; color: #05CD99; border-radius: 4px; padding: 2px 6px; font-size: 10px; font-weight: 700;");
     }
 
@@ -488,7 +488,7 @@ void RoomPageWidget::updateDetailPanel(const std::shared_ptr<Room>& room) {
     m_editRoomBtn->setEnabled(true);
     m_deleteRoomBtn->setEnabled(true);
 
-    m_detailTitleLabel->setText("Phòng " + QString::fromStdString(room->getRoomNumber()));
+    m_detailTitleLabel->setText("Room " + QString::fromStdString(room->getRoomNumber()));
 
     // Dynamic Occupied status
     bool isOccupied = false;
@@ -509,17 +509,17 @@ void RoomPageWidget::updateDetailPanel(const std::shared_ptr<Room>& room) {
     }
 
     if (!room->getIsAvailable()) {
-        m_detailStatusLabel->setText("Bảo trì");
+        m_detailStatusLabel->setText("Maintenance");
         m_detailStatusLabel->setObjectName("detailBadgeMaint");
-        m_detailDescLabel->setText("Phòng hiện đang được bảo trì kỹ thuật định kỳ. Xin vui lòng không xếp khách vào phòng này.");
+        m_detailDescLabel->setText("This room is currently under scheduled maintenance. Please do not assign guests at this time.");
     } else if (isOccupied) {
-        m_detailStatusLabel->setText("Đang có khách");
+        m_detailStatusLabel->setText("Occupied");
         m_detailStatusLabel->setObjectName("detailBadgeOccupied");
-        m_detailDescLabel->setText(QString("Phòng đang có khách lưu trú (%1). Chi tiết giao dịch có thể tra cứu tại tab đặt phòng.").arg(QString::fromStdString(occupantName)));
+        m_detailDescLabel->setText(QString("Room is currently occupied (%1). Booking details are available in the reservation tab.").arg(QString::fromStdString(occupantName)));
     } else {
-        m_detailStatusLabel->setText("Sẵn sàng");
+        m_detailStatusLabel->setText("Ready");
         m_detailStatusLabel->setObjectName("detailBadgeAvailable");
-        m_detailDescLabel->setText("Phòng trống sạch sẽ, đầy đủ thiết bị và sẵn sàng đón khách nhận phòng.");
+        m_detailDescLabel->setText("The room is clean, fully equipped, and ready for guest check-in.");
     }
     // Refresh label styles to apply name changes
     m_detailStatusLabel->style()->unpolish(m_detailStatusLabel);
@@ -537,7 +537,7 @@ void RoomPageWidget::updateDetailPanel(const std::shared_ptr<Room>& room) {
         m_detailSizeLabel->setText("📏 35m²");
         m_detailBedLabel->setText("🛏 King Bed");
         m_detailGuestLabel->setText("👤 2 Guests");
-        m_detailExtraFeeLabel->setText(QString("💰 Phí dịch vụ Mini Bar: %1đ").arg(deluxe->getMiniBarFee()));
+        m_detailExtraFeeLabel->setText(QString("💰 Mini Bar Fee: %1đ").arg(deluxe->getMiniBarFee()));
         m_detailExtraFeeLabel->setVisible(true);
         m_detailImageLabel->setText("✨ Deluxe Room Image Placeholder");
         m_detailImageLabel->setStyleSheet("background-color: #E0F2FE; border-radius: 14px; font-weight: bold; color: #0284C7;");
@@ -546,7 +546,7 @@ void RoomPageWidget::updateDetailPanel(const std::shared_ptr<Room>& room) {
         m_detailSizeLabel->setText("📏 55m²");
         m_detailBedLabel->setText("🛏 Super King Bed");
         m_detailGuestLabel->setText("👤 4 Guests");
-        m_detailExtraFeeLabel->setText(QString("👑 Phí dịch vụ cao cấp: %1đ").arg(suite->getPremiumServiceFee()));
+        m_detailExtraFeeLabel->setText(QString("👑 Premium Service Fee: %1đ").arg(suite->getPremiumServiceFee()));
         m_detailExtraFeeLabel->setVisible(true);
         m_detailImageLabel->setText("👑 Suite Room Image Placeholder");
         m_detailImageLabel->setStyleSheet("background-color: #FEF3C7; border-radius: 14px; font-weight: bold; color: #D97706;");
@@ -562,7 +562,7 @@ void RoomPageWidget::onAddRoomClicked() {
         double extraFee = dialog.getExtraFee();
 
         if (m_manager->roomNumberExists(roomNum)) {
-            QMessageBox::warning(this, "Lỗi thêm phòng", "Số phòng đã tồn tại trong hệ thống.");
+            QMessageBox::warning(this, "Add room error", "The room number already exists in the system.");
             return;
         }
 
@@ -579,9 +579,9 @@ void RoomPageWidget::onAddRoomClicked() {
                 }
             }
             refreshData();
-            CustomSuccessDialog("Đã thêm phòng mới thành công.", this).exec();
+            CustomSuccessDialog("Room added successfully.", this).exec();
         } else {
-            QMessageBox::critical(this, "Lỗi thêm phòng", QString::fromStdString(errMsg));
+            QMessageBox::critical(this, "Add room error", QString::fromStdString(errMsg));
         }
     }
 }
@@ -621,7 +621,7 @@ void RoomPageWidget::onEditRoomClicked() {
         }
 
         refreshData();
-        CustomSuccessDialog("Cập nhật thông tin phòng thành công.", this).exec();
+        CustomSuccessDialog("Room information updated successfully.", this).exec();
     }
 }
 
@@ -631,15 +631,15 @@ void RoomPageWidget::onDeleteRoomClicked() {
 
     std::string roomNum = item->data(Qt::UserRole).toString().toStdString();
     
-    CustomConfirmDialog dialog("Xác nhận xóa", QString("Bạn có chắc chắn muốn xóa phòng %1 ra khỏi hệ thống?").arg(QString::fromStdString(roomNum)), true, this);
+    CustomConfirmDialog dialog("Confirm delete", QString("Are you sure you want to delete room %1 from the system?").arg(QString::fromStdString(roomNum)), true, this);
     if (dialog.exec() == QDialog::Accepted && dialog.isConfirmed()) {
         std::string errMsg;
         if (m_manager->deleteRoom(roomNum, errMsg)) {
             refreshData();
-            CustomSuccessDialog("Đã xóa phòng thành công.", this).exec();
+            CustomSuccessDialog("Room deleted successfully.", this).exec();
         } else {
-            QMessageBox::critical(this, "Lỗi xóa phòng", 
-                QString("Không thể xóa phòng: %1").arg(QString::fromStdString(errMsg)));
+            QMessageBox::critical(this, "Delete room error",
+                QString("Could not delete room: %1").arg(QString::fromStdString(errMsg)));
         }
     }
 }

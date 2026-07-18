@@ -99,10 +99,10 @@ void ReservationsPageWidget::setupUI() {
 
     // Top Header Row
     auto* headerRow = new QHBoxLayout();
-    auto* pageTitle = new QLabel("Quản lý Đặt phòng (Reservations)", this);
+    auto* pageTitle = new QLabel("Reservation Management", this);
     pageTitle->setObjectName("pageTitle");
 
-    m_addBookingBtn = new QPushButton("Đặt phòng mới", this);
+    m_addBookingBtn = new QPushButton("New Reservation", this);
     m_addBookingBtn->setObjectName("btnAddBooking");
 
     headerRow->addWidget(pageTitle);
@@ -115,23 +115,23 @@ void ReservationsPageWidget::setupUI() {
     legendRow->setSpacing(12);
     legendRow->setAlignment(Qt::AlignLeft);
 
-    auto* legendTitle = new QLabel("Chú thích thao tác:", this);
+    auto* legendTitle = new QLabel("Action legend:", this);
     legendTitle->setStyleSheet("font-weight: bold; color: #2B3674; font-size: 11px;");
     legendRow->addWidget(legendTitle);
 
-    auto* legCheckOut = new QLabel("💳 Trả phòng", this);
+    auto* legCheckOut = new QLabel("💳 Check Out", this);
     legCheckOut->setStyleSheet("background-color: #ECFDF5; color: #065F46; border: 1px solid #A7F3D0; font-weight: bold; border-radius: 10px; padding: 2px 8px; font-size: 11px;");
     legendRow->addWidget(legCheckOut);
 
-    auto* legEdit = new QLabel("🖊 Chỉnh sửa", this);
+    auto* legEdit = new QLabel("🖊 Edit", this);
     legEdit->setStyleSheet("background-color: #E9EFFF; color: #1E40AF; border: 1px solid #C3D4FF; font-weight: bold; border-radius: 10px; padding: 2px 8px; font-size: 11px;");
     legendRow->addWidget(legEdit);
 
-    auto* legCancel = new QLabel("❌ Hủy đặt", this);
+    auto* legCancel = new QLabel("❌ Cancel", this);
     legCancel->setStyleSheet("background-color: #FFFBEB; color: #92400E; border: 1px solid #FDE68A; font-weight: bold; border-radius: 10px; padding: 2px 8px; font-size: 11px;");
     legendRow->addWidget(legCancel);
 
-    auto* legDelete = new QLabel("🗑 Xóa / Xóa lịch sử", this);
+    auto* legDelete = new QLabel("🗑 Delete / Clear history", this);
     legDelete->setStyleSheet("background-color: #FEF2F2; color: #991B1B; border: 1px solid #FCA5A5; font-weight: bold; border-radius: 10px; padding: 2px 8px; font-size: 11px;");
     legendRow->addWidget(legDelete);
 
@@ -141,11 +141,11 @@ void ReservationsPageWidget::setupUI() {
     auto* filterRow = new QHBoxLayout();
     m_searchEdit = new QLineEdit(this);
     m_searchEdit->setObjectName("searchEdit");
-    m_searchEdit->setPlaceholderText("Tìm kiếm theo tên khách, số phòng...");
+    m_searchEdit->setPlaceholderText("Search by guest name, room number...");
 
     m_statusCombo = new QComboBox(this);
     m_statusCombo->setObjectName("statusCombo");
-    m_statusCombo->addItems({"Tất cả trạng thái", "Sắp tới (Upcoming)", "Đang ở (Active)", "Hoàn tất (Completed)", "Đã hủy (Cancelled)"});
+    m_statusCombo->addItems({"All statuses", "Upcoming", "Active", "Completed", "Cancelled"});
 
     filterRow->addWidget(m_searchEdit);
     filterRow->addWidget(m_statusCombo);
@@ -156,8 +156,8 @@ void ReservationsPageWidget::setupUI() {
     m_tableWidget = new QTableWidget(this);
     m_tableWidget->setColumnCount(9);
     m_tableWidget->setHorizontalHeaderLabels({
-        "Mã Đặt Phòng", "Mã CCCD", "Tên Khách Hàng", "Số Điện Thoại",
-        "Số Phòng", "Ngày Nhận", "Ngày Trả", "Trạng Thái", "Thao Tác"
+        "Booking ID", "Customer ID", "Customer Name", "Phone Number",
+        "Room Number", "Check-in", "Check-out", "Status", "Actions"
     });
     
     for (int i = 0; i < 8; ++i) {
@@ -204,7 +204,7 @@ void ReservationsPageWidget::onAddBookingClicked() {
         // 1. Register customer if they do not exist
         if (!m_manager->customerIdExists(custId)) {
             if (!m_manager->registerCustomer(custId, name, phone, errMsg)) {
-                QMessageBox::critical(this, "Lỗi đăng ký khách hàng", QString::fromStdString(errMsg));
+                QMessageBox::critical(this, "Customer registration error", QString::fromStdString(errMsg));
                 return;
             }
         }
@@ -212,9 +212,9 @@ void ReservationsPageWidget::onAddBookingClicked() {
         // 2. Create the booking
         if (m_manager->createBooking(custId, roomNum, checkIn, checkOut, errMsg)) {
             refreshData();
-            CustomSuccessDialog("Đã thực hiện đặt phòng thành công.", this).exec();
+            CustomSuccessDialog("Reservation completed successfully.", this).exec();
         } else {
-            QMessageBox::critical(this, "Lỗi đặt phòng", QString::fromStdString(errMsg));
+            QMessageBox::critical(this, "Booking error", QString::fromStdString(errMsg));
         }
     }
 }
@@ -271,16 +271,16 @@ void ReservationsPageWidget::refreshData() {
         // Status Item & color
         auto* statusItem = new QTableWidgetItem();
         if (state == BookingState::UPCOMING) {
-            statusItem->setText("📅 Sắp tới");
+            statusItem->setText("📅 Upcoming");
             statusItem->setForeground(QColor("#005BFE"));
         } else if (state == BookingState::ACTIVE) {
-            statusItem->setText("🛏 Đang ở");
+            statusItem->setText("🛏 Active");
             statusItem->setForeground(QColor("#D97706"));
         } else if (state == BookingState::COMPLETED) {
-            statusItem->setText("✔ Hoàn tất");
+            statusItem->setText("✔ Completed");
             statusItem->setForeground(QColor("#05CD99"));
         } else if (state == BookingState::CANCELLED) {
-            statusItem->setText("✖ Đã hủy");
+            statusItem->setText("✖ Cancelled");
             statusItem->setForeground(QColor("#EF4444"));
         }
         m_tableWidget->setItem(row, 7, statusItem);
@@ -295,7 +295,7 @@ void ReservationsPageWidget::refreshData() {
         if (state == BookingState::ACTIVE) {
             // Check Out
             auto* checkOutBtn = new QPushButton("💳", actionContainer);
-            checkOutBtn->setToolTip("Trả phòng & Thanh toán");
+            checkOutBtn->setToolTip("Check out & pay");
             checkOutBtn->setStyleSheet("background-color: #ECFDF5; border: 1px solid #A7F3D0; border-radius: 6px; font-size: 14px; min-width: 28px; max-width: 28px; min-height: 28px; max-height: 28px; padding: 0px;");
             checkOutBtn->setProperty("bookingId", bId);
             checkOutBtn->setProperty("actionType", "checkout");
@@ -304,7 +304,7 @@ void ReservationsPageWidget::refreshData() {
 
             // Edit
             auto* editBtn = new QPushButton("🖊", actionContainer);
-            editBtn->setToolTip("Chỉnh sửa thông tin");
+            editBtn->setToolTip("Edit reservation");
             editBtn->setStyleSheet("background-color: #E9EFFF; border: 1px solid #C3D4FF; border-radius: 6px; font-size: 14px; min-width: 28px; max-width: 28px; min-height: 28px; max-height: 28px; padding: 0px;");
             editBtn->setProperty("bookingId", bId);
             editBtn->setProperty("actionType", "edit");
@@ -323,7 +323,7 @@ void ReservationsPageWidget::refreshData() {
         } else if (state == BookingState::UPCOMING) {
             // Cancel
             auto* cancelBtn = new QPushButton("❌", actionContainer);
-            cancelBtn->setToolTip("Hủy đơn đặt phòng");
+            cancelBtn->setToolTip("Cancel reservation");
             cancelBtn->setStyleSheet("background-color: #FFFBEB; border: 1px solid #FDE68A; border-radius: 6px; font-size: 13px; min-width: 28px; max-width: 28px; min-height: 28px; max-height: 28px; padding: 0px;");
             cancelBtn->setProperty("bookingId", bId);
             cancelBtn->setProperty("actionType", "cancel");
@@ -332,7 +332,7 @@ void ReservationsPageWidget::refreshData() {
 
             // Edit
             auto* editBtn = new QPushButton("🖊", actionContainer);
-            editBtn->setToolTip("Chỉnh sửa thông tin");
+            editBtn->setToolTip("Edit reservation");
             editBtn->setStyleSheet("background-color: #E9EFFF; border: 1px solid #C3D4FF; border-radius: 6px; font-size: 14px; min-width: 28px; max-width: 28px; min-height: 28px; max-height: 28px; padding: 0px;");
             editBtn->setProperty("bookingId", bId);
             editBtn->setProperty("actionType", "edit");
@@ -350,7 +350,7 @@ void ReservationsPageWidget::refreshData() {
         } else {
             // Completed / Cancelled -> only allow Delete
             auto* deleteBtn = new QPushButton("🗑", actionContainer);
-            deleteBtn->setToolTip("Xóa lịch sử đặt phòng");
+            deleteBtn->setToolTip("Delete booking history");
             deleteBtn->setStyleSheet("background-color: #FEF2F2; border: 1px solid #FCA5A5; border-radius: 6px; font-size: 14px; min-width: 28px; max-width: 28px; min-height: 28px; max-height: 28px; padding: 0px;");
             deleteBtn->setProperty("bookingId", bId);
             deleteBtn->setProperty("actionType", "delete");
@@ -375,25 +375,25 @@ void ReservationsPageWidget::onTableActionClicked() {
     if (!booking) return;
 
     if (actionType == "cancel") {
-        CustomConfirmDialog dialog("Xác nhận hủy đặt phòng", QString("Bạn có muốn hủy đơn đặt phòng %1?").arg(QString::fromStdString(bookingId)), false, this);
+        CustomConfirmDialog dialog("Confirm cancel reservation", QString("Do you want to cancel reservation %1?").arg(QString::fromStdString(bookingId)), false, this);
         if (dialog.exec() == QDialog::Accepted && dialog.isConfirmed()) {
             std::string errMsg;
             if (m_manager->cancelBooking(bookingId, errMsg)) {
                 refreshData();
-                CustomSuccessDialog("Đơn đặt phòng đã được hủy.", this).exec();
+                CustomSuccessDialog("Reservation has been canceled.", this).exec();
             } else {
-                QMessageBox::critical(this, "Lỗi hủy đặt phòng", QString::fromStdString(errMsg));
+                QMessageBox::critical(this, "Cancel reservation error", QString::fromStdString(errMsg));
             }
         }
     } else if (actionType == "delete") {
-        CustomConfirmDialog dialog("Xác nhận xóa đặt phòng", QString("Bạn có chắc chắn muốn xóa vĩnh viễn đơn đặt phòng %1 khỏi hệ thống?").arg(QString::fromStdString(bookingId)), true, this);
+        CustomConfirmDialog dialog("Confirm delete reservation", QString("Are you sure you want to permanently delete reservation %1 from the system?").arg(QString::fromStdString(bookingId)), true, this);
         if (dialog.exec() == QDialog::Accepted && dialog.isConfirmed()) {
             std::string errMsg;
             if (m_manager->deleteBooking(bookingId, errMsg)) {
                 refreshData();
-                CustomSuccessDialog("Đơn đặt phòng đã được xóa hoàn toàn.", this).exec();
+                CustomSuccessDialog("Reservation has been deleted permanently.", this).exec();
             } else {
-                QMessageBox::critical(this, "Lỗi xóa đặt phòng", QString::fromStdString(errMsg));
+                QMessageBox::critical(this, "Delete reservation error", QString::fromStdString(errMsg));
             }
         }
     } else if (actionType == "edit") {
@@ -415,10 +415,10 @@ void ReservationsPageWidget::onTableActionClicked() {
             }
 
             refreshData();
-            CustomSuccessDialog("Cập nhật thông tin đặt phòng thành công.", this).exec();
+            CustomSuccessDialog("Reservation information updated successfully.", this).exec();
         }
     } else if (actionType == "checkout") {
-        CustomConfirmDialog dialog("Xác nhận trả phòng", QString("Tiến hành trả phòng và thanh toán cho giao dịch %1?").arg(QString::fromStdString(bookingId)), false, this);
+        CustomConfirmDialog dialog("Confirm check-out", QString("Proceed with check-out and payment for transaction %1?").arg(QString::fromStdString(bookingId)), false, this);
         if (dialog.exec() == QDialog::Accepted && dialog.isConfirmed()) {
             // 1. Calculate nights
             QDate checkIn = QDate::fromString(QString::fromStdString(booking->getCheckInDate()), Qt::ISODate);
@@ -433,7 +433,7 @@ void ReservationsPageWidget::onTableActionClicked() {
             // 2. Generate and create Invoice
             std::string invoiceId = m_manager->nextInvoiceId();
             double taxRate = 0.1; // 10% VAT
-            std::string todayStr = today.toString("yyyy-MM-dd").toStdString();
+            std::string todayStr = today.toString("YYYY-MM-DD").toStdString();
 
             std::string errMsg;
             if (m_manager->createInvoice(invoiceId, bookingId, taxRate, nights, todayStr, errMsg)) {
@@ -445,7 +445,7 @@ void ReservationsPageWidget::onTableActionClicked() {
                 }
                 refreshData();
             } else {
-                QMessageBox::critical(this, "Lỗi xuất hóa đơn", QString::fromStdString(errMsg));
+                QMessageBox::critical(this, "Invoice generation error", QString::fromStdString(errMsg));
             }
         }
     }

@@ -56,22 +56,22 @@ DashboardWidget::DashboardWidget(HotelManager *manager, QWidget *parent)
 
 void DashboardWidget::updateDateTime()
 {
-    QString currentTime = QDateTime::currentDateTime().toString("dd/MM/yyyy HH:mm:ss");
-    ui->lblDate->setText("Cập nhật " + currentTime);
+    QString currentTime = QDateTime::currentDateTime().toString("DD/MM/YYYY HH:MM:SS");
+    ui->lblDate->setText("Update " + currentTime);
 }
 
 // =================================================================
 void DashboardWidget::populateData()
 {
     if (!m_manager) {
-        ui->statCard1->setData("Tổng số phòng", "0", "0 loại phòng", true);
-        ui->statCard2->setData("Tỷ lệ lấp đầy", "0%", "Không có dữ liệu", true);
-        ui->statCard3->setData("Đặt phòng tháng này", "0", "Không có dữ liệu", true);
-        ui->statCard4->setData("Đặt phòng năm nay", "0", "Không có dữ liệu", true);
-        ui->miniCard1->setData("📅", QColor("#E9EFFF"), "Sắp tới", "0");
-        ui->miniCard2->setData("🛏", QColor("#E9EFFF"), "Đang ở", "0");
-        ui->miniCard3->setData("✔", QColor("#E9EFFF"), "Hoàn tất", "0");
-        ui->miniCard4->setData("✖", QColor("#FDE8E6"), "Đã hủy", "0");
+        ui->statCard1->setData("Total Room Number", "0", "0 room type", true);
+        ui->statCard2->setData("Occupancy rate", "0%", "No data available", true);
+        ui->statCard3->setData("This month reservation", "0", "No data available", true);
+        ui->statCard4->setData("This year reservations", "0", "No data available", true);
+        ui->miniCard1->setData("📅", QColor("#E9EFFF"), "Upcoming", "0");
+        ui->miniCard2->setData("🛏", QColor("#E9EFFF"), "Active", "0");
+        ui->miniCard3->setData("✔", QColor("#E9EFFF"), "Completed", "0");
+        ui->miniCard4->setData("✖", QColor("#FDE8E6"), "Cancelled", "0");
         return;
     }
 
@@ -94,16 +94,16 @@ void DashboardWidget::populateData()
     if (standardCount > 0) roomTypes++;
     if (deluxeCount > 0) roomTypes++;
     if (suiteCount > 0) roomTypes++;
-    ui->statCard1->setData("Tổng số phòng", QString::number(totalRooms), QString::number(roomTypes) + " loại phòng", true);
+    ui->statCard1->setData("Total Room Number", QString::number(totalRooms), QString::number(roomTypes) + " room types", true);
 
-    // 2. StatCard 2: Tỷ lệ lấp đầy
+    // 2. StatCard 2: Occupancy rate
     double occupiedRooms = m_manager->getRoomsByOccupancy(true).size();
     double occupancyRate = 0.0;
     if (totalRooms > 0) {
         occupancyRate = (occupiedRooms / totalRooms) * 100.0;
     }
-    ui->statCard2->setData("Tỷ lệ lấp đầy", QString::number(qRound(occupancyRate)) + "%", 
-                           "Đang sử dụng " + QString::number(occupiedRooms) + "/" + QString::number(totalRooms) + " phòng", true);
+    ui->statCard2->setData("Occupancy rate", QString::number(qRound(occupancyRate)) + "%", 
+                           "Currently occupied " + QString::number(occupiedRooms) + "/" + QString::number(totalRooms) + " rooms", true);
 
     // 3. StatCard 3: Đặt phòng tháng này
     QDate today = QDate::currentDate();
@@ -115,8 +115,8 @@ void DashboardWidget::populateData()
             bookingsThisMonth++;
         }
     }
-    ui->statCard3->setData("Đặt phòng tháng này", QString::number(bookingsThisMonth), 
-                           "Tổng đặt phòng tháng " + QString::number(today.month()), true);
+    ui->statCard3->setData("This month's reservations", QString::number(bookingsThisMonth), 
+                           "Total reservations for " + QString::number(today.month()), true);
 
     // 4. StatCard 4: Đặt phòng năm nay
     int bookingsThisYear = 0;
@@ -127,8 +127,8 @@ void DashboardWidget::populateData()
             bookingsThisYear++;
         }
     }
-    ui->statCard4->setData("Đặt phòng năm nay", QString::number(bookingsThisYear), 
-                           "Tổng đặt phòng năm " + QString::number(today.year()), true);
+    ui->statCard4->setData("This year reservations", QString::number(bookingsThisYear), 
+                           "Total reservations for " + QString::number(today.year()), true);
 
     // 5. MiniCards: Trạng thái phòng (upcoming, active, completed, cancelled)
     int upcomingCount = 0;
@@ -145,21 +145,21 @@ void DashboardWidget::populateData()
         case BookingState::CANCELLED: cancelledCount++; break;
         }
     }
-    ui->miniCard1->setData("📅", QColor("#E9EFFF"), "Sắp tới", QString::number(upcomingCount));
-    ui->miniCard2->setData("🛏", QColor("#E9EFFF"), "Đang ở", QString::number(activeCount));
-    ui->miniCard3->setData("✔", QColor("#E9EFFF"), "Hoàn tất", QString::number(completedCount));
-    ui->miniCard4->setData("✖", QColor("#FDE8E6"), "Đã hủy", QString::number(cancelledCount));
+    ui->miniCard1->setData("📅", QColor("#E9EFFF"), "Upcoming", QString::number(upcomingCount));
+    ui->miniCard2->setData("🛏", QColor("#E9EFFF"), "Active", QString::number(activeCount));
+    ui->miniCard3->setData("✔", QColor("#E9EFFF"), "Completed", QString::number(completedCount));
+    ui->miniCard4->setData("✖", QColor("#FDE8E6"), "Cancelled", QString::number(cancelledCount));
 
     // ---- danh sách phòng nổi bật ----
     // 1. Cập nhật tiêu đề theo thời gian lọc
     int rangeIndex = ui->cmbDateRange->currentIndex();
-    QString rangeText = "tháng này";
-    if (rangeIndex == 0) rangeText = "hôm nay";
-    else if (rangeIndex == 1) rangeText = "tuần này";
-    else if (rangeIndex == 2) rangeText = "tháng này";
-    else if (rangeIndex == 3) rangeText = "năm nay";
-    
-    ui->roomListTitleLabel->setText("Phòng nổi bật " + rangeText);
+    QString rangeText = "this month";
+    if (rangeIndex == 0) rangeText = "today";
+    else if (rangeIndex == 1) rangeText = "this week";
+    else if (rangeIndex == 2) rangeText = "this month";
+    else if (rangeIndex == 3) rangeText = "this year";
+
+    ui->roomListTitleLabel->setText("Popular Rooms - " + rangeText);
 
     // 2. Tính số lượng đặt phòng cho từng phòng trong khoảng thời gian đã chọn
     std::map<std::string, int> roomBookingCounts;
@@ -234,7 +234,7 @@ void DashboardWidget::populateData()
             typeLabel = "Suite";
         }
         
-        QString roomTitle = QString("Phòng %1 · %2")
+        QString roomTitle = QString("Room %1 · %2")
             .arg(QString::fromStdString(room->getRoomNumber()))
             .arg(typeLabel);
             
@@ -242,26 +242,26 @@ void DashboardWidget::populateData()
         QColor badgeColor = QColor("#05CD99"); // Màu xanh lá mặc định
         
         if (i == 0) {
-            subtitle = "Đặt nhiều nhất";
+            subtitle = "Most booked";
         } else if (i == 1) {
             if (numToShow == 2) {
-                subtitle = "Đặt ít nhất";
+                subtitle = "Least booked";
                 badgeColor = QColor("#EE5D50"); // Đỏ
             } else {
-                subtitle = "Đặt nhiều thứ 2";
+                subtitle = "Second most booked";
             }
         } else if (i == 2) {
             bool isLeast = (roomStatsList.size() == 3) || (count == roomStatsList.back().bookingCount);
             if (isLeast) {
-                subtitle = "Đặt ít nhất";
+                subtitle = "Least booked";
                 badgeColor = QColor("#EE5D50"); // Đỏ
             } else {
-                subtitle = "Đặt nhiều thứ 3";
+                subtitle = "Third most booked";
                 badgeColor = QColor("#005BFE"); // Xanh dương
             }
         }
         
-        QString badgeText = QString("%1 lượt").arg(count);
+        QString badgeText = QString("%1 bookings").arg(count);
         
         if (i == 0) {
             ui->roomItem1->setData(roomTitle, subtitle, badgeText, badgeColor);
@@ -297,8 +297,8 @@ void DashboardWidget::buildTrendChart()
         }
     }
 
-    QStringList months = {"T1","T2","T3","T4","T5","T6","T7",
-                          "T8","T9","T10","T11","T12"};
+    QStringList months = {"Jan","Feb","Mar","Apr","May","Jun","Jul",
+                          "Aug","Sep","Oct","Nov","Dec"};
 
     auto *seriesCurrent = new QLineSeries();
     seriesCurrent->setName(QString::number(currentYear));

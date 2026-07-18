@@ -85,11 +85,11 @@ public:
         btnLayout->setSpacing(14);
         btnLayout->setAlignment(Qt::AlignCenter);
 
-        auto* btnCancel = new QPushButton("Hủy", this);
+        auto* btnCancel = new QPushButton("Cancel", this);
         btnCancel->setObjectName("btnCancel");
         connect(btnCancel, &QPushButton::clicked, this, &QDialog::reject);
 
-        auto* btnConfirm = new QPushButton("Xác nhận", this);
+        auto* btnConfirm = new QPushButton("Confirm", this);
         btnConfirm->setObjectName("btnConfirm");
         connect(btnConfirm, &QPushButton::clicked, this, [=]() {
             m_confirmed = true;

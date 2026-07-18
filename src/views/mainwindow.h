@@ -1,5 +1,4 @@
-#ifndef MAINWINDOW_H
-#define MAINWINDOW_H
+#pragma once
 
 #include <QMainWindow>
 #include <QPushButton>
@@ -31,5 +30,3 @@ private:
     RoomStatusPageWidget* m_roomStatusPage;
     void updateButtonStyle(QPushButton* activeBtn);
 };
-
-#endif // MAINWINDOW_H

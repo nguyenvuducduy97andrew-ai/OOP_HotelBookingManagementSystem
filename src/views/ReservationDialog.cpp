@@ -11,7 +11,7 @@
 ReservationDialog::ReservationDialog(HotelManager* manager, QWidget *parent)
     : QDialog(parent), m_manager(manager), m_editingBookingId("") {
     setupUI();
-    setWindowTitle("Đặt phòng mới");
+    setWindowTitle("New Reservation");
     updateAvailableRooms();
 }
 
@@ -101,41 +101,41 @@ void ReservationDialog::setupUI() {
     formLayout->setSpacing(12);
 
     m_customerIdEdit = new QLineEdit(this);
-    m_customerIdEdit->setPlaceholderText("Số CMND/CCCD hoặc Mã KH");
-    formLayout->addRow("Mã Khách Hàng (CCCD):", m_customerIdEdit);
+    m_customerIdEdit->setPlaceholderText("ID card number or Guest ID");
+    formLayout->addRow("Customer ID (CCCD):", m_customerIdEdit);
 
     m_customerNameEdit = new QLineEdit(this);
-    m_customerNameEdit->setPlaceholderText("Tên khách hàng");
-    formLayout->addRow("Tên Khách Hàng:", m_customerNameEdit);
+    m_customerNameEdit->setPlaceholderText("Customer name");
+    formLayout->addRow("Customer Name:", m_customerNameEdit);
 
     m_customerPhoneEdit = new QLineEdit(this);
-    m_customerPhoneEdit->setPlaceholderText("Số điện thoại");
-    formLayout->addRow("Số Điện Thoại:", m_customerPhoneEdit);
+    m_customerPhoneEdit->setPlaceholderText("Phone number");
+    formLayout->addRow("Phone Number:", m_customerPhoneEdit);
 
     QDate today = QDate::currentDate();
     m_checkInDateEdit = new QDateEdit(today, this);
     m_checkInDateEdit->setCalendarPopup(true);
     m_checkInDateEdit->setDisplayFormat("yyyy-MM-dd");
     m_checkInDateEdit->setMinimumDate(today.addDays(-30)); // Allow past checking for demo but recommend modern
-    formLayout->addRow("Ngày Nhận Phòng (Check-in):", m_checkInDateEdit);
+    formLayout->addRow("Check-in Date:", m_checkInDateEdit);
 
     m_checkOutDateEdit = new QDateEdit(today.addDays(1), this);
     m_checkOutDateEdit->setCalendarPopup(true);
     m_checkOutDateEdit->setDisplayFormat("yyyy-MM-dd");
     m_checkOutDateEdit->setMinimumDate(today);
-    formLayout->addRow("Ngày Trả Phòng (Check-out):", m_checkOutDateEdit);
+    formLayout->addRow("Check-out Date:", m_checkOutDateEdit);
 
     m_roomCombo = new QComboBox(this);
-    formLayout->addRow("Phòng Còn Trống:", m_roomCombo);
+    formLayout->addRow("Available Rooms:", m_roomCombo);
 
     mainLayout->addLayout(formLayout);
 
     // Buttons
     auto* btnLayout = new QHBoxLayout();
     btnLayout->addStretch();
-    auto* cancelBtn = new QPushButton("Hủy", this);
+    auto* cancelBtn = new QPushButton("Cancel", this);
     cancelBtn->setObjectName("btnCancel");
-    auto* saveBtn = new QPushButton("Đặt phòng", this);
+    auto* saveBtn = new QPushButton("Book Room", this);
     saveBtn->setObjectName("btnSave");
 
     btnLayout->addWidget(cancelBtn);
@@ -197,17 +197,17 @@ void ReservationDialog::onAccept() {
     if (m_customerIdEdit->text().trimmed().isEmpty() ||
         m_customerNameEdit->text().trimmed().isEmpty() ||
         m_customerPhoneEdit->text().trimmed().isEmpty()) {
-        QMessageBox::warning(this, "Thiếu thông tin", "Vui lòng điền đầy đủ thông tin khách hàng.");
+        QMessageBox::warning(this, "Missing information", "Please fill out the guest information completely.");
         return;
     }
 
     if (m_roomCombo->currentIndex() < 0) {
-        QMessageBox::warning(this, "Không có phòng", "Không có phòng trống nào khả dụng trong khoảng thời gian đã chọn.");
+        QMessageBox::warning(this, "No available room", "No available rooms are available for the selected date range.");
         return;
     }
 
     if (m_checkOutDateEdit->date() <= m_checkInDateEdit->date()) {
-        QMessageBox::warning(this, "Ngày không hợp lệ", "Ngày trả phòng phải sau ngày nhận phòng.");
+        QMessageBox::warning(this, "Invalid date", "Check-out date must be after check-in date.");
         return;
     }
 
@@ -245,7 +245,7 @@ void ReservationDialog::setEditBooking(const std::string& bookingId) {
     auto booking = m_manager->findBookingById(bookingId);
     if (!booking) return;
 
-    setWindowTitle("Chỉnh sửa đặt phòng");
+    setWindowTitle("Edit Reservation");
     m_customerIdEdit->setText(QString::fromStdString(booking->getCustomer()->getCustomerId()));
     m_customerIdEdit->setEnabled(false); // Disallow editing Guest ID to protect DB references
 
@@ -254,7 +254,7 @@ void ReservationDialog::setEditBooking(const std::string& bookingId) {
 
     QDate checkIn = QDate::fromString(QString::fromStdString(booking->getCheckInDate()), "yyyy-MM-dd");
     QDate checkOut = QDate::fromString(QString::fromStdString(booking->getCheckOutDate()), "yyyy-MM-dd");
-    
+
     m_checkInDateEdit->setDate(checkIn);
     m_checkOutDateEdit->setDate(checkOut);
 

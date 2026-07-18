@@ -91,7 +91,7 @@ void RoomStatusPageWidget::setupUI() {
     mainLayout->setSpacing(16);
 
     // Header Title
-    auto* pageTitle = new QLabel("Sơ đồ Trạng thái Phòng (Room Status)", this);
+    auto* pageTitle = new QLabel("Room Status Overview", this);
     pageTitle->setObjectName("pageTitle");
     mainLayout->addWidget(pageTitle);
 
@@ -99,17 +99,17 @@ void RoomStatusPageWidget::setupUI() {
     auto* filterRow = new QHBoxLayout();
     m_searchEdit = new QLineEdit(this);
     m_searchEdit->setObjectName("searchEdit");
-    m_searchEdit->setPlaceholderText("Tìm kiếm số phòng...");
+    m_searchEdit->setPlaceholderText("Search room number...");
 
     m_typeCombo = new QComboBox(this);
     m_typeCombo->setObjectName("typeCombo");
     m_typeCombo->setProperty("class", "filterCombo");
-    m_typeCombo->addItems({"Tất cả loại phòng", "Standard", "Deluxe", "Suite"});
+    m_typeCombo->addItems({"All room types", "Standard", "Deluxe", "Suite"});
 
     m_statusCombo = new QComboBox(this);
     m_statusCombo->setObjectName("statusCombo");
     m_statusCombo->setProperty("class", "filterCombo");
-    m_statusCombo->addItems({"Tất cả hiện trạng", "Trống (Available)", "Đang ở (Occupied)", "Bảo trì (Maintenance)"});
+    m_statusCombo->addItems({"All statuses", "Available", "Occupied", "Maintenance"});
 
     filterRow->addWidget(m_searchEdit);
     filterRow->addWidget(m_typeCombo);
@@ -156,19 +156,19 @@ QWidget* RoomStatusPageWidget::createRoomStatusCard(const std::shared_ptr<Room>&
         }
 
         if (isOccupied) {
-            QMessageBox::warning(this, "Không thể chuyển trạng thái", 
-                QString("Phòng %1 đang có khách lưu trú, không thể đưa vào bảo trì.").arg(QString::fromStdString(room->getRoomNumber())));
+            QMessageBox::warning(this, "Cannot change status", 
+                QString("Room %1 is currently occupied and cannot be moved into maintenance.").arg(QString::fromStdString(room->getRoomNumber())));
             return;
         }
 
         if (room->getIsAvailable()) {
-            CustomConfirmDialog dialog("Xác nhận bảo trì", QString("Bạn có muốn đưa phòng %1 vào trạng thái BẢO TRÌ?").arg(QString::fromStdString(room->getRoomNumber())), false, this);
+            CustomConfirmDialog dialog("Confirm maintenance", QString("Do you want to move room %1 into maintenance status?").arg(QString::fromStdString(room->getRoomNumber())), false, this);
             if (dialog.exec() == QDialog::Accepted && dialog.isConfirmed()) {
                 room->setIsAvailable(false);
                 refreshData();
             }
         } else {
-            CustomConfirmDialog dialog("Xác nhận hoạt động", QString("Hoàn thành bảo trì phòng %1 và đưa vào hoạt động trở lại?").arg(QString::fromStdString(room->getRoomNumber())), false, this);
+            CustomConfirmDialog dialog("Confirm return to service", QString("Complete maintenance for room %1 and return it to service?").arg(QString::fromStdString(room->getRoomNumber())), false, this);
             if (dialog.exec() == QDialog::Accepted && dialog.isConfirmed()) {
                 room->setIsAvailable(true);
                 refreshData();
@@ -194,9 +194,9 @@ QWidget* RoomStatusPageWidget::createRoomStatusCard(const std::shared_ptr<Room>&
         }
     }
 
-    QString statusText = "TRỐNG";
+    QString statusText = "AVAILABLE";
     QString typeLabel = "Standard";
-    QString extraText = "Có thể đón khách";
+    QString extraText = "Ready for guests";
 
     QString cardStyle = "border-radius: 12px; border: 1px solid #E2E8F0;";
     QString titleStyle = "font-size: 15px; font-weight: 800; color: #2B3674;";
@@ -205,17 +205,17 @@ QWidget* RoomStatusPageWidget::createRoomStatusCard(const std::shared_ptr<Room>&
 
     // Dynamic coloring based on status
     if (!room->getIsAvailable()) {
-        statusText = "BẢO TRÌ";
-        extraText = "Đang bảo dưỡng kỹ thuật";
+        statusText = "MAINTENANCE";
+        extraText = "Under technical maintenance";
         cardStyle += "background-color: #FEF2F2; border: 1px solid #FCA5A5;";
         typeStyle += "background-color: #EF4444; color: white;";
     } else if (isOccupied) {
-        statusText = "ĐANG Ở";
+        statusText = "OCCUPIED";
         extraText = QString::fromStdString(occupantName);
         cardStyle += "background-color: #FFFBEB; border: 1px solid #FDE68A;";
         typeStyle += "background-color: #D97706; color: white;";
     } else {
-        statusText = "TRỐNG";
+        statusText = "AVAILABLE";
         cardStyle += "background-color: #ECFDF5; border: 1px solid #A7F3D0;";
         typeStyle += "background-color: #05CD99; color: white;";
     }
@@ -227,7 +227,7 @@ QWidget* RoomStatusPageWidget::createRoomStatusCard(const std::shared_ptr<Room>&
     layout->setSpacing(6);
 
     auto* row1 = new QHBoxLayout();
-    auto* title = new QLabel("Phòng " + QString::fromStdString(room->getRoomNumber()), card);
+    auto* title = new QLabel("Room " + QString::fromStdString(room->getRoomNumber()), card);
     title->setStyleSheet(titleStyle);
     
     if (dynamic_cast<DeluxeRoom*>(room.get())) typeLabel = "Deluxe";

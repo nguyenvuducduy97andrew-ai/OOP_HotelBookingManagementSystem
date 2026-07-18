@@ -8,14 +8,14 @@
 RoomDialog::RoomDialog(QWidget *parent)
     : QDialog(parent), m_isEditMode(false) {
     setupUI();
-    setWindowTitle("Thêm phòng mới");
+    setWindowTitle("Add New Room");
     onTypeChanged(0); // Standard by default
 }
 
 RoomDialog::RoomDialog(const QString& roomNum, double basePrice, RoomType type, double extraFee, bool isAvailable, QWidget *parent)
     : QDialog(parent), m_isEditMode(true), m_originalRoomNum(roomNum) {
     setupUI();
-    setWindowTitle("Chỉnh sửa phòng");
+    setWindowTitle("Edit Room");
 
     m_roomNumberEdit->setText(roomNum);
     m_roomNumberEdit->setEnabled(false); // Can't change room number during edit to prevent PK change
@@ -100,23 +100,23 @@ void RoomDialog::setupUI() {
     formLayout->setSpacing(12);
 
     m_roomNumberEdit = new QLineEdit(this);
-    m_roomNumberEdit->setPlaceholderText("Ví dụ: 101, 302");
-    formLayout->addRow("Số phòng:", m_roomNumberEdit);
+    m_roomNumberEdit->setPlaceholderText("Example: 101, 302");
+    formLayout->addRow("Room Number:", m_roomNumberEdit);
 
     m_basePriceSpin = new QDoubleSpinBox(this);
     m_basePriceSpin->setRange(0, 100000000);
     m_basePriceSpin->setSingleStep(50000);
     m_basePriceSpin->setSuffix(" đ");
     m_basePriceSpin->setDecimals(0);
-    formLayout->addRow("Giá cơ bản (đêm):", m_basePriceSpin);
+    formLayout->addRow("Base Price (per night):", m_basePriceSpin);
 
     m_typeCombo = new QComboBox(this);
     m_typeCombo->addItems({"Standard", "Deluxe", "Suite"});
-    formLayout->addRow("Loại phòng:", m_typeCombo);
+    formLayout->addRow("Room Type:", m_typeCombo);
 
     m_availabilityCombo = new QComboBox(this);
-    m_availabilityCombo->addItems({"Sẵn sàng đón khách (Available)", "Đang bảo trì (Maintenance)"});
-    formLayout->addRow("Trạng thái hoạt động:", m_availabilityCombo);
+    m_availabilityCombo->addItems({"Available", "Maintenance"});
+    formLayout->addRow("Status:", m_availabilityCombo);
 
     m_extraFeeLabel = new QLabel(this);
     m_extraFeeSpin = new QDoubleSpinBox(this);
@@ -131,9 +131,9 @@ void RoomDialog::setupUI() {
     // Button Row
     auto* btnLayout = new QHBoxLayout();
     btnLayout->addStretch();
-    auto* cancelBtn = new QPushButton("Hủy", this);
+    auto* cancelBtn = new QPushButton("Cancel", this);
     cancelBtn->setObjectName("btnCancel");
-    auto* saveBtn = new QPushButton("Lưu", this);
+    auto* saveBtn = new QPushButton("Save", this);
     saveBtn->setObjectName("btnSave");
 
     btnLayout->addWidget(cancelBtn);
@@ -150,11 +150,11 @@ void RoomDialog::onTypeChanged(int index) {
         m_extraFeeLabel->setVisible(false);
         m_extraFeeSpin->setVisible(false);
     } else if (index == 1) { // Deluxe
-        m_extraFeeLabel->setText("Phí dịch vụ Mini Bar:");
+        m_extraFeeLabel->setText("Mini Bar Fee:");
         m_extraFeeLabel->setVisible(true);
         m_extraFeeSpin->setVisible(true);
     } else if (index == 2) { // Suite
-        m_extraFeeLabel->setText("Phí dịch vụ cao cấp:");
+        m_extraFeeLabel->setText("Premium Service Fee:");
         m_extraFeeLabel->setVisible(true);
         m_extraFeeSpin->setVisible(true);
     }
@@ -163,11 +163,11 @@ void RoomDialog::onTypeChanged(int index) {
 
 void RoomDialog::onAccept() {
     if (m_roomNumberEdit->text().trimmed().isEmpty()) {
-        QMessageBox::warning(this, "Thiếu thông tin", "Vui lòng nhập số phòng.");
+        QMessageBox::warning(this, "Missing information", "Please enter the room number.");
         return;
     }
     if (m_basePriceSpin->value() <= 0) {
-        QMessageBox::warning(this, "Giá trị không hợp lệ", "Vui lòng nhập giá phòng lớn hơn 0.");
+        QMessageBox::warning(this, "Invalid value", "Please enter a room price greater than 0.");
         return;
     }
     accept();
