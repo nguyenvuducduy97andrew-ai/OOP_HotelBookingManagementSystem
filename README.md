@@ -24,7 +24,7 @@ The system demonstrates core object-oriented programming concepts:
   - **Standard**: `baseRate × days`
   - **Deluxe**: `baseRate × days × 1.2` (20% premium)
   - **Suite**: `baseRate × days × 1.5` (50% premium)
-- **Availability Tracking**: `isAvailable` marks maintenance/inspection status only — independent of whether a guest is currently staying in the room
+- **Availability Tracking**: Track from booking data. `isAvailable` marks maintenance/inspection status only — independent of whether a guest is currently staying in the room
 - **Room Factory Pattern**: Safe room creation with validation
 - **Archive-first cleanup**: Hard delete is restricted and intended only for admin/data-cleanup. Archiving rooms or customers is the preferred way to hide old entities while preserving booking and invoice history.
 
@@ -38,7 +38,7 @@ The system demonstrates core object-oriented programming concepts:
 - **Booking Validation**: Prevent invalid date ranges and double-booking (overlap checks skip cancelled bookings)
 - **Derived Status**: Upcoming/Active/Completed states are computed from dates at read time, never stored
 - **Cancellation**: `cancelBooking()` soft-cancels an upcoming reservation and cascades a void (not delete) to any attached invoice, so front-desk staff can cancel in one action without tracing invoices manually
-- **Occupancy Queries**: `getRoomsByOccupancy()`, `getTodayCheckIns()`, `getTodayCheckOuts()` derive real-time occupancy from bookings, independent of room availability
+- **Occupancy Queries**: `getRoomsByOccupancy()`, `getTodayCheckIns()`, `getTodayCheckOuts()` derive real-time occupancy from bookings.
 - **Automatic ID Generation**: Unique booking identifiers
 - **Available Room Filtering**: Query empty rooms for specific periods
 
