@@ -15,6 +15,7 @@ private:
     bool initDatabase(const std::string& dataPath);
 
     QSqlDatabase m_db; // Qt database connection storage variable
+    std::string m_dataPath;
 
 public:
     // Returns the single shared DataManager instance.
@@ -31,5 +32,9 @@ public:
 
     // Modified: Removed 'const' from HotelManager reference to allow dynamic calculations during serialization
     // and to ensure the new Booking lifecycle state is correctly saved back to the database
-    bool saveAll(HotelManager& manager, const std::string& dataPath = "hotel_data.db");
+    bool saveAll(HotelManager& manager, const std::string& dataPath = "");
+
+    bool invoiceExistsInCurrentDatabase(const std::string& invoiceId) const;
+
+    bool saveInvoiceImmediately(const Invoice& invoice);
 };

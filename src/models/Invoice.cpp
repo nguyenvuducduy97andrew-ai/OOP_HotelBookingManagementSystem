@@ -5,12 +5,21 @@
 #include <iostream>
 #include <iomanip>
 #include <sstream> // Added for std::stringstream in generateInvoiceDetails
+#include <QLocale>
+
+namespace {
+std::string formatMoney(double value)
+{
+    return QLocale(QLocale::Vietnamese, QLocale::Vietnam).toString(value, 'f', 0).toStdString();
+}
+}
 
 
 // Modified: Updated default constructor to initialize 'nights' instead of 'totalAmount'
 // Modified: paymentDate now defaults to an empty string or dummy ISO format
 Invoice::Invoice() {
     this->invoiceId = "INV_UNKNOWN";
+    this->bookingId = "";
     this->taxRate = 0.0;
     this->nights = 0; // Added: Initializing the new nights member variable
     this->paymentDate = ""; // Modified: Using empty string instead of QDate::currentDate()
@@ -23,6 +32,14 @@ void Invoice::setInvoiceId(const std::string& invoiceId) {
     this->invoiceId = invoiceId;
 }
 
+std::string Invoice::getBookingId() const {
+    return bookingId;
+}
+
+void Invoice::setBookingId(const std::string& bookingId) {
+    this->bookingId = bookingId;
+}
+
 std::shared_ptr<Booking> Invoice::getBooking() const {
     // Lock the weak_ptr to get a shared_ptr; returns nullptr if expired
     return booking.lock();
@@ -32,6 +49,9 @@ std::shared_ptr<Booking> Invoice::getBooking() const {
 void Invoice::setBooking(const std::shared_ptr<Booking>& booking) {
     // Store weak reference (does not increase refcount)
     this->booking = booking;
+    if (booking) {
+        this->bookingId = booking->getBookingId();
+    }
 }
 
 // Modified: Cleaned up raw pointer overload to match the dynamic calculation architecture
@@ -79,9 +99,7 @@ bool Invoice::isCancelled() const {
 
 // Modified: Validates booking existence, invoice data integrity, and duration validity
 bool Invoice::isValid() const {
-    // Lock the weak_ptr and check if booking is valid
-    auto lockedBooking = booking.lock();
-    return lockedBooking != nullptr && !invoiceId.empty() && nights > 0;
+    return !invoiceId.empty() && nights > 0;
 }
 
 // Modified: Computes subtotal on-the-fly using the locally stored 'nights' variable
@@ -117,6 +135,9 @@ std::string Invoice::generateInvoiceDetails() const {
     // Error handling for missing or expired booking
     if (lockedBooking == nullptr) {
         details << "<font color='red'><b>Error: No booking data associated or booking has expired!</b></font><br>";
+        if (!bookingId.empty()) {
+            details << "<b>Booking ID:</b> " << bookingId << "<br>";
+        }
         details << "=========================================<br>";
         return details.str();
     }
@@ -134,7 +155,7 @@ std::string Invoice::generateInvoiceDetails() const {
     auto lockedRoom = lockedBooking->getRoom();
     if (lockedRoom != nullptr) {
         details << "<b>Room Number:</b> " << lockedRoom->getRoomNumber() << "<br>";
-        details << "<b>Base Price per Night:</b> $" << std::fixed << std::setprecision(2) << lockedRoom->getBasePrice() << "<br>";
+        details << "<b>Base Price per Night:</b> " << formatMoney(lockedRoom->getBasePrice()) << " đ<br>";
     } else {
         details << "<b>Room Info:</b> Not Assigned (or expired)<br>";
     }
@@ -150,11 +171,11 @@ std::string Invoice::generateInvoiceDetails() const {
     double totalAmount = calculateTotal(); // Dynamic calculation
 
     details << "--------------------------------------------------<br>";
-    details << "<b>Subtotal:</b> $" << std::fixed << std::setprecision(2) << subtotal << "<br>";
+    details << "<b>Subtotal:</b> " << formatMoney(subtotal) << " đ<br>";
     details << "<b>Tax Rate:</b> " << std::fixed << std::setprecision(1) << (taxRate * 100) << "%<br>";
-    details << "<b>Tax Amount:</b> $" << std::fixed << std::setprecision(2) << taxAmount << "<br>";
+    details << "<b>Tax Amount:</b> " << formatMoney(taxAmount) << " đ<br>";
     details << "--------------------------------------------------<br>";
-    details << "<h2>TOTAL AMOUNT: $" << std::fixed << std::setprecision(2) << totalAmount << "</h2>";
+    details << "<h2>TOTAL AMOUNT: " << formatMoney(totalAmount) << " đ</h2>";
     details << "=========================================<br>";
 
     return details.str();

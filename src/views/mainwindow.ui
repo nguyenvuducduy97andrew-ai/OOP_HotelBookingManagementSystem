@@ -94,8 +94,8 @@ QLabel#lblDate {
     color: #A3AED0;
     font-size: 14px;
     font-weight: bold;
-    padding-left: 25px;
-    padding-bottom: 15px;
+    padding-left: 0px;
+    padding-bottom: 0px;
 }
 
 /* ================= 4. STYLE CHO HỘP THOẠI THÔNG BÁO (QMessageBox) ================= */
@@ -267,65 +267,6 @@ QMessageBox QPushButton:hover {
            <number>0</number>
           </property>
           <item>
-           <widget class="QFrame" name="headerFrame">
-            <property name="minimumSize">
-             <size>
-              <width>0</width>
-              <height>80</height>
-             </size>
-            </property>
-            <property name="maximumSize">
-             <size>
-              <width>16777215</width>
-              <height>80</height>
-             </size>
-            </property>
-            <property name="frameShape">
-             <enum>QFrame::Shape::StyledPanel</enum>
-            </property>
-            <property name="frameShadow">
-             <enum>QFrame::Shadow::Raised</enum>
-            </property>
-            <layout class="QHBoxLayout" name="horizontalLayout_2">
-             <property name="leftMargin">
-              <number>20</number>
-             </property>
-             <property name="topMargin">
-              <number>20</number>
-             </property>
-             <property name="rightMargin">
-              <number>20</number>
-             </property>
-             <property name="bottomMargin">
-              <number>20</number>
-             </property>
-             <item>
-              <widget class="QLabel" name="lblWelcome">
-               <property name="text">
-                <string>Hello Admin</string>
-               </property>
-               <property name="alignment">
-                <set>Qt::AlignmentFlag::AlignCenter</set>
-               </property>
-              </widget>
-             </item>
-             <item>
-              <widget class="QLabel" name="lblDate">
-               <property name="text">
-                <string>7/1/2026</string>
-               </property>
-               <property name="alignment">
-                <set>Qt::AlignmentFlag::AlignCenter</set>
-               </property>
-               <property name="sidebarBtn" stdset="0">
-                <bool>false</bool>
-               </property>
-              </widget>
-             </item>
-            </layout>
-           </widget>
-          </item>
-          <item>
            <widget class="QFrame" name="mainContainFrame">
             <property name="frameShape">
              <enum>QFrame::Shape::StyledPanel</enum>
@@ -334,6 +275,21 @@ QMessageBox QPushButton:hover {
              <enum>QFrame::Shadow::Raised</enum>
             </property>
             <layout class="QVBoxLayout" name="verticalLayout_3">
+                 <property name="spacing">
+                  <number>0</number>
+                 </property>
+                 <property name="leftMargin">
+                  <number>0</number>
+                 </property>
+                 <property name="topMargin">
+                  <number>0</number>
+                 </property>
+                 <property name="rightMargin">
+                  <number>0</number>
+                 </property>
+                 <property name="bottomMargin">
+                  <number>0</number>
+                 </property>
              <item>
               <widget class="QStackedWidget" name="stackedWidget">
                <property name="styleSheet">

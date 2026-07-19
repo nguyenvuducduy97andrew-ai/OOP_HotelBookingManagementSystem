@@ -12,6 +12,14 @@
 #include <QDebug>
 #include <QDate>
 #include <QPainter>
+#include <QLocale>
+
+namespace {
+QString formatMoney(double value)
+{
+    return QLocale(QLocale::Vietnamese, QLocale::Vietnam).toString(value, 'f', 0);
+}
+}
 
 RoomPageWidget::RoomPageWidget(HotelManager* manager, QWidget *parent)
     : QWidget(parent), m_manager(manager), m_selectedTypeFilter("All") {
@@ -203,9 +211,9 @@ void RoomPageWidget::setupUI() {
     // -------------------------------------------------------------
     // RIGHT PANEL (Room Detail)
     // -------------------------------------------------------------
-    auto* detailFrame = new QFrame(this);
-    detailFrame->setObjectName("detailFrame");
-    auto* detailLayout = new QVBoxLayout(detailFrame);
+    m_detailFrame = new QFrame(this);
+    m_detailFrame->setObjectName("detailFrame");
+    auto* detailLayout = new QVBoxLayout(m_detailFrame);
     detailLayout->setContentsMargins(20, 20, 20, 20);
     detailLayout->setSpacing(15);
 
@@ -291,7 +299,7 @@ void RoomPageWidget::setupUI() {
     contentLayout->addStretch();
     detailLayout->addWidget(m_detailPanel);
 
-    mainLayout->addWidget(detailFrame, 2); // 2 parts width
+    mainLayout->addWidget(m_detailFrame, 2); // 2 parts width
 
     // Connects
     connect(m_searchEdit, &QLineEdit::textChanged, this, &RoomPageWidget::onSearchChanged);
@@ -303,6 +311,8 @@ void RoomPageWidget::setupUI() {
     connect(m_editRoomBtn, &QPushButton::clicked, this, &RoomPageWidget::onEditRoomClicked);
     connect(m_deleteRoomBtn, &QPushButton::clicked, this, &RoomPageWidget::onDeleteRoomClicked);
     connect(m_roomListWidget, &QListWidget::itemSelectionChanged, this, &RoomPageWidget::onRoomSelectionChanged);
+
+    m_detailFrame->setVisible(false);
 }
 
 void RoomPageWidget::onSearchChanged(const QString& text) {
@@ -391,7 +401,7 @@ QWidget* RoomPageWidget::createRoomCard(const std::shared_ptr<Room>& room) {
     bool isOccupied = false;
     if (m_manager) {
         for (const auto& booking : m_manager->getBookings()) {
-            if (booking && !booking->isCancelled() && booking->getRoom() &&
+            if (booking && !booking->isCancelled() && !booking->isDeleted() && booking->getRoom() &&
                 booking->getRoom()->getRoomNumber() == room->getRoomNumber()) {
                 if (m_manager->getBookingState(*booking) == BookingState::ACTIVE) {
                     isOccupied = true;
@@ -413,7 +423,7 @@ QWidget* RoomPageWidget::createRoomCard(const std::shared_ptr<Room>& room) {
         statusBadge->setStyleSheet("background-color: #ECFDF5; color: #05CD99; border-radius: 4px; padding: 2px 6px; font-size: 10px; font-weight: 700;");
     }
 
-    auto* priceLabel = new QLabel(QString::number(room->getBasePrice(), 'f', 0) + "đ", card);
+    auto* priceLabel = new QLabel(formatMoney(room->getBasePrice()) + "đ", card);
     priceLabel->setStyleSheet("font-size: 13px; font-weight: 800; color: #005BFE;");
 
     rightCol->addWidget(statusBadge);
@@ -478,12 +488,14 @@ void RoomPageWidget::onRoomSelectionChanged() {
 
 void RoomPageWidget::updateDetailPanel(const std::shared_ptr<Room>& room) {
     if (!room) {
+        m_detailFrame->setVisible(false);
         m_detailPanel->setVisible(false);
         m_editRoomBtn->setEnabled(false);
         m_deleteRoomBtn->setEnabled(false);
         return;
     }
 
+    m_detailFrame->setVisible(true);
     m_detailPanel->setVisible(true);
     m_editRoomBtn->setEnabled(true);
     m_deleteRoomBtn->setEnabled(true);
@@ -495,7 +507,7 @@ void RoomPageWidget::updateDetailPanel(const std::shared_ptr<Room>& room) {
     std::string occupantName = "";
     if (m_manager) {
         for (const auto& booking : m_manager->getBookings()) {
-            if (booking && !booking->isCancelled() && booking->getRoom() &&
+            if (booking && !booking->isCancelled() && !booking->isDeleted() && booking->getRoom() &&
                 booking->getRoom()->getRoomNumber() == room->getRoomNumber()) {
                 if (m_manager->getBookingState(*booking) == BookingState::ACTIVE) {
                     isOccupied = true;
@@ -537,7 +549,7 @@ void RoomPageWidget::updateDetailPanel(const std::shared_ptr<Room>& room) {
         m_detailSizeLabel->setText("📏 35m²");
         m_detailBedLabel->setText("🛏 King Bed");
         m_detailGuestLabel->setText("👤 2 Guests");
-        m_detailExtraFeeLabel->setText(QString("💰 Mini Bar Fee: %1đ").arg(deluxe->getMiniBarFee()));
+        m_detailExtraFeeLabel->setText(QString("💰 Mini Bar Fee: %1đ").arg(formatMoney(deluxe->getMiniBarFee())));
         m_detailExtraFeeLabel->setVisible(true);
         m_detailImageLabel->setText("✨ Deluxe Room Image Placeholder");
         m_detailImageLabel->setStyleSheet("background-color: #E0F2FE; border-radius: 14px; font-weight: bold; color: #0284C7;");
@@ -546,7 +558,7 @@ void RoomPageWidget::updateDetailPanel(const std::shared_ptr<Room>& room) {
         m_detailSizeLabel->setText("📏 55m²");
         m_detailBedLabel->setText("🛏 Super King Bed");
         m_detailGuestLabel->setText("👤 4 Guests");
-        m_detailExtraFeeLabel->setText(QString("👑 Premium Service Fee: %1đ").arg(suite->getPremiumServiceFee()));
+        m_detailExtraFeeLabel->setText(QString("👑 Premium Service Fee: %1đ").arg(formatMoney(suite->getPremiumServiceFee())));
         m_detailExtraFeeLabel->setVisible(true);
         m_detailImageLabel->setText("👑 Suite Room Image Placeholder");
         m_detailImageLabel->setStyleSheet("background-color: #FEF3C7; border-radius: 14px; font-weight: bold; color: #D97706;");

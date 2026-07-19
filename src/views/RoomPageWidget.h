@@ -41,6 +41,8 @@ private:
 
     QListWidget* m_roomListWidget;
 
+    QWidget* m_detailFrame;
+
     // Right Detail Panel widgets
     QWidget* m_detailPanel;
     QLabel* m_detailTitleLabel;

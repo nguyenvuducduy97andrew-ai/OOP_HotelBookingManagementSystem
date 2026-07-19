@@ -18,6 +18,7 @@ Booking::Booking() {
     bookingCounter++;
     this->bookingId = "BK" + std::to_string(bookingCounter);
     this->cancelled = false;
+    this->deleted = false;
 
 #pragma warning(suppress : 4996)
     std::time_t now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
@@ -107,6 +108,14 @@ bool Booking::isCancelled() const {
 
 void Booking::setCancelled(bool cancelled) {
     this->cancelled = cancelled;
+}
+
+bool Booking::isDeleted() const {
+    return deleted;
+}
+
+void Booking::setDeleted(bool deleted) {
+    this->deleted = deleted;
 }
 
 bool Booking::isValid() const {

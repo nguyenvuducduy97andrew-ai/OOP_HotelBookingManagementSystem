@@ -9,6 +9,7 @@ class Invoice
 {
 private:
     std::string invoiceId;
+    std::string bookingId;
     std::weak_ptr<Booking> booking;  // Weak reference to booking (owned by HotelManager)
     double taxRate;
     int nights;                      // Number of nights stayed (passed down from MainWindow)
@@ -20,6 +21,9 @@ public:
 
     std::string getInvoiceId() const;
     void setInvoiceId(const std::string& invoiceId);
+
+    std::string getBookingId() const;
+    void setBookingId(const std::string& bookingId);
 
     std::shared_ptr<Booking> getBooking() const;
     void setBooking(const std::shared_ptr<Booking>& booking);

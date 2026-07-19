@@ -51,6 +51,7 @@ The system demonstrates core object-oriented programming concepts:
 ### Data Persistence
 - **SQLite-backed Persistence**: Load and save hotel state through DataManager::loadAll() and DataManager::saveAll()
 - **Automatic Database Setup**: The data layer creates the required tables on first use
+- **Storage Location**: The application now stores its database in the project-level data folder at `data/hotel_data.db` so data is kept separate from source code and build outputs
 - **Core Domain Recovery**: Customer, room, and booking data are restored from the database on startup
 - **Strict Persistence Integrity**: `saveAll()` refuses to persist invalid object graphs and rolls back on broken booking or invoice references, instead of silently dropping bad child records.
 

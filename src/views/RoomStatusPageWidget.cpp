@@ -145,7 +145,7 @@ QWidget* RoomStatusPageWidget::createRoomStatusCard(const std::shared_ptr<Room>&
         bool isOccupied = false;
         if (m_manager) {
             for (const auto& booking : m_manager->getBookings()) {
-                if (booking && !booking->isCancelled() && booking->getRoom() &&
+                if (booking && !booking->isCancelled() && !booking->isDeleted() && booking->getRoom() &&
                     booking->getRoom()->getRoomNumber() == room->getRoomNumber()) {
                     if (m_manager->getBookingState(*booking) == BookingState::ACTIVE) {
                         isOccupied = true;
@@ -181,7 +181,7 @@ QWidget* RoomStatusPageWidget::createRoomStatusCard(const std::shared_ptr<Room>&
     std::string occupantName = "";
     if (m_manager) {
         for (const auto& booking : m_manager->getBookings()) {
-            if (booking && !booking->isCancelled() && booking->getRoom() &&
+            if (booking && !booking->isCancelled() && !booking->isDeleted() && booking->getRoom() &&
                 booking->getRoom()->getRoomNumber() == room->getRoomNumber()) {
                 if (m_manager->getBookingState(*booking) == BookingState::ACTIVE) {
                     isOccupied = true;
@@ -287,7 +287,7 @@ void RoomStatusPageWidget::refreshData() {
         // Status Filter check
         bool isOccupied = false;
         for (const auto& booking : m_manager->getBookings()) {
-            if (booking && !booking->isCancelled() && booking->getRoom() &&
+            if (booking && !booking->isCancelled() && !booking->isDeleted() && booking->getRoom() &&
                 booking->getRoom()->getRoomNumber() == room->getRoomNumber()) {
                 if (m_manager->getBookingState(*booking) == BookingState::ACTIVE) {
                     isOccupied = true;
