@@ -5,6 +5,7 @@
 #include <QPushButton>
 
 class Customer;
+class QLabel;
 
 class CustomerDialog : public QDialog {
     Q_OBJECT
@@ -24,10 +25,13 @@ private:
     void setupUI();
     void setupStyle();
     void populateFields();
+    bool validate();
+    void setFieldError(QLineEdit* field, bool hasError);
 
     std::shared_ptr<Customer> m_customer;
     QLineEdit* m_idEdit;
     QLineEdit* m_nameEdit;
     QLineEdit* m_phoneEdit;
     QPushButton* m_okButton;
+    QLabel* m_errorLabel;
 };

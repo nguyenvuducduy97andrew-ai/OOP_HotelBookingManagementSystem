@@ -3,8 +3,9 @@
 #include <QLabel>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
-#include <QMessageBox>
 #include <QFormLayout>
+#include <QStringList>
+#include <QStyle>
 
 CustomerDialog::CustomerDialog(QWidget* parent)
     : QDialog(parent), m_customer(nullptr)
@@ -29,7 +30,7 @@ CustomerDialog::CustomerDialog(const std::shared_ptr<Customer>& customer, QWidge
 void CustomerDialog::setupStyle() {
     // Match CustomConfirmDialog's window conventions
     setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
-    setFixedSize(420, 380);
+    setFixedSize(420, 440);
 
     setStyleSheet(R"(
         QDialog {
@@ -66,6 +67,19 @@ void CustomerDialog::setupStyle() {
         QLineEdit:disabled {
             background-color: #F1F5F9;
             color: #A3AED0;
+        }
+        QLineEdit[error="true"] {
+            border: 1px solid #EF4444;
+            background-color: #FEF2F2;
+        }
+        QLabel#errorLabel {
+            font-size: 12px;
+            font-weight: 600;
+            color: #EF4444;
+            background-color: #FEF2F2;
+            border: 1px solid #FECACA;
+            border-radius: 8px;
+            padding: 8px 10px;
         }
         QPushButton#btnSave {
             background-color: #005BFE;
@@ -129,6 +143,13 @@ void CustomerDialog::setupUI() {
     formLayout->addRow("Phone:", m_phoneEdit);
 
     mainLayout->addLayout(formLayout);
+
+    m_errorLabel = new QLabel(this);
+    m_errorLabel->setObjectName("errorLabel");
+    m_errorLabel->setWordWrap(true);
+    m_errorLabel->setVisible(false);
+    mainLayout->addWidget(m_errorLabel);
+
     mainLayout->addStretch();
 
     auto* buttonRow = new QHBoxLayout();
@@ -143,6 +164,11 @@ void CustomerDialog::setupUI() {
 
     connect(m_okButton, &QPushButton::clicked, this, &CustomerDialog::onAccept);
     connect(cancelButton, &QPushButton::clicked, this, &QDialog::reject);
+
+    // Clear a field's red border as soon as the user edits it; re-validated on next Save.
+    connect(m_idEdit, &QLineEdit::textChanged, this, [this]() { setFieldError(m_idEdit, false); });
+    connect(m_nameEdit, &QLineEdit::textChanged, this, [this]() { setFieldError(m_nameEdit, false); });
+    connect(m_phoneEdit, &QLineEdit::textChanged, this, [this]() { setFieldError(m_phoneEdit, false); });
 }
 
 void CustomerDialog::populateFields() {
@@ -166,17 +192,51 @@ QString CustomerDialog::getCustomerPhone() const {
     return m_phoneEdit->text().trimmed();
 }
 
-void CustomerDialog::onAccept() {
+void CustomerDialog::setFieldError(QLineEdit* field, bool hasError) {
+    field->setProperty("error", hasError);
+    field->style()->unpolish(field);
+    field->style()->polish(field);
+}
+
+bool CustomerDialog::validate() {
+    setFieldError(m_idEdit, false);
+    setFieldError(m_nameEdit, false);
+    setFieldError(m_phoneEdit, false);
+
+    QStringList errors;
+    QLineEdit* firstInvalid = nullptr;
+
     if (m_idEdit->text().trimmed().isEmpty()) {
-        QMessageBox::warning(this, "Validation error", "Customer ID is required.");
-        return;
+        errors << "Customer ID is required.";
+        setFieldError(m_idEdit, true);
+        firstInvalid = firstInvalid ? firstInvalid : m_idEdit;
     }
     if (m_nameEdit->text().trimmed().isEmpty()) {
-        QMessageBox::warning(this, "Validation error", "Customer name is required.");
-        return;
+        errors << "Customer name is required.";
+        setFieldError(m_nameEdit, true);
+        firstInvalid = firstInvalid ? firstInvalid : m_nameEdit;
     }
     if (m_phoneEdit->text().trimmed().isEmpty()) {
-        QMessageBox::warning(this, "Validation error", "Customer phone number is required.");
+        errors << "Customer phone number is required.";
+        setFieldError(m_phoneEdit, true);
+        firstInvalid = firstInvalid ? firstInvalid : m_phoneEdit;
+    }
+
+    if (!errors.isEmpty()) {
+        m_errorLabel->setText(errors.join("\n"));
+        m_errorLabel->setVisible(true);
+        firstInvalid->setFocus();
+        firstInvalid->selectAll();
+        return false;
+    }
+
+    m_errorLabel->clear();
+    m_errorLabel->setVisible(false);
+    return true;
+}
+
+void CustomerDialog::onAccept() {
+    if (!validate()) {
         return;
     }
     accept();
