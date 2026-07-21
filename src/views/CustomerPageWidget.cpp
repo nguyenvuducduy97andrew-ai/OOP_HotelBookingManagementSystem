@@ -1,10 +1,86 @@
 #include "CustomerPageWidget.h"
 #include "CustomerDialog.h"
+#include "CustomConfirmDialog.h"
+#include "CustomSuccessDialog.h"
 #include <QVBoxLayout>
 #include <QLabel>
 #include <QHeaderView>
 #include <QHBoxLayout>
 #include <QMessageBox>
+#include <QStyledItemDelegate>
+#include <QTableWidget>
+#include <QPainter>
+#include <QMouseEvent>
+#include <QEvent>
+
+namespace {
+class HoverRowDelegate : public QStyledItemDelegate {
+public:
+    explicit HoverRowDelegate(QTableWidget* table)
+        : QStyledItemDelegate(table), m_table(table)
+    {
+        m_table->viewport()->installEventFilter(this);
+        m_table->setMouseTracking(true);
+    }
+
+    void paint(QPainter* painter,
+               const QStyleOptionViewItem& option,
+               const QModelIndex& index) const override
+    {
+        QStyleOptionViewItem cleanOption(option);
+        cleanOption.state &= ~QStyle::State_HasFocus;
+        QStyledItemDelegate::paint(painter, cleanOption, index);
+
+        if (index.row() != m_hoveredRow) {
+            return;
+        }
+
+        painter->save();
+        painter->setRenderHint(QPainter::Antialiasing, false);
+        painter->setPen(QPen(QColor("#005BFE"), 2));
+
+        QRect borderRect = option.rect.adjusted(1, 1, -1, -1);
+        painter->drawLine(borderRect.topLeft(), borderRect.topRight());
+        painter->drawLine(borderRect.bottomLeft(), borderRect.bottomRight());
+
+        if (index.column() == 0) {
+            painter->drawLine(borderRect.topLeft(), borderRect.bottomLeft());
+        }
+        if (index.column() == m_table->columnCount() - 1) {
+            painter->drawLine(borderRect.topRight(), borderRect.bottomRight());
+        }
+
+        painter->restore();
+    }
+
+protected:
+    bool eventFilter(QObject* watched, QEvent* event) override
+    {
+        if (watched == m_table->viewport()) {
+            int newHoveredRow = m_hoveredRow;
+
+            if (event->type() == QEvent::MouseMove) {
+                auto* mouseEvent = static_cast<QMouseEvent*>(event);
+                const QModelIndex index = m_table->indexAt(mouseEvent->position().toPoint());
+                newHoveredRow = index.isValid() ? index.row() : -1;
+            } else if (event->type() == QEvent::Leave) {
+                newHoveredRow = -1;
+            }
+
+            if (newHoveredRow != m_hoveredRow) {
+                m_hoveredRow = newHoveredRow;
+                m_table->viewport()->update();
+            }
+        }
+
+        return QStyledItemDelegate::eventFilter(watched, event);
+    }
+
+private:
+    QTableWidget* m_table;
+    int m_hoveredRow = -1;
+};
+}
 
 CustomerPageWidget::CustomerPageWidget(HotelManager* manager, QWidget *parent)
     : QWidget(parent), m_manager(manager)
@@ -46,7 +122,7 @@ void CustomerPageWidget::setupStyle() {
             color: #FFFFFF;
             border: 1px solid #005BFE;
         }
-        QPushButton#btnAddCustomer, QPushButton#btnEditCustomer, QPushButton#btnArchiveCustomer {
+        QPushButton#btnAddCustomer, QPushButton#btnEditCustomer, QPushButton#btnArchiveCustomer, QPushButton#btnDeleteCustomer {
             background-color: #005BFE;
             color: #FFFFFF;
             font-weight: 700;
@@ -58,10 +134,17 @@ void CustomerPageWidget::setupStyle() {
         QPushButton#btnEditCustomer, QPushButton#btnArchiveCustomer {
             background-color: #1F2937;
         }
+        QPushButton#btnDeleteCustomer {
+            background-color: #EF4444;
+        }
         QPushButton#btnAddCustomer:hover,
         QPushButton#btnEditCustomer:hover,
-        QPushButton#btnArchiveCustomer:hover {
+        QPushButton#btnArchiveCustomer:hover,
+        QPushButton#btnDeleteCustomer:hover {
             background-color: #2B7BFF;
+        }
+        QPushButton#btnDeleteCustomer:hover {
+            background-color: #DC2626;
         }
         QTableWidget {
             border: 1px solid #E9EDF7;
@@ -73,6 +156,18 @@ void CustomerPageWidget::setupStyle() {
         }
         QTableWidget::item {
             padding: 8px 10px;
+        }
+        QTableWidget::item:hover {
+            background-color: transparent;
+        }
+        QTableWidget::item:selected {
+            background-color: #EAF2FF;
+            color: #2B3674;
+        }
+        QTableWidget::item:selected:active,
+        QTableWidget::item:selected:!active {
+            background-color: #EAF2FF;
+            color: #2B3674;
         }
         QHeaderView::section {
             background-color: #F8FAFC;
@@ -124,10 +219,13 @@ void CustomerPageWidget::setupUI() {
     m_editCustomerBtn->setObjectName("btnEditCustomer");
     m_archiveCustomerBtn = new QPushButton("Archive", this);
     m_archiveCustomerBtn->setObjectName("btnArchiveCustomer");
+    m_deleteCustomerBtn = new QPushButton("Delete", this);
+    m_deleteCustomerBtn->setObjectName("btnDeleteCustomer");
 
     actionRow->addWidget(m_addCustomerBtn);
     actionRow->addWidget(m_editCustomerBtn);
     actionRow->addWidget(m_archiveCustomerBtn);
+    actionRow->addWidget(m_deleteCustomerBtn);
     mainLayout->addLayout(actionRow);
 
     m_tableWidget = new QTableWidget(this);
@@ -147,6 +245,7 @@ void CustomerPageWidget::setupUI() {
     m_tableWidget->verticalHeader()->setVisible(false);
     m_tableWidget->setAlternatingRowColors(true);
     m_tableWidget->setShowGrid(true);
+    m_tableWidget->setItemDelegate(new HoverRowDelegate(m_tableWidget));
 
     mainLayout->addWidget(m_tableWidget);
 
@@ -156,6 +255,7 @@ void CustomerPageWidget::setupUI() {
     connect(m_addCustomerBtn, &QPushButton::clicked, this, &CustomerPageWidget::onAddCustomerClicked);
     connect(m_editCustomerBtn, &QPushButton::clicked, this, &CustomerPageWidget::onEditCustomerClicked);
     connect(m_archiveCustomerBtn, &QPushButton::clicked, this, &CustomerPageWidget::onArchiveCustomerClicked);
+    connect(m_deleteCustomerBtn, &QPushButton::clicked, this, &CustomerPageWidget::onDeleteCustomerClicked);
     connect(m_tableWidget, &QTableWidget::itemSelectionChanged, this, &CustomerPageWidget::updateActionButtons);
 
     updateActionButtons();
@@ -257,10 +357,37 @@ void CustomerPageWidget::onArchiveCustomerClicked() {
     refreshDataInternal();
 }
 
+void CustomerPageWidget::onDeleteCustomerClicked() {
+    if (m_tableWidget->selectedItems().isEmpty()) {
+        return;
+    }
+
+    QString customerId = m_tableWidget->item(m_tableWidget->currentRow(), 0)->text();
+    CustomConfirmDialog dialog(
+        "Confirm delete customer",
+        QString("Are you sure you want to permanently delete customer %1 from the system?").arg(customerId),
+        true,
+        this);
+
+    if (dialog.exec() != QDialog::Accepted || !dialog.isConfirmed()) {
+        return;
+    }
+
+    std::string errorMessage;
+    if (!m_manager->deleteCustomer(customerId.toStdString(), errorMessage)) {
+        QMessageBox::critical(this, "Delete Customer Failed", QString::fromStdString(errorMessage));
+        return;
+    }
+
+    refreshDataInternal();
+    CustomSuccessDialog(QString("Customer %1 deleted successfully.").arg(customerId), this).exec();
+}
+
 void CustomerPageWidget::updateActionButtons() {
     bool hasSelection = !m_tableWidget->selectedItems().isEmpty();
     m_editCustomerBtn->setEnabled(hasSelection);
     m_archiveCustomerBtn->setEnabled(hasSelection);
+    m_deleteCustomerBtn->setEnabled(hasSelection);
 
     if (hasSelection) {
         if (m_selectedStatusFilter == "Active") {

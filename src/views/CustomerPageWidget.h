@@ -19,6 +19,7 @@ private slots:
     void onAddCustomerClicked();
     void onEditCustomerClicked();
     void onArchiveCustomerClicked();
+    void onDeleteCustomerClicked();
     void updateActionButtons();
 
 private:
@@ -34,5 +35,6 @@ private:
     QPushButton* m_addCustomerBtn;
     QPushButton* m_editCustomerBtn;
     QPushButton* m_archiveCustomerBtn;
+    QPushButton* m_deleteCustomerBtn;
     QTableWidget* m_tableWidget;
 };
