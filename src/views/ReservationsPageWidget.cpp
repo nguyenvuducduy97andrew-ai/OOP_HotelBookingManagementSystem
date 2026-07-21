@@ -243,7 +243,7 @@ void ReservationsPageWidget::setupUI() {
     legCancel->setStyleSheet("background-color: #FFFBEB; color: #92400E; border: 1px solid #FDE68A; font-weight: bold; border-radius: 10px; padding: 2px 8px; font-size: 11px;");
     legendRow->addWidget(legCancel);
 
-    auto* legDelete = new QLabel("🗑 Delete / Clear history", this);
+    auto* legDelete = new QLabel("🗑 Delete", this);
     legDelete->setStyleSheet("background-color: #FEF2F2; color: #991B1B; border: 1px solid #FCA5A5; font-weight: bold; border-radius: 10px; padding: 2px 8px; font-size: 11px;");
     legendRow->addWidget(legDelete);
 
