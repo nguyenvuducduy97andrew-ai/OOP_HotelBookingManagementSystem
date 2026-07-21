@@ -15,6 +15,8 @@ DataManager& DataManager::getInstance() {
 }
 
 bool DataManager::initDatabase(const std::string& dataPath) {
+    m_dataPath = dataPath;
+
     if (m_db.isOpen() && m_db.databaseName() == QString::fromStdString(dataPath)) {
         return true;
     }
@@ -108,6 +110,7 @@ bool DataManager::initDatabase(const std::string& dataPath) {
         "   checkInDate TEXT NOT NULL,"
         "   checkOutDate TEXT NOT NULL,"
         "   cancelled INTEGER NOT NULL DEFAULT 0,"
+        "   deleted INTEGER NOT NULL DEFAULT 0,"
         "   FOREIGN KEY (customerId) REFERENCES Customer(customerId) ON DELETE CASCADE ON UPDATE CASCADE,"
         "   FOREIGN KEY (roomNumber) REFERENCES Room(roomNumber) ON DELETE RESTRICT ON UPDATE CASCADE"
         ");";
@@ -119,11 +122,14 @@ bool DataManager::initDatabase(const std::string& dataPath) {
     QSqlQuery bookingSchemaQuery;
     if (bookingSchemaQuery.exec("PRAGMA table_info(Booking)")) {
         bool hasCancelled = false;
+        bool hasDeleted = false;
         bool hasStatus = false;
         while (bookingSchemaQuery.next()) {
             const QString columnName = bookingSchemaQuery.value(1).toString();
             if (columnName == "cancelled") {
                 hasCancelled = true;
+            } else if (columnName == "deleted") {
+                hasDeleted = true;
             } else if (columnName == "status") {
                 hasStatus = true;
             }
@@ -138,6 +144,13 @@ bool DataManager::initDatabase(const std::string& dataPath) {
             QSqlQuery migrateQuery;
             if (!migrateQuery.exec("UPDATE Booking SET cancelled = CASE WHEN status = 'Canceled' OR status = 'Cancelled' THEN 1 ELSE 0 END")) {
                 qDebug() << "Error migrating booking cancellation state: " << migrateQuery.lastError().text();
+                return false;
+            }
+        }
+
+        if (!hasDeleted) {
+            if (!bookingSchemaQuery.exec("ALTER TABLE Booking ADD COLUMN deleted INTEGER NOT NULL DEFAULT 0")) {
+                qDebug() << "Error adding deleted column: " << bookingSchemaQuery.lastError().text();
                 return false;
             }
         }
@@ -245,7 +258,7 @@ bool DataManager::loadAll(HotelManager& manager, const std::string& dataPath) {
     // Rebuild the booking ID counter before restoring bookings so new IDs do not collide with persisted records
     Booking::initCounterFromDatabase();
 
-    if (query.exec("SELECT bookingId, customerId, roomNumber, checkInDate, checkOutDate, cancelled FROM Booking")) {
+    if (query.exec("SELECT bookingId, customerId, roomNumber, checkInDate, checkOutDate, cancelled, deleted FROM Booking")) {
         while (query.next()) {
             std::string bookingId = query.value(0).toString().toStdString();
             std::string custId = query.value(1).toString().toStdString();
@@ -253,8 +266,9 @@ bool DataManager::loadAll(HotelManager& manager, const std::string& dataPath) {
             std::string checkInStr = query.value(3).toString().toStdString();
             std::string checkOutStr = query.value(4).toString().toStdString();
             bool cancelled = query.value(5).toInt() == 1;
+            bool deleted = query.value(6).toInt() == 1;
 
-            if (!manager.restoreBookingFromDatabase(bookingId, custId, roomNum, checkInStr, checkOutStr, cancelled, errorMsg)) {
+            if (!manager.restoreBookingFromDatabase(bookingId, custId, roomNum, checkInStr, checkOutStr, cancelled, deleted, errorMsg)) {
                 qDebug() << "Skipped invalid booking during load:" << QString::fromStdString(errorMsg);
                 continue;
             }
@@ -272,7 +286,7 @@ bool DataManager::loadAll(HotelManager& manager, const std::string& dataPath) {
             std::string bookId = query.value(1).toString().toStdString();
             double tax = query.value(2).toDouble();
             int nightsCount = query.value(3).toInt();
-            std::string payDate = query.value(4).toString().toStdString();\
+            std::string payDate = query.value(4).toString().toStdString();
             bool cancelled = query.value(5).toInt() == 1;
 
             if (!manager.restoreInvoiceFromDatabase(invId, bookId, tax, nightsCount, payDate, cancelled, errorMsg)) {
@@ -291,7 +305,13 @@ bool DataManager::loadAll(HotelManager& manager, const std::string& dataPath) {
 // Modified: Removed const qualifier to allow weak_ptr locking mechanisms during data saving loops
 //           saveAll() refuses to persist invalid object graphs instead of silently dropping broken bookings or invoices.
 bool DataManager::saveAll(HotelManager& manager, const std::string& dataPath) {
-    if (!initDatabase(dataPath)) {
+    const std::string activePath = dataPath.empty() ? m_dataPath : dataPath;
+    if (activePath.empty()) {
+        qDebug() << "No database path available for saveAll.";
+        return false;
+    }
+
+    if (!initDatabase(activePath)) {
         return false;
     }
     if (!m_db.transaction())
@@ -374,7 +394,7 @@ bool DataManager::saveAll(HotelManager& manager, const std::string& dataPath) {
         }
     }
 
-    query.prepare("INSERT INTO Booking (bookingId, customerId, roomNumber, checkInDate, checkOutDate, cancelled) VALUES (?, ?, ?, ?, ?, ?)");
+    query.prepare("INSERT INTO Booking (bookingId, customerId, roomNumber, checkInDate, checkOutDate, cancelled, deleted) VALUES (?, ?, ?, ?, ?, ?, ?)");
     for (const auto& booking : manager.getBookings()) {
         if (!booking) {
             continue;
@@ -397,6 +417,7 @@ bool DataManager::saveAll(HotelManager& manager, const std::string& dataPath) {
         query.addBindValue(QString::fromStdString(booking->getCheckOutDate()));
 
         query.addBindValue(booking->isCancelled() ? 1 : 0);
+        query.addBindValue(booking->isDeleted() ? 1 : 0);
 
         if (!query.exec()) {
             m_db.rollback();
@@ -412,15 +433,8 @@ bool DataManager::saveAll(HotelManager& manager, const std::string& dataPath) {
             continue;
         }
 
-        auto booking = invoice->getBooking();
-        if (!booking) {
-            m_db.rollback();
-            qDebug() << "Invalid Invoice object graph: invoice references a missing booking.";
-            return false;
-        }
-
         query.addBindValue(QString::fromStdString(invoice->getInvoiceId()));
-        query.addBindValue(QString::fromStdString(booking->getBookingId()));
+        query.addBindValue(QString::fromStdString(invoice->getBookingId()));
         query.addBindValue(invoice->getTaxRate());
         query.addBindValue(invoice->getNights());
         query.addBindValue(QString::fromStdString(invoice->getPaymentDate()));
@@ -438,5 +452,77 @@ bool DataManager::saveAll(HotelManager& manager, const std::string& dataPath) {
         qDebug() << "Failed to commit transaction: " << m_db.lastError().text();
         return false;
     }
+    return true;
+}
+
+bool DataManager::invoiceExistsInCurrentDatabase(const std::string& invoiceId) const {
+    if (m_dataPath.empty() || invoiceId.empty()) {
+        return false;
+    }
+
+    const QString connectionName = QString("invoice_verify_%1").arg(reinterpret_cast<quintptr>(this));
+    bool exists = false;
+    {
+        QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE", connectionName);
+        db.setDatabaseName(QString::fromStdString(m_dataPath));
+
+        if (!db.open()) {
+            qDebug() << "Verification database open failed:" << db.lastError().text();
+            return false;
+        }
+
+        QSqlQuery query(db);
+        query.prepare("SELECT COUNT(*) FROM Invoice WHERE invoiceId = ?");
+        query.addBindValue(QString::fromStdString(invoiceId));
+        if (!query.exec() || !query.next()) {
+            qDebug() << "Verification query failed:" << query.lastError().text();
+            db.close();
+            return false;
+        }
+
+        exists = query.value(0).toInt() > 0;
+        db.close();
+    }
+
+    QSqlDatabase::removeDatabase(connectionName);
+    return exists;
+}
+
+bool DataManager::saveInvoiceImmediately(const Invoice& invoice) {
+    if (m_dataPath.empty()) {
+        qDebug() << "No active database path available for invoice save.";
+        return false;
+    }
+
+    if (!m_db.isOpen() && !initDatabase(m_dataPath)) {
+        return false;
+    }
+
+    QSqlQuery query(m_db);
+    if (!m_db.transaction()) {
+        qDebug() << "Failed to start invoice save transaction:" << m_db.lastError().text();
+        return false;
+    }
+
+    query.prepare("INSERT INTO Invoice (invoiceId, bookingId, taxRate, nights, paymentDate, cancelled) VALUES (?, ?, ?, ?, ?, ?)");
+    query.addBindValue(QString::fromStdString(invoice.getInvoiceId()));
+    query.addBindValue(QString::fromStdString(invoice.getBookingId()));
+    query.addBindValue(invoice.getTaxRate());
+    query.addBindValue(invoice.getNights());
+    query.addBindValue(QString::fromStdString(invoice.getPaymentDate()));
+    query.addBindValue(invoice.isCancelled() ? 1 : 0);
+
+    if (!query.exec()) {
+        m_db.rollback();
+        qDebug() << "Error saving invoice immediately:" << query.lastError().text();
+        return false;
+    }
+
+    if (!m_db.commit()) {
+        m_db.rollback();
+        qDebug() << "Failed to commit immediate invoice save:" << m_db.lastError().text();
+        return false;
+    }
+
     return true;
 }

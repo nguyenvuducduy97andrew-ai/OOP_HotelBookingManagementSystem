@@ -50,7 +50,8 @@ private:
         const std::string &roomNumber,
         const std::string &checkIn,
         const std::string &checkOut,
-        std::string &errorMessage
+        std::string &errorMessage,
+        const std::string &excludedBookingId = ""
         ) const;
     bool validateBookingInput(
         const std::string& customerId,
@@ -137,6 +138,15 @@ public:
         std::string& errorMessage
         );
 
+    bool updateBooking(
+        const std::string& bookingId,
+        const std::string& customerId,
+        const std::string& roomNumber,
+        const std::string& checkInDate,
+        const std::string& checkOutDate,
+        std::string& errorMessage
+        );
+
     // Modified: Added 'nights' and 'paymentDate' so the view layer can pass down computed duration and billing timestamps
     bool createInvoice(
         const std::string& invoiceId,
@@ -173,6 +183,7 @@ public:
         const std::string& checkInDate,
         const std::string& checkOutDate,
         bool cancelled,
+        bool deleted,
         std::string& errorMessage
     );
     bool restoreInvoiceFromDatabase(

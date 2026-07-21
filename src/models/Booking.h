@@ -15,6 +15,7 @@ private:
     std::string checkInDate;
     std::string checkOutDate;
     bool cancelled; 
+    bool deleted;
 
 public:
     Booking();
@@ -40,6 +41,9 @@ public:
 
     bool isCancelled() const;
     void setCancelled(bool cancelled);
+
+    bool isDeleted() const;
+    void setDeleted(bool deleted);
 
     bool isValid() const;  // Check if booking has valid (non-expired) customer and room
 };

@@ -11,9 +11,24 @@
 #include <QtMath>
 #include <QVBoxLayout>
 #include <QComboBox>
+#include <QFileDialog>
+#include <QMessageBox>
+#include <QPdfWriter>
+#include <QTextDocument>
+#include <QFont>
+#include <QPageSize>
+#include <QPageLayout>
+#include <QFileInfo>
 #include <vector>
 #include <map>
 #include <algorithm>
+
+namespace {
+QString escapeHtml(const QString& text)
+{
+    return text.toHtmlEscaped();
+}
+}
 
 #include <QtCharts/QChart>
 #include <QtCharts/QChartView>
@@ -46,6 +61,21 @@ DashboardWidget::DashboardWidget(HotelManager *manager, QWidget *parent)
 
     // 4. Kết nối tín hiệu combobox lọc thời gian
     connect(ui->cmbDateRange, &QComboBox::currentIndexChanged, this, &DashboardWidget::refreshDashboard);
+    connect(ui->btnExport, &QPushButton::clicked, this, &DashboardWidget::exportReport);
+
+    if (ui->horizontalLayout) {
+        ui->horizontalLayout->setAlignment(Qt::AlignTop);
+    }
+    if (ui->verticalLayoutTitle) {
+        ui->verticalLayoutTitle->setContentsMargins(0, 0, 0, 0);
+        ui->verticalLayoutTitle->setSpacing(2);
+        ui->verticalLayoutTitle->setAlignment(Qt::AlignTop);
+    }
+    if (ui->verticalLayout) {
+        ui->verticalLayout->setContentsMargins(0, 0, 0, 0);
+        ui->verticalLayout->setSpacing(6);
+        ui->verticalLayout->setAlignment(Qt::AlignTop);
+    }
 
     // ---- Phần mới: dựng nội dung dashboard ----
     populateData();
@@ -56,8 +86,8 @@ DashboardWidget::DashboardWidget(HotelManager *manager, QWidget *parent)
 
 void DashboardWidget::updateDateTime()
 {
-    QString currentTime = QDateTime::currentDateTime().toString("DD/MM/YYYY HH:MM:SS");
-    ui->lblDate->setText("Update " + currentTime);
+    QString currentTime = QDateTime::currentDateTime().toString("dd/MM/yyyy HH:mm:ss");
+    ui->lblDate->setText("Last updated: " + currentTime);
 }
 
 // =================================================================
@@ -520,9 +550,226 @@ void DashboardWidget::applyStyle()
 }
 
 void DashboardWidget::refreshDashboard() {
+    updateDateTime();
     populateData();
     buildTrendChart();
     buildBarChart();
+}
+
+QString DashboardWidget::buildReportHtml() const
+{
+    const QDateTime now = QDateTime::currentDateTime();
+    const QDate today = now.date();
+    const int rangeIndex = ui->cmbDateRange->currentIndex();
+
+    int totalRooms = 0;
+    int standardCount = 0;
+    int deluxeCount = 0;
+    int suiteCount = 0;
+    int occupiedRooms = 0;
+    int upcomingCount = 0;
+    int activeCount = 0;
+    int completedCount = 0;
+    int cancelledCount = 0;
+    int bookingsThisMonth = 0;
+    int bookingsThisYear = 0;
+
+    struct RoomEntry {
+        QString roomNumber;
+        QString type;
+        int bookingCount = 0;
+    };
+
+    std::map<std::string, int> roomBookingCounts;
+    if (m_manager) {
+        for (const auto& room : m_manager->getRooms()) {
+            if (!room || room->isArchived()) {
+                continue;
+            }
+
+            totalRooms++;
+            if (dynamic_cast<StandardRoom*>(room.get())) {
+                standardCount++;
+            } else if (dynamic_cast<DeluxeRoom*>(room.get())) {
+                deluxeCount++;
+            } else if (dynamic_cast<SuiteRoom*>(room.get())) {
+                suiteCount++;
+            }
+
+            roomBookingCounts[room->getRoomNumber()] = 0;
+        }
+
+        occupiedRooms = static_cast<int>(m_manager->getRoomsByOccupancy(true).size());
+
+        for (const auto& booking : m_manager->getBookings()) {
+            if (!booking) {
+                continue;
+            }
+
+            const BookingState state = m_manager->getBookingState(*booking);
+            switch (state) {
+            case BookingState::UPCOMING: upcomingCount++; break;
+            case BookingState::ACTIVE: activeCount++; break;
+            case BookingState::COMPLETED: completedCount++; break;
+            case BookingState::CANCELLED: cancelledCount++; break;
+            }
+
+            const QDate checkIn = QDate::fromString(QString::fromStdString(booking->getCheckInDate()), Qt::ISODate);
+            if (checkIn.isValid() && checkIn.month() == today.month() && checkIn.year() == today.year()) {
+                bookingsThisMonth++;
+            }
+            if (checkIn.isValid() && checkIn.year() == today.year()) {
+                bookingsThisYear++;
+            }
+
+            bool match = false;
+            if (rangeIndex == 0) {
+                match = (checkIn == today);
+            } else if (rangeIndex == 1) {
+                int checkInYear = 0;
+                int checkInWeek = checkIn.weekNumber(&checkInYear);
+                int todayYear = 0;
+                int todayWeek = today.weekNumber(&todayYear);
+                match = (checkInWeek == todayWeek && checkInYear == todayYear);
+            } else if (rangeIndex == 2) {
+                match = (checkIn.month() == today.month() && checkIn.year() == today.year());
+            } else if (rangeIndex == 3) {
+                match = (checkIn.year() == today.year());
+            }
+
+            if (match && !booking->isCancelled()) {
+                const auto room = booking->getRoom();
+                if (room && !room->isArchived()) {
+                    roomBookingCounts[room->getRoomNumber()]++;
+                }
+            }
+        }
+    }
+
+    double occupancyRate = 0.0;
+    if (totalRooms > 0) {
+        occupancyRate = (static_cast<double>(occupiedRooms) / static_cast<double>(totalRooms)) * 100.0;
+    }
+
+    std::vector<RoomEntry> popularRooms;
+    for (const auto& [roomNumber, count] : roomBookingCounts) {
+        QString typeLabel = "Standard";
+        if (m_manager) {
+            const auto room = m_manager->findRoomByNumber(roomNumber);
+            if (dynamic_cast<DeluxeRoom*>(room.get())) {
+                typeLabel = "Deluxe";
+            } else if (dynamic_cast<SuiteRoom*>(room.get())) {
+                typeLabel = "Suite";
+            }
+        }
+
+        popularRooms.push_back({QString::fromStdString(roomNumber), typeLabel, count});
+    }
+
+    std::sort(popularRooms.begin(), popularRooms.end(), [](const RoomEntry& a, const RoomEntry& b) {
+        if (a.bookingCount != b.bookingCount) {
+            return a.bookingCount > b.bookingCount;
+        }
+        return a.roomNumber < b.roomNumber;
+    });
+
+    QString rangeLabel = "today";
+    if (rangeIndex == 1) {
+        rangeLabel = "this week";
+    } else if (rangeIndex == 2) {
+        rangeLabel = "this month";
+    } else if (rangeIndex == 3) {
+        rangeLabel = "this year";
+    }
+
+    QString html;
+    QTextStream stream(&html);
+    stream << "<html><head><meta charset='utf-8'>"
+           << "<style>"
+            << "body{font-family:Segoe UI,Arial,sans-serif;color:#1f2937;padding:18px;font-size:13pt;line-height:1.45;}"
+            << "h1{color:#2B3674;margin:0 0 10px 0;font-size:28pt;}"
+            << "h2{color:#2B3674;margin:24px 0 12px 0;font-size:17pt;}"
+            << "table{border-collapse:collapse;width:100%;margin-top:12px;}"
+            << "th,td{border:1px solid #e5e7eb;padding:12px 14px;text-align:left;vertical-align:top;font-size:12.5pt;}"
+           << "th{background:#f8fafc;color:#2B3674;}"
+            << ".meta{color:#6b7280;margin-bottom:20px;font-size:11.5pt;}"
+            << ".summary{border-collapse:separate;border-spacing:12px 0;margin-top:12px;}"
+            << ".summary td{border:1px solid #e5e7eb;border-radius:12px;padding:18px 20px;background:#fff;width:25%;}"
+            << ".label{font-size:11pt;color:#94a3b8;margin-bottom:6px;}"
+            << ".value{font-size:24pt;font-weight:700;color:#2B3674;margin-top:6px;}"
+            << ".sectionNote{font-size:11pt;color:#94a3b8;margin-top:4px;}"
+           << "</style></head><body>";
+
+    stream << "<h1>Booking Management Dashboard Report</h1>";
+    stream << "<div class='meta'>Generated at: " << escapeHtml(now.toString("dd/MM/yyyy HH:mm:ss")) << "</div>";
+    stream << "<div class='sectionNote'>Selected range: " << escapeHtml(rangeLabel) << "</div>";
+
+    stream << "<table class='summary'><tr>";
+    stream << "<td><div class='label'>Total rooms</div><div class='value'>" << totalRooms << "</div></td>";
+    stream << "<td><div class='label'>Room types</div><div class='value'>" << ((standardCount > 0) + (deluxeCount > 0) + (suiteCount > 0)) << "</div></td>";
+    stream << "<td><div class='label'>Occupancy rate</div><div class='value'>" << qRound(occupancyRate) << "%</div></td>";
+    stream << "<td><div class='label'>Active bookings</div><div class='value'>" << activeCount << "</div></td>";
+    stream << "</tr></table>";
+
+    stream << "<h2>Booking status</h2>";
+    stream << "<table><tr><th>Upcoming</th><th>Active</th><th>Completed</th><th>Cancelled</th><th>This month</th><th>This year</th></tr>";
+    stream << "<tr><td>" << upcomingCount << "</td><td>" << activeCount << "</td><td>" << completedCount << "</td><td>" << cancelledCount << "</td><td>" << bookingsThisMonth << "</td><td>" << bookingsThisYear << "</td></tr></table>";
+
+    stream << "<h2>Rooms by type</h2>";
+    stream << "<table><tr><th>Standard</th><th>Deluxe</th><th>Suite</th></tr>";
+    stream << "<tr><td>" << standardCount << "</td><td>" << deluxeCount << "</td><td>" << suiteCount << "</td></tr></table>";
+
+    stream << "<h2>Popular rooms (" << escapeHtml(rangeLabel) << ")</h2>";
+    stream << "<table><tr><th>#</th><th>Room</th><th>Type</th><th>Bookings</th></tr>";
+    const int topCount = std::min(3, static_cast<int>(popularRooms.size()));
+    for (int i = 0; i < topCount; ++i) {
+        const auto& item = popularRooms[i];
+        stream << "<tr><td>" << (i + 1) << "</td><td>" << escapeHtml(item.roomNumber) << "</td><td>" << escapeHtml(item.type) << "</td><td>" << item.bookingCount << "</td></tr>";
+    }
+    stream << "</table>";
+
+    stream << "</body></html>";
+    return html;
+}
+
+void DashboardWidget::exportReport()
+{
+    const QString defaultName = QString("dashboard_report_%1.pdf").arg(QDateTime::currentDateTime().toString("yyyyMMdd_HHmmss"));
+    const QString filePath = QFileDialog::getSaveFileName(
+        this,
+        "Export Dashboard Report",
+        defaultName,
+        "PDF Report (*.pdf)"
+    );
+
+    if (filePath.isEmpty()) {
+        return;
+    }
+
+    QString finalPath = filePath;
+    if (!finalPath.endsWith(".pdf", Qt::CaseInsensitive)) {
+        finalPath += ".pdf";
+    }
+
+    QPdfWriter writer(finalPath);
+    QPageLayout pageLayout(QPageSize(QPageSize::A4), QPageLayout::Landscape, QMarginsF(10, 10, 10, 10));
+    writer.setPageLayout(pageLayout);
+    writer.setResolution(300);
+
+    QTextDocument document;
+    document.setDefaultFont(QFont("Segoe UI", 12));
+    document.setDocumentMargin(0);
+    document.setHtml(buildReportHtml());
+    document.setPageSize(QSizeF(pageLayout.paintRectPoints().size()));
+
+    document.print(&writer);
+
+    if (QFileInfo::exists(finalPath)) {
+        QMessageBox::information(this, "Export Report", "Dashboard report exported successfully as PDF.");
+        return;
+    }
+
+    QMessageBox::critical(this, "Export Error", "Cannot write the PDF report file.");
 }
 
 DashboardWidget::~DashboardWidget()

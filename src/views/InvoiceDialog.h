@@ -59,7 +59,7 @@ public:
 
         auto* textEdit = new QTextEdit(this);
         textEdit->setReadOnly(true);
-        textEdit->setPlainText(invoiceDetails);
+        textEdit->setHtml(invoiceDetails);
         layout->addWidget(textEdit);
 
         auto* btnConfirm = new QPushButton("Confirm & Complete", this);

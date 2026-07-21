@@ -4,6 +4,7 @@
 #include <QFormLayout>
 #include <QPushButton>
 #include <QMessageBox>
+#include <QLocale>
 
 RoomDialog::RoomDialog(QWidget *parent)
     : QDialog(parent), m_isEditMode(false) {
@@ -103,11 +104,15 @@ void RoomDialog::setupUI() {
     m_roomNumberEdit->setPlaceholderText("Example: 101, 302");
     formLayout->addRow("Room Number:", m_roomNumberEdit);
 
+    const QLocale moneyLocale(QLocale::Vietnamese, QLocale::Vietnam);
+
     m_basePriceSpin = new QDoubleSpinBox(this);
     m_basePriceSpin->setRange(0, 100000000);
     m_basePriceSpin->setSingleStep(50000);
     m_basePriceSpin->setSuffix(" đ");
     m_basePriceSpin->setDecimals(0);
+    m_basePriceSpin->setLocale(moneyLocale);
+    m_basePriceSpin->setGroupSeparatorShown(true);
     formLayout->addRow("Base Price (per night):", m_basePriceSpin);
 
     m_typeCombo = new QComboBox(this);
@@ -124,6 +129,8 @@ void RoomDialog::setupUI() {
     m_extraFeeSpin->setSingleStep(10000);
     m_extraFeeSpin->setSuffix(" đ");
     m_extraFeeSpin->setDecimals(0);
+    m_extraFeeSpin->setLocale(moneyLocale);
+    m_extraFeeSpin->setGroupSeparatorShown(true);
     formLayout->addRow(m_extraFeeLabel, m_extraFeeSpin);
 
     mainLayout->addLayout(formLayout);

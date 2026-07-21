@@ -45,7 +45,7 @@ main.cpp
   └─► DataManager::getInstance().saveAll()    // persist changes at shutdown
 ```
 
-This startup and shutdown flow reflects the current Qt desktop app architecture: persisted data is loaded before the main window is shown, the view layer operates against `HotelManager`, and changes are saved when the application exits.
+This startup and shutdown flow reflects the current Qt desktop app architecture: persisted data is loaded before the main window is shown, the view layer operates against `HotelManager`, and changes are saved when the application exits. The SQLite database file is stored in the project-level `data/` directory as `data/hotel_data.db`, keeping runtime state separate from the source tree and build artifacts.
 
 ## OOP Design (Models)
 

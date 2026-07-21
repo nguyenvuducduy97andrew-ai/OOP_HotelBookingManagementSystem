@@ -6,6 +6,7 @@
 #include <QFrame>
 #include <QString>
 #include <QColor>
+#include <QTimer>
 
 namespace Ui {
 class DashboardWidget;
@@ -28,6 +29,7 @@ private:
 private slots:
     // Hàm này sẽ được gọi mỗi khi timer hết thời gian
     void updateDateTime();
+    void exportReport();
 
 private:
     // Khai báo timer tại đây
@@ -38,6 +40,7 @@ private:
     void buildTrendChart();  // tạo QChartView và nhét vào trendChartHost
     void buildBarChart();    // tạo QChartView và nhét vào barChartHost
     void applyStyle();       // style theme sáng cho phần thân dashboard
+    QString buildReportHtml() const;
 };
 
 #endif

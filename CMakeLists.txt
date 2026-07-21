@@ -7,6 +7,8 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTORCC ON)
 
+file(MAKE_DIRECTORY "${CMAKE_SOURCE_DIR}/data")
+
 find_package(Qt6 REQUIRED COMPONENTS Core Sql Widgets Charts)
 
 file(GLOB SOURCE_FILES

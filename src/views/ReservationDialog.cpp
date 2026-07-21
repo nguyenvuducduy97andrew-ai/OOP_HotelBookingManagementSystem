@@ -167,7 +167,7 @@ void ReservationDialog::updateAvailableRooms() {
         // Check if overlaps with any active bookings
         bool isFree = true;
         for (const auto& booking : m_manager->getBookings()) {
-            if (!booking || booking->isCancelled()) continue;
+            if (!booking || booking->isCancelled() || booking->isDeleted()) continue;
             if (booking->getBookingId() == m_editingBookingId) continue;
             auto roomPtr = booking->getRoom();
             if (!roomPtr || roomPtr->getRoomNumber() != roomNum) continue;

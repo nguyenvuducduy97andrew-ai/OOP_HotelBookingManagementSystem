@@ -3,6 +3,7 @@
 #include "Customer.h"
 #include "Room.h"
 #include "Invoice.h"
+#include "DataManager.h"
 #include "CustomSuccessDialog.h"
 #include "CustomConfirmDialog.h"
 #include "InvoiceDialog.h"
@@ -13,6 +14,109 @@
 #include <QMessageBox>
 #include <QDate>
 #include <QDebug>
+#include <QFrame>
+#include <QLabel>
+#include <QApplication>
+#include <QGuiApplication>
+#include <QScreen>
+#include <QFontMetrics>
+#include <QEvent>
+
+namespace {
+class BookingActionTooltipFilter : public QObject
+{
+public:
+    BookingActionTooltipFilter(QWidget* anchor, QString tooltipText, QObject* parent = nullptr)
+        : QObject(parent), m_anchor(anchor), m_tooltipText(std::move(tooltipText))
+    {
+        m_popup = new QFrame(nullptr, Qt::ToolTip | Qt::FramelessWindowHint);
+        m_popup->setObjectName("bookingActionTooltipPopup");
+        m_popup->setStyleSheet(
+            "QFrame#bookingActionTooltipPopup {"
+            " background-color: #FFFFFF;"
+            " color: #000000;"
+            " border: 1px solid #FCA5A5;"
+            " border-radius: 6px;"
+            "}"
+        );
+
+        auto* layout = new QHBoxLayout(m_popup);
+        layout->setContentsMargins(10, 6, 10, 6);
+
+        auto* label = new QLabel(m_tooltipText, m_popup);
+        label->setStyleSheet("color: #000000; font-size: 12px; font-weight: 600;");
+        label->setWordWrap(false);
+        layout->addWidget(label);
+
+        const QFontMetrics metrics(label->font());
+        const int width = metrics.horizontalAdvance(m_tooltipText) + 24;
+        const int height = metrics.height() + 12;
+        m_popup->setFixedSize(width, height);
+    }
+
+    ~BookingActionTooltipFilter() override
+    {
+        if (m_popup) {
+            m_popup->hide();
+            m_popup->deleteLater();
+        }
+    }
+
+protected:
+    bool eventFilter(QObject* watched, QEvent* event) override
+    {
+        if (watched != m_anchor) {
+            return QObject::eventFilter(watched, event);
+        }
+
+        if (event->type() == QEvent::Enter) {
+            showPopup();
+        } else if (event->type() == QEvent::Leave || event->type() == QEvent::Hide) {
+            if (m_popup) {
+                m_popup->hide();
+            }
+        }
+
+        return QObject::eventFilter(watched, event);
+    }
+
+private:
+    void showPopup()
+    {
+        if (!m_anchor || !m_popup) {
+            return;
+        }
+
+        const QScreen* screen = QGuiApplication::screenAt(m_anchor->mapToGlobal(QPoint(0, 0)));
+        if (!screen) {
+            screen = QGuiApplication::primaryScreen();
+        }
+
+        const QRect available = screen ? screen->availableGeometry() : QRect();
+        QPoint target = m_anchor->mapToGlobal(QPoint((m_anchor->width() - m_popup->width()) / 2, m_anchor->height() + 6));
+
+        if (target.y() + m_popup->height() > available.bottom()) {
+            target.setY(m_anchor->mapToGlobal(QPoint(0, 0)).y() - m_popup->height() - 6);
+        }
+
+        if (available.isValid()) {
+            const int minX = available.left() + 6;
+            const int maxX = available.right() - m_popup->width() - 6;
+            if (target.x() < minX) target.setX(minX);
+            if (target.x() > maxX) target.setX(maxX);
+            if (target.y() < available.top() + 6) target.setY(available.top() + 6);
+        }
+
+        m_popup->move(target);
+        m_popup->show();
+        m_popup->raise();
+    }
+
+    QWidget* m_anchor;
+    QString m_tooltipText;
+    QFrame* m_popup = nullptr;
+};
+}
 
 ReservationsPageWidget::ReservationsPageWidget(HotelManager* manager, QWidget *parent)
     : QWidget(parent), m_manager(manager), m_statusFilterIndex(0) {
@@ -85,6 +189,14 @@ void setupReservationsPageStyle(QWidget* widget) {
             border: none;
             border-bottom: 2px solid #E9EDF7;
             padding: 8px;
+            font-size: 12px;
+        }
+        QToolTip {
+            background-color: #FEF2F2;
+            color: #000000;
+            border: 1px solid #FCA5A5;
+            border-radius: 6px;
+            padding: 6px 10px;
             font-size: 12px;
         }
     )");
@@ -165,13 +277,12 @@ void ReservationsPageWidget::setupUI() {
     }
     m_tableWidget->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Stretch); // Let Customer Name take remaining space
     m_tableWidget->horizontalHeader()->setSectionResizeMode(8, QHeaderView::Fixed);
-    m_tableWidget->setColumnWidth(8, 140); // 140px is perfect for compact square icon buttons
+    m_tableWidget->setColumnWidth(8, 160);
     m_tableWidget->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_tableWidget->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_tableWidget->setSelectionMode(QAbstractItemView::SingleSelection);
     m_tableWidget->verticalHeader()->setDefaultSectionSize(42);
     m_tableWidget->verticalHeader()->setVisible(false);
-
     mainLayout->addWidget(m_tableWidget);
 
     // Connects
@@ -225,7 +336,7 @@ void ReservationsPageWidget::refreshData() {
 
     int row = 0;
     for (const auto& booking : m_manager->getBookings()) {
-        if (!booking) continue;
+        if (!booking || booking->isDeleted()) continue;
 
         // Apply Status Filter
         BookingState state = m_manager->getBookingState(*booking);
@@ -289,14 +400,25 @@ void ReservationsPageWidget::refreshData() {
         auto* actionContainer = new QWidget(m_tableWidget);
         auto* actionLayout = new QHBoxLayout(actionContainer);
         actionLayout->setContentsMargins(0, 0, 0, 0);
-        actionLayout->setSpacing(4);
+        actionLayout->setSpacing(6);
         actionLayout->setAlignment(Qt::AlignCenter);
+
+        auto configureActionButton = [](QPushButton* button, const QString& tooltipText)
+        {
+            button->setToolTip(QString());
+            button->setCursor(Qt::PointingHandCursor);
+            button->setMinimumSize(30, 30);
+            button->setMaximumSize(30, 30);
+
+            auto* tooltipFilter = new BookingActionTooltipFilter(button, tooltipText, button);
+            button->installEventFilter(tooltipFilter);
+        };
 
         if (state == BookingState::ACTIVE) {
             // Check Out
             auto* checkOutBtn = new QPushButton("💳", actionContainer);
-            checkOutBtn->setToolTip("Check out & pay");
-            checkOutBtn->setStyleSheet("background-color: #ECFDF5; border: 1px solid #A7F3D0; border-radius: 6px; font-size: 14px; min-width: 28px; max-width: 28px; min-height: 28px; max-height: 28px; padding: 0px;");
+            configureActionButton(checkOutBtn, "Check out & pay");
+            checkOutBtn->setStyleSheet("background-color: #ECFDF5; color: #065F46; border: 1px solid #A7F3D0; border-radius: 8px; font-size: 14px; min-width: 30px; max-width: 30px; min-height: 30px; max-height: 30px; padding: 0px;");
             checkOutBtn->setProperty("bookingId", bId);
             checkOutBtn->setProperty("actionType", "checkout");
             connect(checkOutBtn, &QPushButton::clicked, this, &ReservationsPageWidget::onTableActionClicked);
@@ -304,8 +426,8 @@ void ReservationsPageWidget::refreshData() {
 
             // Edit
             auto* editBtn = new QPushButton("🖊", actionContainer);
-            editBtn->setToolTip("Edit reservation");
-            editBtn->setStyleSheet("background-color: #E9EFFF; border: 1px solid #C3D4FF; border-radius: 6px; font-size: 14px; min-width: 28px; max-width: 28px; min-height: 28px; max-height: 28px; padding: 0px;");
+            configureActionButton(editBtn, "Edit reservation");
+            editBtn->setStyleSheet("background-color: #E9EFFF; color: #1E40AF; border: 1px solid #C3D4FF; border-radius: 8px; font-size: 14px; min-width: 30px; max-width: 30px; min-height: 30px; max-height: 30px; padding: 0px;");
             editBtn->setProperty("bookingId", bId);
             editBtn->setProperty("actionType", "edit");
             connect(editBtn, &QPushButton::clicked, this, &ReservationsPageWidget::onTableActionClicked);
@@ -313,8 +435,8 @@ void ReservationsPageWidget::refreshData() {
 
             // Delete
             auto* deleteBtn = new QPushButton("🗑", actionContainer);
-            deleteBtn->setToolTip("Xóa đơn đặt phòng");
-            deleteBtn->setStyleSheet("background-color: #FEF2F2; border: 1px solid #FCA5A5; border-radius: 6px; font-size: 14px; min-width: 28px; max-width: 28px; min-height: 28px; max-height: 28px; padding: 0px;");
+            configureActionButton(deleteBtn, "Delete reservation");
+            deleteBtn->setStyleSheet("background-color: #FEF2F2; color: #991B1B; border: 1px solid #FCA5A5; border-radius: 8px; font-size: 14px; min-width: 30px; max-width: 30px; min-height: 30px; max-height: 30px; padding: 0px;");
             deleteBtn->setProperty("bookingId", bId);
             deleteBtn->setProperty("actionType", "delete");
             connect(deleteBtn, &QPushButton::clicked, this, &ReservationsPageWidget::onTableActionClicked);
@@ -323,8 +445,8 @@ void ReservationsPageWidget::refreshData() {
         } else if (state == BookingState::UPCOMING) {
             // Cancel
             auto* cancelBtn = new QPushButton("❌", actionContainer);
-            cancelBtn->setToolTip("Cancel reservation");
-            cancelBtn->setStyleSheet("background-color: #FFFBEB; border: 1px solid #FDE68A; border-radius: 6px; font-size: 13px; min-width: 28px; max-width: 28px; min-height: 28px; max-height: 28px; padding: 0px;");
+            configureActionButton(cancelBtn, "Cancel reservation");
+            cancelBtn->setStyleSheet("background-color: #FFFBEB; color: #92400E; border: 1px solid #FDE68A; border-radius: 8px; font-size: 14px; min-width: 30px; max-width: 30px; min-height: 30px; max-height: 30px; padding: 0px;");
             cancelBtn->setProperty("bookingId", bId);
             cancelBtn->setProperty("actionType", "cancel");
             connect(cancelBtn, &QPushButton::clicked, this, &ReservationsPageWidget::onTableActionClicked);
@@ -332,8 +454,8 @@ void ReservationsPageWidget::refreshData() {
 
             // Edit
             auto* editBtn = new QPushButton("🖊", actionContainer);
-            editBtn->setToolTip("Edit reservation");
-            editBtn->setStyleSheet("background-color: #E9EFFF; border: 1px solid #C3D4FF; border-radius: 6px; font-size: 14px; min-width: 28px; max-width: 28px; min-height: 28px; max-height: 28px; padding: 0px;");
+            configureActionButton(editBtn, "Edit reservation");
+            editBtn->setStyleSheet("background-color: #E9EFFF; color: #1E40AF; border: 1px solid #C3D4FF; border-radius: 8px; font-size: 14px; min-width: 30px; max-width: 30px; min-height: 30px; max-height: 30px; padding: 0px;");
             editBtn->setProperty("bookingId", bId);
             editBtn->setProperty("actionType", "edit");
             connect(editBtn, &QPushButton::clicked, this, &ReservationsPageWidget::onTableActionClicked);
@@ -341,8 +463,8 @@ void ReservationsPageWidget::refreshData() {
 
             // Delete
             auto* deleteBtn = new QPushButton("🗑", actionContainer);
-            deleteBtn->setToolTip("Xóa đơn đặt phòng");
-            deleteBtn->setStyleSheet("background-color: #FEF2F2; border: 1px solid #FCA5A5; border-radius: 6px; font-size: 14px; min-width: 28px; max-width: 28px; min-height: 28px; max-height: 28px; padding: 0px;");
+            configureActionButton(deleteBtn, "Delete reservation");
+            deleteBtn->setStyleSheet("background-color: #FEF2F2; color: #991B1B; border: 1px solid #FCA5A5; border-radius: 8px; font-size: 14px; min-width: 30px; max-width: 30px; min-height: 30px; max-height: 30px; padding: 0px;");
             deleteBtn->setProperty("bookingId", bId);
             deleteBtn->setProperty("actionType", "delete");
             connect(deleteBtn, &QPushButton::clicked, this, &ReservationsPageWidget::onTableActionClicked);
@@ -350,8 +472,8 @@ void ReservationsPageWidget::refreshData() {
         } else {
             // Completed / Cancelled -> only allow Delete
             auto* deleteBtn = new QPushButton("🗑", actionContainer);
-            deleteBtn->setToolTip("Delete booking history");
-            deleteBtn->setStyleSheet("background-color: #FEF2F2; border: 1px solid #FCA5A5; border-radius: 6px; font-size: 14px; min-width: 28px; max-width: 28px; min-height: 28px; max-height: 28px; padding: 0px;");
+            configureActionButton(deleteBtn, "Delete reservation");
+            deleteBtn->setStyleSheet("background-color: #FEF2F2; color: #991B1B; border: 1px solid #FCA5A5; border-radius: 8px; font-size: 14px; min-width: 30px; max-width: 30px; min-height: 30px; max-height: 30px; padding: 0px;");
             deleteBtn->setProperty("bookingId", bId);
             deleteBtn->setProperty("actionType", "delete");
             connect(deleteBtn, &QPushButton::clicked, this, &ReservationsPageWidget::onTableActionClicked);
@@ -372,7 +494,7 @@ void ReservationsPageWidget::onTableActionClicked() {
     QString actionType = btn->property("actionType").toString();
 
     auto booking = m_manager->findBookingById(bookingId);
-    if (!booking) return;
+    if (!booking || booking->isDeleted()) return;
 
     if (actionType == "cancel") {
         CustomConfirmDialog dialog("Confirm cancel reservation", QString("Do you want to cancel reservation %1?").arg(QString::fromStdString(bookingId)), false, this);
@@ -400,18 +522,22 @@ void ReservationsPageWidget::onTableActionClicked() {
         ReservationDialog dialog(m_manager, this);
         dialog.setEditBooking(bookingId);
         if (dialog.exec() == QDialog::Accepted) {
+            std::string errMsg;
             auto customer = booking->getCustomer();
             if (customer) {
                 customer->setName(dialog.getCustomerName().toStdString());
                 customer->setPhoneNumber(dialog.getCustomerPhone().toStdString());
             }
 
-            booking->setCheckInDate(dialog.getCheckInDate().toStdString());
-            booking->setCheckOutDate(dialog.getCheckOutDate().toStdString());
-            
-            auto room = m_manager->findRoomByNumber(dialog.getRoomNumber().toStdString());
-            if (room) {
-                booking->setRoom(room);
+            if (!m_manager->updateBooking(
+                    bookingId,
+                    dialog.getCustomerId().toStdString(),
+                    dialog.getRoomNumber().toStdString(),
+                    dialog.getCheckInDate().toStdString(),
+                    dialog.getCheckOutDate().toStdString(),
+                    errMsg)) {
+                QMessageBox::critical(this, "Update reservation error", QString::fromStdString(errMsg));
+                return;
             }
 
             refreshData();
@@ -423,9 +549,18 @@ void ReservationsPageWidget::onTableActionClicked() {
             // 1. Calculate nights
             QDate checkIn = QDate::fromString(QString::fromStdString(booking->getCheckInDate()), Qt::ISODate);
             QDate today = QDate::currentDate();
-            
-            // Adjust checkout date to today for early/on-time checkout
-            booking->setCheckOutDate(today.toString("yyyy-MM-dd").toStdString());
+            std::string todayStr = today.toString("yyyy-MM-dd").toStdString();
+
+            std::string errMsg;
+            if (!m_manager->completeBooking(bookingId, todayStr, errMsg)) {
+                QMessageBox::critical(this, "Check-out error", QString::fromStdString(errMsg));
+                return;
+            }
+
+            if (!DataManager::getInstance().saveAll(*m_manager)) {
+                QMessageBox::warning(this, "Save Warning", "Booking data could not be saved before creating the invoice.");
+                return;
+            }
 
             int nights = checkIn.daysTo(today);
             if (nights <= 0) nights = 1; // Minimum charge 1 night
@@ -433,15 +568,21 @@ void ReservationsPageWidget::onTableActionClicked() {
             // 2. Generate and create Invoice
             std::string invoiceId = m_manager->nextInvoiceId();
             double taxRate = 0.1; // 10% VAT
-            std::string todayStr = today.toString("YYYY-MM-DD").toStdString();
 
-            std::string errMsg;
             if (m_manager->createInvoice(invoiceId, bookingId, taxRate, nights, todayStr, errMsg)) {
                 auto invoice = m_manager->findInvoiceById(invoiceId);
                 if (invoice) {
                     std::string details = invoice->generateInvoiceDetails();
                     InvoiceDialog dialog(QString::fromStdString(details), this);
                     dialog.exec();
+                }
+
+                if (!invoice || !DataManager::getInstance().saveInvoiceImmediately(*invoice)) {
+                    QMessageBox::warning(this, "Save Warning", "Invoice was created, but the database could not be updated immediately.");
+                } else if (!DataManager::getInstance().invoiceExistsInCurrentDatabase(invoiceId)) {
+                    QMessageBox::warning(this, "Save Warning", "Invoice was created, but it was not found in the database file after saving.");
+                } else {
+                    CustomSuccessDialog("Invoice created and data saved successfully.", this).exec();
                 }
                 refreshData();
             } else {
