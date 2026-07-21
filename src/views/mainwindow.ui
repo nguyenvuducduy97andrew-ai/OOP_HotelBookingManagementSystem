@@ -207,6 +207,16 @@ QMessageBox QPushButton:hover {
               </widget>
              </item>
              <item>
+              <widget class="QPushButton" name="btnCustomer">
+               <property name="text">
+                <string>Customer</string>
+               </property>
+               <property name="sidebarBtn" stdset="0">
+                <bool>true</bool>
+               </property>
+              </widget>
+             </item>
+             <item>
               <widget class="QPushButton" name="btnRoom">
                <property name="text">
                 <string>Room</string>

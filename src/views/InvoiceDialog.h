@@ -62,7 +62,7 @@ public:
         textEdit->setHtml(invoiceDetails);
         layout->addWidget(textEdit);
 
-        auto* btnConfirm = new QPushButton("Confirm & Complete", this);
+        auto* btnConfirm = new QPushButton("Complete", this);
         btnConfirm->setObjectName("btnConfirm");
         connect(btnConfirm, &QPushButton::clicked, this, &QDialog::accept);
         layout->addWidget(btnConfirm, 0, Qt::AlignCenter);

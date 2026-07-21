@@ -11,6 +11,7 @@ class HotelManager;
 class DashboardWidget;
 class RoomPageWidget;
 class ReservationsPageWidget;
+class CustomerPageWidget;
 class RoomStatusPageWidget;
 
 class MainWindow : public QMainWindow
@@ -27,6 +28,7 @@ private:
     DashboardWidget* m_dashboardPage;
     RoomPageWidget* m_roomPage;
     ReservationsPageWidget* m_reservationsPage;
+    CustomerPageWidget* m_customerPage;
     RoomStatusPageWidget* m_roomStatusPage;
     void updateButtonStyle(QPushButton* activeBtn);
 };
