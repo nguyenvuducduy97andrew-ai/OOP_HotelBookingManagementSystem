@@ -23,41 +23,41 @@
     <bool>false</bool>
    </property>
    <layout class="QVBoxLayout" name="mainVerticalLayout">
-    <property name="leftMargin"><number>15</number></property>
-    <property name="topMargin"><number>15</number></property>
-    <property name="rightMargin"><number>15</number></property>
-    <property name="bottomMargin"><number>15</number></property>
-    <property name="spacing"><number>15</number></property>
+    <property name="leftMargin"><number>20</number></property>
+    <property name="topMargin"><number>20</number></property>
+    <property name="rightMargin"><number>20</number></property>
+    <property name="bottomMargin"><number>20</number></property>
+    <property name="spacing"><number>18</number></property>
     <item>
      <widget class="QFrame" name="HeaderFrame">
-   <property name="geometry">
-    <rect>
-     <x>15</x>
-     <y>15</y>
-     <width>1050</width>
-     <height>150</height>
-    </rect>
-   </property>
    <property name="sizePolicy">
     <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
      <horstretch>0</horstretch>
      <verstretch>0</verstretch>
     </sizepolicy>
    </property>
-   <property name="minimumSize">
-    <size>
-     <width>150</width>
-     <height>150</height>
-    </size>
-   </property>
    <layout class="QHBoxLayout" name="horizontalLayout">
+    <property name="leftMargin"><number>20</number></property>
+    <property name="topMargin"><number>16</number></property>
+    <property name="rightMargin"><number>20</number></property>
+    <property name="bottomMargin"><number>16</number></property>
+    <property name="spacing"><number>16</number></property>
     <item>
      <layout class="QVBoxLayout" name="verticalLayoutTitle">
       <property name="spacing">
-       <number>5</number>
+       <number>4</number>
+      </property>
+      <property name="leftMargin">
+       <number>0</number>
+      </property>
+      <property name="topMargin">
+       <number>0</number>
+      </property>
+      <property name="rightMargin">
+       <number>0</number>
       </property>
       <property name="bottomMargin">
-       <number>50</number>
+       <number>0</number>
       </property>
       <item>
        <widget class="QLabel" name="lblTitle">
@@ -67,15 +67,8 @@
           <verstretch>0</verstretch>
          </sizepolicy>
         </property>
-        <property name="styleSheet">
-         <string notr="true">QLabel#lblTitle {
-         color: #2B3674;
-         font-weight: bold;
-         font-size: 24px;}
-         </string>
-        </property>
         <property name="text">
-         <string>BOOKING MANAGEMENT DASHBOARD</string>
+         <string>Booking Management Dashboard</string>
         </property>
         <property name="wordWrap">
          <bool>false</bool>
@@ -102,42 +95,45 @@
       <property name="orientation">
        <enum>Qt::Orientation::Horizontal</enum>
       </property>
-      <property name="sizeType">
-       <enum>QSizePolicy::Policy::Minimum</enum>
-      </property>
       <property name="sizeHint" stdset="0">
        <size>
-        <width>0</width>
-        <height>0</height>
+        <width>40</width>
+        <height>20</height>
        </size>
       </property>
      </spacer>
     </item>
     <item>
-     <layout class="QVBoxLayout" name="verticalLayout">
+     <layout class="QHBoxLayout" name="verticalLayout">
       <property name="spacing">
-       <number>0</number>
+       <number>10</number>
       </property>
       <property name="leftMargin">
-       <number>100</number>
+       <number>0</number>
       </property>
       <property name="topMargin">
        <number>0</number>
       </property>
       <property name="rightMargin">
-       <number>200</number>
+       <number>0</number>
       </property>
       <property name="bottomMargin">
-       <number>80</number>
+       <number>0</number>
       </property>
       <item>
        <widget class="QComboBox" name="cmbDateRange">
         <property name="enabled">
          <bool>true</bool>
         </property>
+        <property name="minimumSize">
+         <size>
+          <width>140</width>
+          <height>36</height>
+         </size>
+        </property>
         <property name="sizePolicy">
-         <sizepolicy hsizetype="Preferred" vsizetype="Maximum">
-          <horstretch>70</horstretch>
+         <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+          <horstretch>0</horstretch>
           <verstretch>0</verstretch>
          </sizepolicy>
         </property>
@@ -344,23 +340,7 @@
          <enum>Qt::LayoutDirection::LeftToRight</enum>
         </property>
         <property name="styleSheet">
-         <string notr="true">QComboBox#cmbDateRange {
-        font: 10pt &quot;Segoe UI&quot;;
-    border: 1px solid #dcdcdc;
-    border-radius: 5px;
-    padding: 5px;
-    background-color: white;
-        color: rgb(43, 54, 166);
-}
-
-/* Style cho danh sách xổ xuống */
-QComboBox#cmbDateRange QAbstractItemView {
-    border: 1px solid #dcdcdc;
-    background-color: white; /* Màu nền của danh sách */
-        color: rgb(43, 54, 166);
-        selection-background-color: rgb(43, 54, 166);
-        selection-color: rgb(255, 255, 255);
-}</string>
+         <string notr="true"/>
         </property>
         <item>
          <property name="text">
@@ -386,23 +366,18 @@ QComboBox#cmbDateRange QAbstractItemView {
       </item>
       <item>
        <widget class="QPushButton" name="btnExport">
+        <property name="minimumSize">
+         <size>
+          <width>140</width>
+          <height>36</height>
+         </size>
+        </property>
         <property name="cursor"><cursorShape>PointingHandCursor</cursorShape></property>
         <property name="styleSheet">
-         <string notr="true">QPushButton#btnExport {
-    background-color: #005BFE;
-    color: #FFFFFF;
-    border: none;
-    border-radius: 5px;
-    padding: 6px 14px;
-    font-size: 10pt;
-    font-weight: 600;
-}
-QPushButton#btnExport:hover {
-    background-color: #2B7BFF;
-}</string>
+         <string notr="true"/>
         </property>
         <property name="text">
-         <string>⭳ Export Report</string>
+         <string>Export Report</string>
         </property>
        </widget>
       </item>
@@ -417,38 +392,82 @@ QPushButton#btnExport:hover {
           đã được đặt), bọc trong QScrollArea để không bị tràn/cắt nếu nội dung dài
           hơn vùng hiển thị. -->
      <widget class="QScrollArea" name="bodyScrollArea">
-   <property name="geometry">
-    <rect>
-     <x>15</x>
-     <y>180</y>
-     <width>1092</width>
-     <height>516</height>
-    </rect>
+   <property name="sizePolicy">
+    <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+     <horstretch>1</horstretch>
+     <verstretch>1</verstretch>
+    </sizepolicy>
    </property>
    <property name="frameShape"><enum>QFrame::Shape::NoFrame</enum></property>
+   <property name="horizontalScrollBarPolicy"><enum>Qt::ScrollBarPolicy::ScrollBarAlwaysOff</enum></property>
    <property name="widgetResizable"><bool>true</bool></property>
    <widget class="QWidget" name="scrollAreaWidgetContents">
-    <property name="geometry"><rect><x>0</x><y>0</y><width>1092</width><height>516</height></rect></property>
     <layout class="QVBoxLayout" name="bodyLayout">
      <property name="leftMargin"><number>0</number></property>
      <property name="topMargin"><number>0</number></property>
-     <property name="rightMargin"><number>4</number></property>
-     <property name="bottomMargin"><number>4</number></property>
-     <property name="spacing"><number>14</number></property>
+     <property name="rightMargin"><number>0</number></property>
+     <property name="bottomMargin"><number>0</number></property>
+     <property name="spacing"><number>16</number></property>
 
      <!-- Hàng 4 thẻ to -->
      <item>
       <widget class="QWidget" name="statsRowWidget" native="true">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
        <layout class="QHBoxLayout" name="statsRowLayout">
         <property name="leftMargin"><number>0</number></property>
         <property name="topMargin"><number>0</number></property>
         <property name="rightMargin"><number>0</number></property>
         <property name="bottomMargin"><number>0</number></property>
-        <property name="spacing"><number>14</number></property>
-        <item><widget class="StatCard" name="statCard1" native="true"/></item>
-        <item><widget class="StatCard" name="statCard2" native="true"/></item>
-        <item><widget class="StatCard" name="statCard3" native="true"/></item>
-        <item><widget class="StatCard" name="statCard4" native="true"/></item>
+        <property name="spacing"><number>16</number></property>
+        <item>
+         <property name="stretch"><number>1</number></property>
+         <widget class="StatCard" name="statCard1" native="true">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
+            <horstretch>1</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <property name="stretch"><number>1</number></property>
+         <widget class="StatCard" name="statCard2" native="true">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
+            <horstretch>1</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <property name="stretch"><number>1</number></property>
+         <widget class="StatCard" name="statCard3" native="true">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
+            <horstretch>1</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <property name="stretch"><number>1</number></property>
+         <widget class="StatCard" name="statCard4" native="true">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
+            <horstretch>1</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+         </widget>
+        </item>
        </layout>
       </widget>
      </item>
@@ -456,16 +475,62 @@ QPushButton#btnExport:hover {
      <!-- Hàng 4 thẻ nhỏ -->
      <item>
       <widget class="QWidget" name="miniRowWidget" native="true">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
        <layout class="QHBoxLayout" name="miniRowLayout">
         <property name="leftMargin"><number>0</number></property>
         <property name="topMargin"><number>0</number></property>
         <property name="rightMargin"><number>0</number></property>
         <property name="bottomMargin"><number>0</number></property>
-        <property name="spacing"><number>14</number></property>
-        <item><widget class="MiniCard" name="miniCard1" native="true"/></item>
-        <item><widget class="MiniCard" name="miniCard2" native="true"/></item>
-        <item><widget class="MiniCard" name="miniCard3" native="true"/></item>
-        <item><widget class="MiniCard" name="miniCard4" native="true"/></item>
+        <property name="spacing"><number>16</number></property>
+        <item>
+         <property name="stretch"><number>1</number></property>
+         <widget class="MiniCard" name="miniCard1" native="true">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
+            <horstretch>1</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <property name="stretch"><number>1</number></property>
+         <widget class="MiniCard" name="miniCard2" native="true">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
+            <horstretch>1</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <property name="stretch"><number>1</number></property>
+         <widget class="MiniCard" name="miniCard3" native="true">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
+            <horstretch>1</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <property name="stretch"><number>1</number></property>
+         <widget class="MiniCard" name="miniCard4" native="true">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
+            <horstretch>1</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+         </widget>
+        </item>
        </layout>
       </widget>
      </item>
@@ -475,6 +540,11 @@ QPushButton#btnExport:hover {
       <widget class="QFrame" name="trendCard">
        <property name="objectName"><string notr="true">ChartCard</string></property>
        <layout class="QVBoxLayout" name="trendCardLayout">
+        <property name="leftMargin"><number>18</number></property>
+        <property name="topMargin"><number>16</number></property>
+        <property name="rightMargin"><number>18</number></property>
+        <property name="bottomMargin"><number>14</number></property>
+        <property name="spacing"><number>10</number></property>
         <item>
          <widget class="QLabel" name="trendTitleLabel">
           <property name="objectName"><string notr="true">ChartTitle</string></property>
@@ -496,9 +566,15 @@ QPushButton#btnExport:hover {
        <property name="spacing"><number>14</number></property>
 
        <item>
+        <property name="stretch"><number>3</number></property>
         <widget class="QFrame" name="barCard">
          <property name="objectName"><string notr="true">ChartCard</string></property>
          <layout class="QVBoxLayout" name="barCardLayout">
+          <property name="leftMargin"><number>18</number></property>
+          <property name="topMargin"><number>16</number></property>
+          <property name="rightMargin"><number>18</number></property>
+          <property name="bottomMargin"><number>14</number></property>
+          <property name="spacing"><number>10</number></property>
           <item>
            <widget class="QLabel" name="barTitleLabel">
             <property name="objectName"><string notr="true">ChartTitle</string></property>
@@ -515,9 +591,14 @@ QPushButton#btnExport:hover {
        </item>
 
        <item>
+        <property name="stretch"><number>2</number></property>
         <widget class="QFrame" name="roomListCard">
          <property name="objectName"><string notr="true">ChartCard</string></property>
          <layout class="QVBoxLayout" name="roomListCardLayout">
+          <property name="leftMargin"><number>18</number></property>
+          <property name="topMargin"><number>16</number></property>
+          <property name="rightMargin"><number>18</number></property>
+          <property name="bottomMargin"><number>14</number></property>
           <property name="spacing"><number>8</number></property>
           <item>
            <widget class="QLabel" name="roomListTitleLabel">

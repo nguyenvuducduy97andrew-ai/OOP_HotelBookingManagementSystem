@@ -7,6 +7,7 @@
 #include <QString>
 #include <QColor>
 #include <QTimer>
+#include <QTextBrowser>
 
 namespace Ui {
 class DashboardWidget;
@@ -40,7 +41,11 @@ private:
     void buildTrendChart();  // tạo QChartView và nhét vào trendChartHost
     void buildBarChart();    // tạo QChartView và nhét vào barChartHost
     void applyStyle();       // style theme sáng cho phần thân dashboard
+    void refreshDeletedBookingsView();
+    QString buildDeletedBookingsAuditHtml() const;
     QString buildReportHtml() const;
+
+    QTextBrowser *deletedBookingsBrowser;
 };
 
 #endif

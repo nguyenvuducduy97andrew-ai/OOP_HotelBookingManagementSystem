@@ -8,11 +8,11 @@
 StatCard::StatCard(QWidget *parent)
     : QFrame(parent)
 {
-    setMinimumHeight(90);
+    setMinimumHeight(108);
 
     auto *layout = new QVBoxLayout(this);
-    layout->setContentsMargins(16, 14, 16, 14);
-    layout->setSpacing(5);
+    layout->setContentsMargins(18, 16, 18, 14);
+    layout->setSpacing(6);
 
     m_titleLabel = new QLabel(this);
     m_titleLabel->setObjectName("CardTitle");
@@ -52,14 +52,14 @@ void StatCard::setData(const QString &title, const QString &value,
 MiniCard::MiniCard(QWidget *parent)
     : QFrame(parent)
 {
-    setMinimumHeight(58);
+    setMinimumHeight(72);
 
     auto *outer = new QHBoxLayout(this);
-    outer->setContentsMargins(14, 8, 14, 8);
-    outer->setSpacing(12);
+    outer->setContentsMargins(16, 12, 16, 12);
+    outer->setSpacing(14);
 
     m_iconLabel = new QLabel(this);
-    m_iconLabel->setFixedSize(34, 34);
+    m_iconLabel->setFixedSize(40, 40);
     m_iconLabel->setAlignment(Qt::AlignCenter);
 
     auto *textCol = new QVBoxLayout();
@@ -81,7 +81,7 @@ void MiniCard::setData(const QString &iconText, const QColor &iconBg,
 {
     m_iconLabel->setText(iconText);
     m_iconLabel->setStyleSheet(QString(
-                                   "background-color: %1; border-radius: 8px; font-size: 14px;")
+                                   "background-color: %1; border-radius: 10px; font-size: 16px; color: #1B2559;")
                                    .arg(iconBg.name()));
     m_textLabel->setText(label);
     m_valueLabel->setText(value);
@@ -94,7 +94,8 @@ RoomListItem::RoomListItem(QWidget *parent)
     setObjectName("RoomListItem");
 
     auto *outer = new QHBoxLayout(this);
-    outer->setContentsMargins(12, 8, 12, 8);
+    outer->setContentsMargins(14, 10, 14, 10);
+    outer->setSpacing(12);
 
     auto *textCol = new QVBoxLayout();
     textCol->setSpacing(2);
@@ -120,7 +121,7 @@ void RoomListItem::setData(const QString &roomTitle, const QString &roomSubtitle
     m_subtitleLabel->setText(roomSubtitle);
     m_badgeLabel->setText(badgeText);
     m_badgeLabel->setStyleSheet(QString(
-                                    "background-color: %1; color: white; border-radius: 10px;"
-                                    "padding: 3px 10px; font-size: 12px; font-weight: 600;")
+                                    "background-color: %1; color: white; border-radius: 12px;"
+                                    "padding: 4px 12px; font-size: 11px; font-weight: 600;")
                                     .arg(badgeColor.name()));
 }

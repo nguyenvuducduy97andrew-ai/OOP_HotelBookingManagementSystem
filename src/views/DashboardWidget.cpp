@@ -15,12 +15,15 @@
 #include <QMessageBox>
 #include <QPdfWriter>
 #include <QTextDocument>
+#include <QTextBrowser>
+#include <QTextStream>
 #include <QFont>
 #include <QPageSize>
 #include <QPageLayout>
 #include <QFileInfo>
 #include <vector>
 #include <map>
+#include <unordered_set>
 #include <algorithm>
 
 namespace {
@@ -28,6 +31,21 @@ QString escapeHtml(const QString& text)
 {
     return text.toHtmlEscaped();
 }
+
+struct CustomerAbuseRow
+{
+    QString customerId;
+    QString customerName;
+    QString phoneNumber;
+    int totalBookings = 0;
+    int cancelledBookings = 0;
+    int deletedBookings = 0;
+
+    int abuseScore() const
+    {
+        return cancelledBookings + deletedBookings;
+    }
+};
 }
 
 #include <QtCharts/QChart>
@@ -44,6 +62,7 @@ DashboardWidget::DashboardWidget(HotelManager *manager, QWidget *parent)
     : QWidget(parent)
     , ui(new Ui::DashboardWidget)
     , m_manager(manager)
+    , deletedBookingsBrowser(nullptr)
 {
     ui->setupUi(this);
 
@@ -64,30 +83,60 @@ DashboardWidget::DashboardWidget(HotelManager *manager, QWidget *parent)
     connect(ui->btnExport, &QPushButton::clicked, this, &DashboardWidget::exportReport);
 
     if (ui->horizontalLayout) {
-        ui->horizontalLayout->setAlignment(Qt::AlignTop);
+        ui->horizontalLayout->setAlignment(Qt::AlignVCenter);
     }
     if (ui->verticalLayoutTitle) {
         ui->verticalLayoutTitle->setContentsMargins(0, 0, 0, 0);
-        ui->verticalLayoutTitle->setSpacing(2);
-        ui->verticalLayoutTitle->setAlignment(Qt::AlignTop);
+        ui->verticalLayoutTitle->setSpacing(4);
+        ui->verticalLayoutTitle->setAlignment(Qt::AlignTop | Qt::AlignLeft);
     }
     if (ui->verticalLayout) {
         ui->verticalLayout->setContentsMargins(0, 0, 0, 0);
-        ui->verticalLayout->setSpacing(6);
-        ui->verticalLayout->setAlignment(Qt::AlignTop);
+        ui->verticalLayout->setSpacing(10);
+        ui->verticalLayout->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    }
+    if (ui->mainVerticalLayout) {
+        ui->mainVerticalLayout->setStretch(1, 1);
+    }
+    if (ui->bodyScrollArea) {
+        ui->bodyScrollArea->setStyleSheet("QScrollArea { background: transparent; border: none; }");
     }
 
     // ---- Phần mới: dựng nội dung dashboard ----
     populateData();
     buildTrendChart();
     buildBarChart();
+    refreshDeletedBookingsView();
     applyStyle();
+
+    auto *auditFrame = new QFrame(ui->scrollAreaWidgetContents);
+    auditFrame->setObjectName("AuditCard");
+    auto *auditLayout = new QVBoxLayout(auditFrame);
+    auditLayout->setContentsMargins(18, 16, 18, 16);
+    auditLayout->setSpacing(12);
+
+    auto *auditTitle = new QLabel("Deleted Bookings History & Abuse Watchlist", auditFrame);
+    auditTitle->setObjectName("SectionTitle");
+
+    deletedBookingsBrowser = new QTextBrowser(auditFrame);
+    deletedBookingsBrowser->setObjectName("AuditBrowser");
+    deletedBookingsBrowser->setOpenExternalLinks(false);
+    deletedBookingsBrowser->setFrameShape(QFrame::NoFrame);
+    deletedBookingsBrowser->setMinimumHeight(220);
+    deletedBookingsBrowser->setHtml(buildDeletedBookingsAuditHtml());
+
+    auditLayout->addWidget(auditTitle);
+    auditLayout->addWidget(deletedBookingsBrowser);
+
+    if (ui->bodyLayout) {
+        ui->bodyLayout->addWidget(auditFrame);
+    }
 }
 
 void DashboardWidget::updateDateTime()
 {
-    QString currentTime = QDateTime::currentDateTime().toString("dd/MM/yyyy HH:mm:ss");
-    ui->lblDate->setText("Current: " + currentTime);
+    const QString currentTime = QDateTime::currentDateTime().toString("dddd, dd/MM/yyyy · HH:mm:ss");
+    ui->lblDate->setText(currentTime);
 }
 
 // =================================================================
@@ -98,22 +147,33 @@ void DashboardWidget::populateData()
         ui->statCard2->setData("Occupancy rate", "0%", "No data available", true);
         ui->statCard3->setData("This month reservation", "0", "No data available", true);
         ui->statCard4->setData("This year reservations", "0", "No data available", true);
-        ui->miniCard1->setData("📅", QColor("#E9EFFF"), "Upcoming", "0");
-        ui->miniCard2->setData("🛏", QColor("#E9EFFF"), "Active", "0");
-        ui->miniCard3->setData("✔", QColor("#E9EFFF"), "Completed", "0");
+        ui->miniCard1->setData("📅", QColor("#E8F0FF"), "Upcoming", "0");
+        ui->miniCard2->setData("🛏", QColor("#E6FAF4"), "Active", "0");
+        ui->miniCard3->setData("✔", QColor("#F0EBFF"), "Completed", "0");
         ui->miniCard4->setData("✖", QColor("#FDE8E6"), "Cancelled", "0");
         return;
     }
 
-    // 1. StatCard 1: Tổng số phòng & số loại phòng
-    int totalRooms = m_manager->getRooms().size();
+    int totalRooms = 0;
     int standardCount = 0;
     int deluxeCount = 0;
     int suiteCount = 0;
-    // Fixed-modified: Replace room subclass checks with metadata lookups for type counts.
-    for (const auto& r : m_manager->getRooms()) {
-        if (!r) continue;
-        const std::string typeName = r->getRoomTypeName();
+    int occupiedRooms = 0;
+    int bookingsThisMonth = 0;
+    int bookingsThisYear = 0;
+    int upcomingCount = 0;
+    int activeCount = 0;
+    int completedCount = 0;
+    int cancelledCount = 0;
+    const QDate statsToday = QDate::currentDate();
+
+    for (const auto& room : m_manager->getRooms()) {
+        if (!room || room->isArchived()) {
+            continue;
+        }
+
+        totalRooms++;
+        const std::string typeName = room->getRoomTypeName();
         if (typeName == "Standard") {
             standardCount++;
         } else if (typeName == "Deluxe") {
@@ -122,64 +182,59 @@ void DashboardWidget::populateData()
             suiteCount++;
         }
     }
-    int roomTypes = 0;
-    if (standardCount > 0) roomTypes++;
-    if (deluxeCount > 0) roomTypes++;
-    if (suiteCount > 0) roomTypes++;
-    ui->statCard1->setData("Total Room Number", QString::number(totalRooms), QString::number(roomTypes) + " room types", true);
 
-    // 2. StatCard 2: Occupancy rate
-    double occupiedRooms = m_manager->getRoomsByOccupancy(true).size();
-    double occupancyRate = 0.0;
-    if (totalRooms > 0) {
-        occupancyRate = (occupiedRooms / totalRooms) * 100.0;
-    }
-    ui->statCard2->setData("Occupancy rate", QString::number(qRound(occupancyRate)) + "%", 
-                           "Currently occupied " + QString::number(occupiedRooms) + "/" + QString::number(totalRooms) + " rooms", true);
-
-    // 3. StatCard 3: Đặt phòng tháng này
-    QDate today = QDate::currentDate();
-    int bookingsThisMonth = 0;
-    for (const auto& b : m_manager->getBookings()) {
-        if (!b) continue;
-        QDate checkIn = QDate::fromString(QString::fromStdString(b->getCheckInDate()), Qt::ISODate);
-        if (checkIn.isValid() && checkIn.month() == today.month() && checkIn.year() == today.year()) {
-            bookingsThisMonth++;
+    std::unordered_set<std::string> occupiedRoomNumbers;
+    for (const auto& booking : m_manager->getBookings()) {
+        if (!booking || booking->isDeleted()) {
+            continue;
         }
-    }
-    ui->statCard3->setData("This month's reservations", QString::number(bookingsThisMonth), 
-                           "Total reservations for " + QString::number(today.month()), true);
 
-    // 4. StatCard 4: Đặt phòng năm nay
-    int bookingsThisYear = 0;
-    for (const auto& b : m_manager->getBookings()) {
-        if (!b) continue;
-        QDate checkIn = QDate::fromString(QString::fromStdString(b->getCheckInDate()), Qt::ISODate);
-        if (checkIn.isValid() && checkIn.year() == today.year()) {
-            bookingsThisYear++;
-        }
-    }
-    ui->statCard4->setData("This year reservations", QString::number(bookingsThisYear), 
-                           "Total reservations for " + QString::number(today.year()), true);
-
-    // 5. MiniCards: Trạng thái phòng (upcoming, active, completed, cancelled)
-    int upcomingCount = 0;
-    int activeCount = 0;
-    int completedCount = 0;
-    int cancelledCount = 0;
-    for (const auto& b : m_manager->getBookings()) {
-        if (!b) continue;
-        BookingState state = m_manager->getBookingState(*b);
+        const BookingState state = m_manager->getBookingState(*booking);
         switch (state) {
         case BookingState::UPCOMING: upcomingCount++; break;
         case BookingState::ACTIVE: activeCount++; break;
         case BookingState::COMPLETED: completedCount++; break;
         case BookingState::CANCELLED: cancelledCount++; break;
         }
+
+        const QDate checkIn = QDate::fromString(QString::fromStdString(booking->getCheckInDate()), Qt::ISODate);
+        if (!checkIn.isValid()) {
+            continue;
+        }
+
+        if (checkIn.month() == statsToday.month() && checkIn.year() == statsToday.year()) {
+            bookingsThisMonth++;
+        }
+        if (checkIn.year() == statsToday.year()) {
+            bookingsThisYear++;
+        }
+
+        if (state == BookingState::ACTIVE) {
+            const auto room = booking->getRoom();
+            if (room && !room->isArchived()) {
+                occupiedRoomNumbers.insert(room->getRoomNumber());
+            }
+        }
     }
-    ui->miniCard1->setData("📅", QColor("#E9EFFF"), "Upcoming", QString::number(upcomingCount));
-    ui->miniCard2->setData("🛏", QColor("#E9EFFF"), "Active", QString::number(activeCount));
-    ui->miniCard3->setData("✔", QColor("#E9EFFF"), "Completed", QString::number(completedCount));
+
+    occupiedRooms = static_cast<int>(occupiedRoomNumbers.size());
+
+    const int roomTypes = (standardCount > 0) + (deluxeCount > 0) + (suiteCount > 0);
+    ui->statCard1->setData("Total Room Number", QString::number(totalRooms), QString::number(roomTypes) + " room types", true);
+
+    double occupancyRate = 0.0;
+    if (totalRooms > 0) {
+        occupancyRate = (static_cast<double>(occupiedRooms) / static_cast<double>(totalRooms)) * 100.0;
+    }
+    ui->statCard2->setData("Occupancy rate", QString::number(qRound(occupancyRate)) + "%",
+                           "Currently occupied " + QString::number(occupiedRooms) + "/" + QString::number(totalRooms) + " rooms", true);
+    ui->statCard3->setData("This month's reservations", QString::number(bookingsThisMonth),
+                           "Total reservations for " + QString::number(statsToday.month()), true);
+    ui->statCard4->setData("This year reservations", QString::number(bookingsThisYear),
+                           "Total reservations for " + QString::number(statsToday.year()), true);
+    ui->miniCard1->setData("📅", QColor("#E8F0FF"), "Upcoming", QString::number(upcomingCount));
+    ui->miniCard2->setData("🛏", QColor("#E6FAF4"), "Active", QString::number(activeCount));
+    ui->miniCard3->setData("✔", QColor("#F0EBFF"), "Completed", QString::number(completedCount));
     ui->miniCard4->setData("✖", QColor("#FDE8E6"), "Cancelled", QString::number(cancelledCount));
 
     // ---- danh sách phòng nổi bật ----
@@ -201,24 +256,24 @@ void DashboardWidget::populateData()
     }
 
     for (const auto& b : m_manager->getBookings()) {
-        if (!b || b->isCancelled()) continue;
+        if (!b || b->isCancelled() || b->isDeleted()) continue;
         
         QDate checkIn = QDate::fromString(QString::fromStdString(b->getCheckInDate()), Qt::ISODate);
         if (!checkIn.isValid()) continue;
         
         bool match = false;
         if (rangeIndex == 0) { // Hôm nay
-            match = (checkIn == today);
+            match = (checkIn == statsToday);
         } else if (rangeIndex == 1) { // Tuần này
             int checkInYear = 0;
             int checkInWeek = checkIn.weekNumber(&checkInYear);
             int todayYear = 0;
-            int todayWeek = today.weekNumber(&todayYear);
+            int todayWeek = statsToday.weekNumber(&todayYear);
             match = (checkInWeek == todayWeek && checkInYear == todayYear);
         } else if (rangeIndex == 2) { // Tháng này
-            match = (checkIn.month() == today.month() && checkIn.year() == today.year());
+            match = (checkIn.month() == statsToday.month() && checkIn.year() == statsToday.year());
         } else if (rangeIndex == 3) { // Năm nay
-            match = (checkIn.year() == today.year());
+            match = (checkIn.year() == statsToday.year());
         }
         
         if (match) {
@@ -310,7 +365,7 @@ void DashboardWidget::buildTrendChart()
 
     if (m_manager) {
         for (const auto& b : m_manager->getBookings()) {
-            if (!b) continue;
+            if (!b || b->isDeleted()) continue;
             QDate checkIn = QDate::fromString(QString::fromStdString(b->getCheckInDate()), Qt::ISODate);
             if (checkIn.isValid()) {
                 int m = checkIn.month() - 1; // 0-11
@@ -406,7 +461,7 @@ void DashboardWidget::buildBarChart()
 
     if (m_manager) {
         for (const auto& b : m_manager->getBookings()) {
-            if (!b) continue;
+            if (!b || b->isDeleted()) continue;
             auto room = b->getRoom();
             if (!room) continue;
             if (dynamic_cast<StandardRoom*>(room.get())) {
@@ -480,29 +535,90 @@ void DashboardWidget::buildBarChart()
 // =================================================================
 void DashboardWidget::applyStyle()
 {
-    // Chỉ style phần thân mới thêm — không đụng lblTitle (đã có stylesheet
-    // riêng trong .ui) hay cmbDateRange (đã có stylesheet riêng trong .ui).
     setStyleSheet(R"(
         DashboardWidget {
+            background-color: #F4F7FE;
+        }
+        #HeaderFrame {
             background-color: #FFFFFF;
+            border: 1px solid #E2E8F0;
+            border-radius: 16px;
+        }
+        QLabel#lblTitle {
+            font-size: 22px;
+            font-weight: 700;
+            color: #1B2559;
+            letter-spacing: -0.3px;
         }
         QLabel#lblDate {
             font-size: 12px;
-            color: #A3AED0;
+            color: #8F9BB7;
         }
-        StatCard, MiniCard, #ChartCard {
+        QComboBox#cmbDateRange {
+            font: 11pt "Segoe UI";
+            border: 1px solid #E2E8F0;
+            border-radius: 10px;
+            padding: 6px 12px;
             background-color: #FFFFFF;
-            border: 1px solid #E9EDF7;
-            border-radius: 14px;
+            color: #2B3674;
+        }
+        QComboBox#cmbDateRange:hover {
+            border-color: #CBD5E1;
+        }
+        QComboBox#cmbDateRange::drop-down {
+            border: none;
+            width: 24px;
+        }
+        QComboBox#cmbDateRange QAbstractItemView {
+            border: 1px solid #E2E8F0;
+            background-color: #FFFFFF;
+            color: #2B3674;
+            selection-background-color: #005BFE;
+            selection-color: #FFFFFF;
+            outline: none;
+            padding: 4px;
+        }
+        QPushButton#btnExport {
+            background-color: #005BFE;
+            color: #FFFFFF;
+            border: none;
+            border-radius: 10px;
+            padding: 8px 16px;
+            font-size: 11pt;
+            font-weight: 600;
+        }
+        QPushButton#btnExport:hover {
+            background-color: #2B7BFF;
+        }
+        QPushButton#btnExport:pressed {
+            background-color: #0046CC;
+        }
+        StatCard, MiniCard, #ChartCard, #AuditCard {
+            background-color: #FFFFFF;
+            border: 1px solid #E2E8F0;
+            border-radius: 16px;
+        }
+        #statCard1 {
+            border-top: 3px solid #005BFE;
+        }
+        #statCard2 {
+            border-top: 3px solid #05CD99;
+        }
+        #statCard3 {
+            border-top: 3px solid #FFB547;
+        }
+        #statCard4 {
+            border-top: 3px solid #7551FF;
         }
         #CardTitle {
             font-size: 12px;
-            color: #A3AED0;
+            font-weight: 600;
+            color: #8F9BB7;
         }
         #CardValue {
-            font-size: 22px;
+            font-size: 28px;
             font-weight: 700;
-            color: #2B3674;
+            color: #1B2559;
         }
         #CardSubtitlePositive {
             font-size: 11px;
@@ -515,32 +631,39 @@ void DashboardWidget::applyStyle()
             font-weight: 600;
         }
         #MiniCardLabel {
-            font-size: 11px;
-            color: #A3AED0;
+            font-size: 12px;
+            color: #8F9BB7;
+            font-weight: 500;
         }
         #MiniCardValue {
+            font-size: 18px;
+            font-weight: 700;
+            color: #1B2559;
+        }
+        #ChartTitle, #SectionTitle {
             font-size: 15px;
             font-weight: 700;
-            color: #2B3674;
-        }
-        #ChartTitle {
-            font-size: 13px;
-            font-weight: 700;
-            color: #2B3674;
-            padding-bottom: 4px;
+            color: #1B2559;
         }
         #RoomListItem {
-            background-color: #F4F7FE;
-            border-radius: 10px;
+            background-color: #F8FAFC;
+            border: 1px solid #EEF2F7;
+            border-radius: 12px;
         }
         #RoomTitle {
             font-size: 13px;
             font-weight: 700;
-            color: #2B3674;
+            color: #1B2559;
         }
         #RoomSubtitle {
             font-size: 11px;
-            color: #A3AED0;
+            color: #8F9BB7;
+        }
+        QTextBrowser#AuditBrowser {
+            background-color: #F8FAFC;
+            border: 1px solid #EEF2F7;
+            border-radius: 12px;
+            padding: 12px;
         }
     )");
 }
@@ -550,6 +673,146 @@ void DashboardWidget::refreshDashboard() {
     populateData();
     buildTrendChart();
     buildBarChart();
+    refreshDeletedBookingsView();
+}
+
+void DashboardWidget::refreshDeletedBookingsView()
+{
+    if (deletedBookingsBrowser) {
+        deletedBookingsBrowser->setHtml(buildDeletedBookingsAuditHtml());
+    }
+}
+
+QString DashboardWidget::buildDeletedBookingsAuditHtml() const
+{
+    QString html;
+    QTextStream stream(&html);
+    stream << "<style>"
+           << "body{font-family:Segoe UI,Arial,sans-serif;color:#334155;margin:0;padding:0;font-size:11pt;line-height:1.5;}"
+           << "h3{color:#1B2559;margin:0 0 8px 0;font-size:13pt;font-weight:700;}"
+           << "p{margin:0;color:#64748B;}"
+           << "table{border-collapse:collapse;width:100%;margin-top:10px;border-radius:8px;overflow:hidden;}"
+           << "th,td{border:1px solid #E2E8F0;padding:10px 12px;text-align:left;vertical-align:top;}"
+           << "th{background:#F1F5F9;color:#1B2559;font-size:10pt;}"
+           << "tr:nth-child(even){background:#FAFBFC;}"
+           << ".section{background:#FFFFFF;border:1px solid #EEF2F7;border-radius:12px;padding:16px;margin-bottom:12px;}"
+           << ".empty{display:flex;flex-direction:column;align-items:center;text-align:center;padding:20px 12px;color:#94A3B8;}"
+           << ".empty-icon{font-size:28px;margin-bottom:8px;opacity:0.7;}"
+           << ".empty-title{font-size:12pt;font-weight:600;color:#64748B;margin-bottom:4px;}"
+           << ".note{font-size:10pt;color:#94A3B8;}"
+           << ".warn{color:#B45309;font-weight:600;}"
+           << ".muted{color:#94A3B8;}"
+           << "</style>";
+
+    stream << "<div class='section'>";
+    stream << "<h3>Deleted Bookings History</h3>";
+
+    if (!m_manager) {
+        stream << "<div class='empty'><div class='empty-icon'>&#128196;</div>"
+               << "<div class='empty-title'>No data available</div>"
+               << "<p class='note'>Connect the hotel manager to view audit records.</p></div>";
+        stream << "</div>";
+        return html;
+    }
+
+    struct DeletedBookingRow {
+        QString bookingId;
+        QString customerId;
+        QString customerName;
+        QString roomNumber;
+        QString checkIn;
+        QString checkOut;
+        QString state;
+    };
+
+    std::vector<DeletedBookingRow> deletedRows;
+    std::map<std::string, CustomerAbuseRow> customerRows;
+
+    for (const auto& booking : m_manager->getBookings()) {
+        if (!booking) {
+            continue;
+        }
+
+        const auto customer = booking->getCustomer();
+        const auto room = booking->getRoom();
+        if (!customer) {
+            continue;
+        }
+
+        auto &customerRow = customerRows[customer->getCustomerId()];
+        customerRow.customerId = QString::fromStdString(customer->getCustomerId());
+        customerRow.customerName = QString::fromStdString(customer->getName());
+        customerRow.phoneNumber = QString::fromStdString(customer->getPhoneNumber());
+        customerRow.totalBookings++;
+        if (booking->isCancelled()) {
+            customerRow.cancelledBookings++;
+        }
+        if (booking->isDeleted()) {
+            customerRow.deletedBookings++;
+        }
+
+        if (booking->isDeleted()) {
+            deletedRows.push_back({
+                QString::fromStdString(booking->getBookingId()),
+                QString::fromStdString(customer->getCustomerId()),
+                QString::fromStdString(customer->getName()),
+                room ? QString::fromStdString(room->getRoomNumber()) : QString("-") ,
+                QString::fromStdString(booking->getCheckInDate()),
+                QString::fromStdString(booking->getCheckOutDate()),
+                QString::fromStdString(bookingStateToString(m_manager->getBookingState(*booking)))
+            });
+        }
+    }
+
+    if (deletedRows.empty()) {
+        stream << "<div class='empty'><div class='empty-icon'>&#9989;</div>"
+               << "<div class='empty-title'>No deleted bookings yet</div>"
+               << "<p class='note'>Deleted records will appear here for audit and abuse review.</p></div>";
+    } else {
+        stream << "<table><tr><th>Booking ID</th><th>Customer</th><th>Room</th><th>Check-in</th><th>Check-out</th><th>Status</th></tr>";
+        for (const auto& row : deletedRows) {
+            stream << "<tr><td>" << escapeHtml(row.bookingId) << "</td><td>" << escapeHtml(row.customerName) << " (" << escapeHtml(row.customerId) << ")</td><td>" << escapeHtml(row.roomNumber) << "</td><td>" << escapeHtml(row.checkIn) << "</td><td>" << escapeHtml(row.checkOut) << "</td><td class='warn'>" << escapeHtml(row.state) << "</td></tr>";
+        }
+        stream << "</table>";
+    }
+    stream << "</div>";
+
+    std::vector<CustomerAbuseRow> abuseRows;
+    for (const auto& [customerId, row] : customerRows) {
+        if (row.abuseScore() >= 2) {
+            abuseRows.push_back(row);
+        }
+    }
+
+    std::sort(abuseRows.begin(), abuseRows.end(), [](const CustomerAbuseRow& a, const CustomerAbuseRow& b) {
+        if (a.abuseScore() != b.abuseScore()) {
+            return a.abuseScore() > b.abuseScore();
+        }
+        if (a.deletedBookings != b.deletedBookings) {
+            return a.deletedBookings > b.deletedBookings;
+        }
+        return a.customerId < b.customerId;
+    });
+
+    stream << "<div class='section'>";
+    stream << "<h3>Customer Cancel/Delete Abuse Watchlist</h3>";
+    stream << "<p class='note'>Customers with 2 or more combined cancel/delete actions are flagged below.</p>";
+
+    if (abuseRows.empty()) {
+        stream << "<div class='empty'><div class='empty-icon'>&#128737;</div>"
+               << "<div class='empty-title'>All clear</div>"
+               << "<p class='note'>No suspicious customer patterns found yet.</p></div>";
+    } else {
+        stream << "<table><tr><th>Customer</th><th>Total Bookings</th><th>Cancelled</th><th>Deleted</th><th>Action Score</th><th>Contact</th></tr>";
+        for (const auto& row : abuseRows) {
+            const bool highRisk = row.abuseScore() >= 4;
+            stream << "<tr><td>" << escapeHtml(row.customerName) << " (" << escapeHtml(row.customerId) << ")</td><td>" << row.totalBookings << "</td><td>" << row.cancelledBookings << "</td><td>" << row.deletedBookings << "</td><td class='" << (highRisk ? "warn" : "") << "'>" << row.abuseScore() << "</td><td>" << escapeHtml(row.phoneNumber) << "</td></tr>";
+        }
+        stream << "</table>";
+    }
+    stream << "</div>";
+
+    return html;
 }
 
 QString DashboardWidget::buildReportHtml() const
@@ -600,7 +863,7 @@ QString DashboardWidget::buildReportHtml() const
         occupiedRooms = static_cast<int>(m_manager->getRoomsByOccupancy(true).size());
 
         for (const auto& booking : m_manager->getBookings()) {
-            if (!booking) {
+            if (!booking || booking->isDeleted()) {
                 continue;
             }
 
@@ -724,6 +987,9 @@ QString DashboardWidget::buildReportHtml() const
         stream << "<tr><td>" << (i + 1) << "</td><td>" << escapeHtml(item.roomNumber) << "</td><td>" << escapeHtml(item.type) << "</td><td>" << item.bookingCount << "</td></tr>";
     }
     stream << "</table>";
+
+    stream << "<h2>Deleted bookings history & abuse watchlist</h2>";
+    stream << buildDeletedBookingsAuditHtml();
 
     stream << "</body></html>";
     return html;
