@@ -21,9 +21,9 @@ The system demonstrates core object-oriented programming concepts:
 ### Room Management
 - **Three Room Types**: Standard, Deluxe, and Suite rooms with distinct pricing models
 - **Polymorphic Pricing**: Each room type calculates rent differently
-  - **Standard**: `baseRate × days`
-  - **Deluxe**: `baseRate × days × 1.2` (20% premium)
-  - **Suite**: `baseRate × days × 1.5` (50% premium)
+  - **Standard**: `baseRate`
+  - **Deluxe**: `baseRate + miniBarFee`
+  - **Suite**: `baseRate + premiumServiceFee`
 - **Availability Tracking**: Track from booking data. `isAvailable` marks maintenance/inspection status only — independent of whether a guest is currently staying in the room
 - **Room Factory Pattern**: Safe room creation with validation
 - **Archive-first cleanup**: Hard delete is restricted and intended only for admin/data-cleanup. Archiving rooms or customers is the preferred way to hide old entities while preserving booking and invoice history.
@@ -37,16 +37,16 @@ The system demonstrates core object-oriented programming concepts:
 - **Reservation Management**: Link customers to rooms with check-in/check-out dates
 - **Booking Validation**: Prevent invalid date ranges and double-booking (overlap checks skip cancelled bookings)
 - **Derived Status**: Upcoming/Active/Completed states are computed from dates at read time, never stored
-- **Cancellation**: `cancelBooking()` soft-cancels an upcoming reservation and cascades a void (not delete) to any attached invoice, so front-desk staff can cancel in one action without tracing invoices manually
+- **Cancellation**: `cancelBooking()` soft-cancels an upcoming reservation and keeps the record for history, while the separate booking deletion path is reserved for cleanup/admin workflows
 - **Occupancy Queries**: `getRoomsByOccupancy()`, `getTodayCheckIns()`, `getTodayCheckOuts()` derive real-time occupancy from bookings.
-- **Automatic ID Generation**: Unique booking identifiers
+- **Automatic ID Generation**: Unique booking identifiers are assigned by `HotelManager` only after validation succeeds
 - **Available Room Filtering**: Query empty rooms for specific periods
 
 ### Invoice & Billing
 - **Invoice Lifecycle**: Create, lookup, list, and delete invoices through HotelManager
 - **Post-Stay Billing**: Invoices are only generated once a stay is `ACTIVE` or `COMPLETED` — pay-first invoicing on upcoming reservations is not supported
 - **Billing Separation**: Invoices remain tied to bookings while preserving their own payment date and tax configuration
-- **Cancellation Handling**: If a booking with an existing invoice is cancelled, the invoice is voided (marked cancelled, not deleted) automatically, preserving an audit trail while excluding it from revenue totals. Although this is not likely to happen due to invoice creation validation.
+- **Validity Checks**: Invoice validity now requires a linked booking, a positive stay length, and an ISO payment date.
 
 ### Data Persistence
 - **SQLite-backed Persistence**: Load and save hotel state through DataManager::loadAll() and DataManager::saveAll()
@@ -66,23 +66,23 @@ src/
 ├── models/               # Domain entities (Room, Customer, Booking, Invoice)
 ├── controllers/          # Business logic (HotelManager)
 ├── database/             # Persistence layer (DataManager)
-└── views/                # Qt GUI components (MainWindow)
+└── views/                # Qt GUI components (MainWindow, widgets, dialogs)
 ```
 
 ### MVC Layers
 
 | Layer | Responsibility |
 |---|---|
-| **Models** | Room hierarchy, Customer, Booking, Invoice — core domain objects |
+| **Models** | Room hierarchy, Customer, Booking, Invoice — core domain objects plus booking state and room metadata helpers |
 | **Controller** | HotelManager — orchestrates operations, enforces business rules |
 | **Database** | DataManager — loads and saves data to persistent storage |
-| **Views** | Qt widgets and dialogs — user interface |
+| **Views** | Qt widgets and dialogs — complete desktop user interface |
 
 ### Data Flow
 ```
 main.cpp
   ├─► DataManager::getInstance().loadAll()    ← Load persisted data on startup
-  └─► MainWindow / Console Demo                ← User interactions
+  └─► MainWindow / Qt widgets                 ← User interactions
         └─► HotelManager                       ← Business logic
               ├─► Models (Room, Customer, Booking, Invoice)
               └─► DataManager::saveAll()        ← Persist state to SQLite
@@ -116,7 +116,7 @@ Room (abstract base class)
 └── SuiteRoom
 ```
 
-Each subclass inherits common attributes from `Room` and overrides `calculateTargetPrice()` with unique pricing logic.
+Each subclass inherits common attributes from `Room` and overrides `calculateTargetPrice()` together with room metadata helpers used by the UI (room type name and subtype fee accessors).
 
 ### Entity Relationships
 ```
@@ -160,7 +160,7 @@ mkdir build
 cd build
 cmake ..
 cmake --build .
-./HotelBookingManagement
+./HotelBookingManagement.exe
 ```
 
 ---
@@ -174,10 +174,10 @@ cmake --build .
 | `Customer` | Represents a guest |
 | `Booking` | Links customer to room with dates |
 | `Invoice` | Billing information for a booking |
-| `HotelManager` | Controller managing rooms, customers, bookings, and invoice operations |
-| `DataManager` | Singleton for SQLite-backed data persistence via loadAll()/saveAll() |
+| `HotelManager` | Controller managing rooms, customers, bookings, invoices, validation, and derived-state queries |
+| `DataManager` | Singleton for SQLite-backed data persistence via loadAll()/saveAll(), including booking counter restoration |
 | `RoomFactory` | Factory for creating room instances |
-| `MainWindow` | Qt GUI (future expansion) |
+| `MainWindow` | Qt GUI shell and navigation host |
 
 ---
 

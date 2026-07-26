@@ -13,17 +13,17 @@ This document describes the structure and design decisions for the **Hotel Booki
     ├── models/                  # Domain entities (data + OOP hierarchy)
     ├── controllers/             # Business logic
     ├── database/                # Load/save persistence
-    └── views/                   # Qt GUI (Widget + .ui)
+    └── views/                   # Qt GUI (widgets, dialogs, and .ui files)
 ```
 
 Each layer has a single responsibility so team members can work in parallel with minimal merge conflicts.
 
 | Layer | Responsibility |
 |---|---|
-| `models/` | What the system manages — rooms, customers, bookings, invoices |
+| `models/` | What the system manages — rooms, customers, bookings, invoices, and booking/room metadata helpers |
 | `controllers/` | How the system behaves — create rooms, manage collections, enforce rules |
-| `database/` | Where data lives between sessions — JSON, CSV, or SQLite |
-| `views/` | How the user interacts — Qt widgets, layouts, signals/slots |
+| `database/` | Where data lives between sessions — SQLite |
+| `views/` | How the user interacts — Qt widgets, layouts, signals/slots, and dialogs |
 
 ### View Layer / Qt UI
 The `views/` folder contains the application’s Qt desktop interface. It includes the main window, dashboard page, reservation management page, room management page, room status overview, and supporting dialogs such as reservation, room, invoice, confirmation, and success dialogs.
@@ -64,23 +64,25 @@ Room (abstract)
  └── SuiteRoom
 ```
 
-`StandardRoom`, `DeluxeRoom`, and `SuiteRoom` inherit common attributes (room number, type, base rate, availability) from `Room` and only override what differs — rent calculation.
+`StandardRoom`, `DeluxeRoom`, and `SuiteRoom` inherit common attributes (room number, base rate, availability) from `Room` and override the room-specific behavior that differs — target price, room type name, and subtype fee accessors used by the UI.
 
 ### Polymorphism
 
-`Room` declares a pure virtual method:
+`Room` declares pure virtual methods:
 
 ```cpp
-virtual double calculateTargetPrice() = 0;
+virtual double calculateTargetPrice() const = 0;
+virtual std::string getRoomTypeName() const = 0;
+virtual double getExtraFeeAmount() const = 0;
 ```
 
-Each subclass overrides it with its own pricing rule:
+Each subclass overrides them with its own pricing rule and metadata:
 
 | Class | Formula |
 |---|---|
-| `StandardRoom` | `baseRate` (1.0x) |
-| `DeluxeRoom` | `baseRate × 1.2` (20% premium) |
-| `SuiteRoom` | `baseRate × 1.5` (50% premium) |
+| `StandardRoom` | `baseRate` |
+| `DeluxeRoom` | `baseRate + miniBarFee` |
+| `SuiteRoom` | `baseRate + premiumServiceFee` |
 
 Controller and view code can call `calculateTargetPrice()` on any `Room` without knowing the concrete type.
 
@@ -99,12 +101,12 @@ HotelManager (owns via shared_ptr)
 ```
 
 - **`Customer`** — identity and contact info (ID, name, phone). Kept separate so one customer can hold multiple bookings.
-- **`Booking`** — links a customer to a room with check-in and check-out dates via weak references. Represents the reservation itself.
+- **`Booking`** — links a customer to a room with check-in and check-out dates via weak references. Represents the reservation itself. The booking state enum lives alongside `Booking` in `Booking.h`, while `HotelManager::getBookingState()` derives the current state from dates and cancellation flags.
   - Stores `weak_ptr<Customer>` and `weak_ptr<Room>` (non-owning references)
   - Stores a persisted `cancelled` flag (see [Booking Lifecycle & Cancellation](#booking-lifecycle--cancellation) below). All other status (upcoming/active/completed) is derived, never stored.
 - **`Invoice`** — wraps a booking and computes subtotal, tax, and total via a weak reference. Separates billing from reservation logic.
   - Stores `weak_ptr<Booking>` (non-owning reference)
-  - Stores a persisted `cancelled` flag, set when its parent booking is cancelled (void, not deleted — see below).
+  - Stores payment date, tax rate, and nights stayed; validity depends on a linked booking, a positive stay duration, and an ISO payment date.
 
 This design ensures that:
 1. HotelManager maintains sole ownership of all objects
@@ -131,7 +133,7 @@ BookingState HotelManager::getBookingState(const Booking& booking) const;
 - `UPCOMING` / `ACTIVE` / `COMPLETED` are derived at read time from `(checkInDate, checkOutDate, today)`. They are never stored, so there is no risk of a stale status drifting from the actual dates.
 - `CANCELLED` is the one fact dates alone can never express — it is a deliberate staff action, so `Booking` stores a persisted `cancelled` flag. `getBookingState()` checks this flag first, before falling back to the date-derived states.
 
-**Cancellation is a soft action, distinct from hard deletion:**
+**Cancellation is a soft action, distinct from cleanup deletion:**
 
 ```cpp
 bool cancelBooking(const std::string& bookingId, std::string& errorMessage);
@@ -139,7 +141,7 @@ bool cancelBooking(const std::string& bookingId, std::string& errorMessage);
 
 - Only valid when the booking's current state is `UPCOMING` — a stay that has already started or finished cannot be "un-happened."
 - Sets `Booking::cancelled = true`. The booking record is kept (not removed) for history/audit purposes.
-- `deleteBooking()` remains a separate, unrelated hard-delete path (admin/data-cleanup use), and still cascades to *deleting* any associated invoice — it is not used by the normal cancellation flow.
+- The booking cleanup path removes the booking record from the manager collection when an admin/data-cleanup action is chosen; it is separate from `cancelBooking()` and is not used by the normal cancellation flow.
 
 **Double-booking overlap checks must exclude cancelled bookings.** The existing overlap guard (`checkIn < existingCheckOut && existingCheckIn < checkOut`) skips any booking where `isCancelled()` is true — otherwise a cancelled booking would permanently block its original dates from being rebooked.
 
@@ -166,7 +168,7 @@ bool registerCustomer(const std::string& id, const std::string& name, const std:
 bool createBooking(const std::string& customerId, const std::string& roomNumber, const std::string& checkInDate, const std::string& checkOutDate, std::string& errorMessage);
 bool cancelBooking(const std::string& bookingId, std::string& errorMessage);
 bool setRoomAvailability(const std::string& roomNumber, bool available, std::string& errorMessage);
-std::shared_ptr<Invoice> createInvoice(const std::string& invoiceId, const std::string& bookingId, double taxRate, int nights, const std::string& paymentDate, std::string& errorMessage;
+bool createInvoice(const std::string& invoiceId, const std::string& bookingId, double taxRate, int nights, const std::string& paymentDate, std::string& errorMessage);
 BookingState getBookingState(const Booking& booking) const;
 ```
 
@@ -179,7 +181,7 @@ BookingState getBookingState(const Booking& booking) const;
 - `createBooking()` — validates customer exists, room and dates don't overlap with any *non-cancelled* existing booking for that room, then creates the booking. Does **not** touch `Room::isAvailable` — occupancy is derived from bookings, not stored on the room (see [Room Availability vs. Occupancy](#room-availability-vs-occupancy) below).
 - `cancelBooking()` — soft-cancels an `UPCOMING` booking and cascades a void to its invoice, if any (see [Booking Lifecycle & Cancellation](#booking-lifecycle--cancellation))
 - `setRoomAvailability()` — toggles maintenance status only; blocks marking a room unavailable while it has an `ACTIVE` booking (a guest currently checked in)
-- - `createInvoice()` — validates invoice input and attaches the invoice to a booking; only allowed once the booking is `ACTIVE` or `COMPLETED`. Pay-first invoicing on `UPCOMING` bookings is intentionally rejected.
+- `createInvoice()` — validates invoice input and attaches the invoice to a booking; only allowed once the booking is `ACTIVE` or `COMPLETED`. Pay-first invoicing on `UPCOMING` bookings is intentionally rejected.
 - `getBookingState()` — derives `UPCOMING` / `ACTIVE` / `COMPLETED` from dates, or returns `CANCELLED` if the booking's persisted flag is set
 
 
@@ -347,13 +349,14 @@ bool cancelBooking(const std::string& bookingId, std::string& errorMessage);
 
 **Invoice Generation:**
 ```cpp
-std::shared_ptr<Invoice> createInvoice(
-    const std::string& invoiceId,
-    const std::string& bookingId,
-    int days,                             // duration in nights
-    double taxRate,                       // 0.1 = 10%
-    std::string& errorMessage
-) const;
+bool createInvoice(
+  const std::string& invoiceId,
+  const std::string& bookingId,
+  double taxRate,
+  int nights,
+  const std::string& paymentDate,
+  std::string& errorMessage
+);
 ```
 
 ### Query Methods
@@ -390,17 +393,17 @@ This validation-first approach makes the system clean and testable.
 
 ## View Layer (Qt6)
 
-The view layer is currently in development with the following structure:
+The view layer is implemented as a complete Qt desktop UI. It includes the main window, dashboard page, reservation management page, room management page, room status overview, and supporting dialogs such as reservation, room, invoice, confirmation, and success dialogs.
 
-| File | Role | Status |
-|---|---|---|
-| `MainWindow.ui` | Visual layout designed in Qt Designer | Scaffolding |
-| `MainWindow.h` | Widget class declaration (`Q_OBJECT`, signals/slots) | Scaffolding |
-| `MainWindow.cpp` | Behavior — connects UI events to controller logic | Scaffolding |
+The UI layer is intentionally separated from controller logic: view classes emit user events and invoke `HotelManager` operations, while business rules and persistence remain inside the controller and model layers.
 
-**Current State:** The system has a comperhensive demo using Qt6 UI. Wired `MainWindow` signals/slots to `HotelManager` methods to provide interactive GUI control. 
-
-**Next Step:** Currently in furthur development to improve users' experience.
+Current UI status:
+- `MainWindow` provides the application shell and navigation
+- `DashboardWidget` renders summary cards and charts
+- `ReservationsPageWidget` handles booking filters and booking actions
+- `RoomPageWidget` manages room details and room create/edit workflows
+- `RoomStatusPageWidget` presents occupancy and maintenance state
+- Dialog classes handle the modal create/edit flows for reservations, rooms, and invoices
 
 The `.ui` file is compiled automatically by CMake (`AUTOUIC`). The generated `ui_MainWindow.h` is included in `MainWindow.cpp`, not edited by hand.
 
@@ -432,22 +435,22 @@ Key settings in `CMakeLists.txt`:
 
 Keeping these boundaries strict makes the codebase easier to test, extend, and grade.
 
-## Future Work
+## Current Status
 
 The current implementation provides:
 
 ✅ **Complete** — OOP design with all four pillars (encapsulation, inheritance, polymorphism, abstraction)
 ✅ **Complete** — Factory Pattern (RoomFactory) and Singleton Pattern (DataManager)
 ✅ **Complete** — Comprehensive validation and error handling in HotelManager
-✅ **Complete** — Polymorphic room pricing (calculateTargetPrice)
-+ ✅ **Complete** — Invoice generation with tax calculation, restricted to `ACTIVE`/`COMPLETED` bookings (pay-first invoicing intentionally unsupported)
-✅ **Complete** — Booking cancellation (`cancelBooking`) with cascading invoice void and overlap-check exclusion
+✅ **Complete** — Polymorphic room pricing with room metadata helpers for the UI
+✅ **Complete** — Invoice generation with tax calculation, restricted to `ACTIVE`/`COMPLETED` bookings
+✅ **Complete** — Booking cancellation (`cancelBooking`) with overlap-check exclusion for cancelled reservations
 ✅ **Complete** — Room availability (maintenance) decoupled from booking occupancy
 ✅ **Complete** — Dashboard/query helpers: `getRoomsByOccupancy`, `getTodayCheckIns`, `getTodayCheckOuts`, `getBookingsForCustomer`
-✅ **Complete** — **`views/`** Integrated MainWindow with HotelManager (tabbed UI for rooms, customers, bookings, invoices); cancelled bookings/invoices should remain visible but styled distinctly (e.g. greyed out) rather than hidden
+✅ **Complete** — Integrated Qt UI with MainWindow, dashboard, reservations, room management, room status, and dialogs
 
-**Next Steps:**
+**Possible future enhancements:**
 
-- **Revenue/statistics** — implement income summary methods over `Invoice`
-- **Invoice** - add interactive display method for invoices
-- **`views/`** - Honing the existing display method accroding to UX.
+- Revenue/statistics summaries over `Invoice`
+- Additional invoice presentation/export options
+- UX polish for the existing view layer
