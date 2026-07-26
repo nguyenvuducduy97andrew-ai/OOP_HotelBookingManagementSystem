@@ -16,6 +16,8 @@ public:
 
     void refreshData();
 
+    ~RoomStatusPageWidget();
+
 private slots:
     void applyFilters();
     void setFilterType(QString type);

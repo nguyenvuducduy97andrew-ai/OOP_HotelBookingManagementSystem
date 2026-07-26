@@ -54,12 +54,18 @@ RoomStatusPageWidget::RoomStatusPageWidget(HotelManager* manager, QWidget *paren
     // Kết nối thanh tìm kiếm
     connect(ui->txtSearchRoom, &QLineEdit::textChanged, this, &RoomStatusPageWidget::applyFilters);
 
+    // Cố định kích thước nút để không bị xê dịch layout khi chữ ngắn lại
+    ui->btnCheckAvailability->setFixedWidth(180);
+
     // Kết nối nút Check Availability
     connect(ui->btnCheckAvailability, &QPushButton::clicked, this, [=]() {
         m_isCheckAvailMode = !m_isCheckAvailMode;
         if (m_isCheckAvailMode) {
             ui->btnCheckAvailability->setText("Clear Filter");
-            ui->btnCheckAvailability->setStyleSheet("background-color: #E53935; color: white; border-radius: 10px; padding: 10px; font-weight: bold;");
+            ui->btnCheckAvailability->setStyleSheet(
+                "QPushButton { background-color: #E53935; color: white; border-radius: 10px; padding: 10px; font-weight: bold; }"
+                "QPushButton:hover { background-color: #C62828; }"
+            );
         } else {
             ui->btnCheckAvailability->setText("Check Availability");
             ui->btnCheckAvailability->setStyleSheet(""); 
@@ -102,7 +108,7 @@ void RoomStatusPageWidget::refreshData() {
     int index = 0;
 
     for (const auto& room : m_manager->getRooms()) {
-        if (!room) continue;
+        if (!room || room->isArchived()) continue;
 
         RoomCard* card = new RoomCard(ui->scrollAreaWidgetContents);
         card->setRoomNumber(QString::fromStdString(room->getRoomNumber()));
@@ -175,10 +181,11 @@ void RoomStatusPageWidget::refreshData() {
                 QString idNumber = form.getIdNumber();
                 QString phone = form.getPhoneNumber();
                 
-                // form.getDateIn() trả về "dd/MM", ta cần "yyyy-MM-dd" cho HotelManager
-                QString currentYear = QString::number(QDate::currentDate().year());
-                QDate dIn = QDate::fromString(form.getDateIn() + "/" + currentYear, "dd/MM/yyyy");
-                QDate dOut = QDate::fromString(form.getDateOut() + "/" + currentYear, "dd/MM/yyyy");
+                // Lấy năm trực tiếp từ widget dateEdit (chứa đầy đủ yyyy) thay vì dùng năm hiện tại
+                int yearIn = ui->dateEditCheckIn->date().year();
+                int yearOut = ui->dateEditCheckOut->date().year();
+                QDate dIn = QDate::fromString(form.getDateIn() + "/" + QString::number(yearIn), "dd/MM/yyyy");
+                QDate dOut = QDate::fromString(form.getDateOut() + "/" + QString::number(yearOut), "dd/MM/yyyy");
                 
                 std::string err;
                 
@@ -256,18 +263,22 @@ void RoomStatusPageWidget::applyFilters() {
         if (m_isCheckAvailMode) {
             if (card->getStatus() == "MTN") {
                 matchAvail = false;
-            } else if (card->getStatus() == "OCC") {
-                // Approximate logic for checking availability (dates in MM/yyyy for current year)
-                int currentYear = QDate::currentDate().year();
-                QDate cardIn = QDate::fromString(card->getDateIn() + QString("/%1").arg(currentYear), "dd/MM/yyyy");
-                QDate cardOut = QDate::fromString(card->getDateOut() + QString("/%1").arg(currentYear), "dd/MM/yyyy");
-                
-                if (cardIn.isValid() && cardOut.isValid()) {
-                    if (!(reqOut <= cardIn || reqIn >= cardOut)) {
-                        matchAvail = false;
+            } else {
+                for (const auto& booking : m_manager->getBookings()) {
+                    if (booking && !booking->isCancelled() && !booking->isDeleted() && booking->getRoom() &&
+                        booking->getRoom()->getRoomNumber() == card->getRoomNumber().toStdString()) {
+                        
+                        QDate bIn = QDate::fromString(QString::fromStdString(booking->getCheckInDate()), Qt::ISODate);
+                        QDate bOut = QDate::fromString(QString::fromStdString(booking->getCheckOutDate()), Qt::ISODate);
+                        
+                        if (bIn.isValid() && bOut.isValid()) {
+                            // Check for date overlap: not(reqOut <= bIn or reqIn >= bOut)
+                            if (!(reqOut <= bIn || reqIn >= bOut)) {
+                                matchAvail = false;
+                                break;
+                            }
+                        }
                     }
-                } else {
-                    matchAvail = false;
                 }
             }
 
@@ -304,4 +315,8 @@ void RoomStatusPageWidget::applyFilters() {
     // Add horizontal spacer to push all cards to the left
     QSpacerItem* horizontalSpacer = new QSpacerItem(40, 20, QSizePolicy::Expanding, QSizePolicy::Minimum);
     gridLayout->addItem(horizontalSpacer, 0, columns, 1, 1);
+}
+
+RoomStatusPageWidget::~RoomStatusPageWidget(){
+    delete ui;
 }
