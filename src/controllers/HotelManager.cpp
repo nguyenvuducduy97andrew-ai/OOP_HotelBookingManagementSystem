@@ -329,13 +329,19 @@ bool HotelManager::validateInvoiceInput(
     const BookingState state = getBookingState(*booking);
     if (state == BookingState::UPCOMING)
     {
-        errorMessage = "Cannot create invoice for an upcoming booking.";
+        errorMessage = "Cannot create invoice before checkout is completed.";
         return false;
     }
 
     if (state == BookingState::CANCELLED)
     {
         errorMessage = "Cannot create invoice for a cancelled booking.";
+        return false;
+    }
+
+    if (state != BookingState::COMPLETED)
+    {
+        errorMessage = "Invoice can only be created after checkout.";
         return false;
     }
 
@@ -1073,7 +1079,6 @@ bool HotelManager::restoreInvoiceFromDatabase(
     double taxRate,
     int nights,
     const std::string &paymentDate,
-    bool cancelled,
     std::string &errorMessage)
 {
     if (invoiceId.empty())
@@ -1090,6 +1095,12 @@ bool HotelManager::restoreInvoiceFromDatabase(
     }
 
     auto booking = findBookingById(bookingId);
+    if (!booking)
+    {
+        errorMessage = "Booking not found for persisted invoice.";
+        return false;
+    }
+
     if (taxRate < 0)
     {
         errorMessage = "Tax rate must not be negative.";
@@ -1107,26 +1118,18 @@ bool HotelManager::restoreInvoiceFromDatabase(
         return false;
     }
 
-    if (booking)
+    const BookingState state = getBookingState(*booking);
+
+    if (state != BookingState::COMPLETED)
     {
-        const BookingState state = getBookingState(*booking);
-        if (state == BookingState::UPCOMING)
-        {
-            errorMessage = "Cannot create invoice for an upcoming booking.";
-            return false;
-        }
+        errorMessage = "Invoice can only be restored for a completed booking.";
+        return false;
+    }
 
-        if (state == BookingState::CANCELLED)
-        {
-            errorMessage = "Cannot create invoice for a cancelled booking.";
-            return false;
-        }
-
-        if (findInvoiceForBooking(bookingId) != nullptr)
-        {
-            errorMessage = "An invoice already exists for this booking.";
-            return false;
-        }
+    if (findInvoiceForBooking(bookingId) != nullptr)
+    {
+        errorMessage = "An invoice already exists for this booking.";
+        return false;
     }
 
     auto invoice = std::make_shared<Invoice>();
@@ -1136,7 +1139,6 @@ bool HotelManager::restoreInvoiceFromDatabase(
     invoice->setTaxRate(taxRate);
     invoice->setNights(nights);
     invoice->setPaymentDate(paymentDate);
-    invoice->setCancelled(cancelled);
 
     addInvoice(invoice);
     return true;
@@ -1175,11 +1177,6 @@ bool HotelManager::cancelBooking(const std::string &bookingId, std::string &erro
     }
 
     booking->setCancelled(true);
-    auto invoice = findInvoiceForBooking(bookingId);
-    if (invoice)
-    {
-        invoice->setCancelled(true);
-    }
 
     return true;
 }

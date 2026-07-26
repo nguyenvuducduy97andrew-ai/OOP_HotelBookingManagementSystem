@@ -192,7 +192,6 @@ public:
         double taxRate,
         int nights,
         const std::string& paymentDate,
-        bool cancelled,
         std::string& errorMessage
     );
     // Added: Soft-cancels a reservation by changing its status and releasing the assigned room back to inventory

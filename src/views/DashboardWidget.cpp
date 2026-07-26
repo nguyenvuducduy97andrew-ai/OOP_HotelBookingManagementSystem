@@ -87,7 +87,7 @@ DashboardWidget::DashboardWidget(HotelManager *manager, QWidget *parent)
 void DashboardWidget::updateDateTime()
 {
     QString currentTime = QDateTime::currentDateTime().toString("dd/MM/yyyy HH:mm:ss");
-    ui->lblDate->setText("Last updated: " + currentTime);
+    ui->lblDate->setText("Current: " + currentTime);
 }
 
 // =================================================================

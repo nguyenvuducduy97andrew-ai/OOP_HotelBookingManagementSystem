@@ -139,8 +139,6 @@ bool cancelBooking(const std::string& bookingId, std::string& errorMessage);
 
 - Only valid when the booking's current state is `UPCOMING` — a stay that has already started or finished cannot be "un-happened."
 - Sets `Booking::cancelled = true`. The booking record is kept (not removed) for history/audit purposes.
-- Insurance: **Cascades to void, not delete, any attached invoice**: if somehow the booking already has an invoice is cancelled, that invoice's own `cancelled` flag is also set. The system locates and voids it automatically — reception staff do not need to search for and manually delete the correct invoice under time pressure (e.g. during rush-hour front-desk operations).
-- This is intentionally a fast, single-call, no-confirmation path. Voided invoices remain visible in invoice listings (styled distinctly, e.g. greyed out) rather than hidden, preserving an audit trail.
 - `deleteBooking()` remains a separate, unrelated hard-delete path (admin/data-cleanup use), and still cascades to *deleting* any associated invoice — it is not used by the normal cancellation flow.
 
 **Double-booking overlap checks must exclude cancelled bookings.** The existing overlap guard (`checkIn < existingCheckOut && existingCheckIn < checkOut`) skips any booking where `isCancelled()` is true — otherwise a cancelled booking would permanently block its original dates from being rebooked.
