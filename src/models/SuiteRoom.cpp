@@ -13,6 +13,6 @@ void SuiteRoom::setPremiumServiceFee(double fee) {
     premiumServiceFee = fee;
 }
 
-double SuiteRoom::calculateTargetPrice() {
+double SuiteRoom::calculateTargetPrice() const {
     return getBasePrice() + premiumServiceFee;
 }

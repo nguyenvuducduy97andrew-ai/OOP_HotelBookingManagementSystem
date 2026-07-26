@@ -6,5 +6,5 @@ class StandardRoom : public Room {
 public:
     StandardRoom(std::string num, double basePrice);
 
-    double calculateTargetPrice() override;
+    double calculateTargetPrice() const override;
 };

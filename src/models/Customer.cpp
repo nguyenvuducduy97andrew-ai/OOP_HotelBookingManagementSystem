@@ -1,13 +1,13 @@
 #include "Customer.h"
 
 Customer::Customer() {
-    this->customerId = "";
-    this->name = "";
-    this->phoneNumber = "";
+    this->customerId = "UNKNOWN";
+    this->name = "UNKNOWN";
+    this->phoneNumber = "UNKNOWN";
     this->archived = false;
 }
 
-Customer::Customer(std::string customerId, std::string name, std::string phoneNumber) {
+Customer::Customer(const std::string& customerId, const std::string& name, const std::string& phoneNumber) {
     this->customerId = customerId;
     this->name = name;
     this->phoneNumber = phoneNumber;
@@ -18,7 +18,7 @@ std::string Customer::getCustomerId() const {
     return this->customerId;
 }
 
-void Customer::setCustomerId(std::string customerId) {
+void Customer::setCustomerId(const std::string& customerId) {
     this->customerId = customerId;
 }
 
@@ -26,7 +26,7 @@ std::string Customer::getName() const {
     return this->name;
 }
 
-void Customer::setName(std::string name) {
+void Customer::setName(const std::string& name) {
     this->name = name;
 }
 
@@ -34,7 +34,7 @@ std::string Customer::getPhoneNumber() const {
     return this->phoneNumber;
 }
 
-void Customer::setPhoneNumber(std::string phoneNumber) {
+void Customer::setPhoneNumber(const std::string& phoneNumber) {
     this->phoneNumber = phoneNumber;
 }
 

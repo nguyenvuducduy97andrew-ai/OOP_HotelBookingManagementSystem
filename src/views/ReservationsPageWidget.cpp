@@ -511,7 +511,7 @@ void ReservationsPageWidget::onTableActionClicked() {
         CustomConfirmDialog dialog("Confirm delete reservation", QString("Are you sure you want to permanently delete reservation %1 from the system?").arg(QString::fromStdString(bookingId)), true, this);
         if (dialog.exec() == QDialog::Accepted && dialog.isConfirmed()) {
             std::string errMsg;
-            if (m_manager->deleteBooking(bookingId, errMsg)) {
+            if (m_manager->soft_deleteBooking(bookingId, errMsg)) {
                 refreshData();
                 CustomSuccessDialog("Reservation has been deleted permanently.", this).exec();
             } else {

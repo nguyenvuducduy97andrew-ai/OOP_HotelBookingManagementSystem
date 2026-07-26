@@ -1,13 +1,13 @@
 #include "Room.h"
 #include <string>
 
-Room::Room(std::string roomNumber, double basePrice)
+Room::Room(const std::string& roomNumber, double basePrice)
     : roomNumber(roomNumber),
       basePrice(basePrice),
       isAvailable(true),
       archived(false) {
 }
-void Room::setRoomNumber(std::string roomNumber) {
+void Room::setRoomNumber(const std::string& roomNumber) {
     this->roomNumber = roomNumber;
 }
 

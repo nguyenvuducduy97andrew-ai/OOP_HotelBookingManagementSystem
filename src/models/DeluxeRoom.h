@@ -15,5 +15,5 @@ public:
     void setMiniBarFee(double fee);
 
     // Override function calculateTargetPrice từ lớp cha Room
-    double calculateTargetPrice() override;
+    double calculateTargetPrice() const override;
 };

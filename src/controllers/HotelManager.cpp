@@ -177,20 +177,11 @@ bool HotelManager::validateBookingDates(
 {
     const auto checkIn = QDate::fromString(QString::fromStdString(checkInDate), Qt::ISODate);
     const auto checkOut = QDate::fromString(QString::fromStdString(checkOutDate), Qt::ISODate);
-    if (!checkIn.isValid() || !checkOut.isValid())
-    {
-        errorMessage = "Check-in and check-out dates must use ISO format (YYYY-MM-DD).";
-        return false;
-    }
-    if (!isValidDateString(checkInDate, errorMessage))
+    if (!isValidDateString(checkInDate, errorMessage)|| !isValidDateString(checkOutDate, errorMessage))
     {
         return false;
     }
 
-    if (!isValidDateString(checkOutDate, errorMessage))
-    {
-        return false;
-    }
 
     if (checkOutDate <= checkInDate)
     {
@@ -1235,7 +1226,7 @@ bool HotelManager::deleteCustomer(const std::string &customerId, std::string &er
     return true;
 }
 
-bool HotelManager::deleteBooking(const std::string &bookingId, std::string &errorMessage)
+bool HotelManager::soft_deleteBooking(const std::string &bookingId, std::string &errorMessage)
 {
     auto booking = findBookingById(bookingId);
     if (!booking)

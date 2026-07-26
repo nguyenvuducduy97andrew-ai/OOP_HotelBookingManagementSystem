@@ -14,6 +14,6 @@ void DeluxeRoom::setMiniBarFee(double fee) {
     this->miniBarFee = fee;
 }
 
-double DeluxeRoom::calculateTargetPrice() {
+double DeluxeRoom::calculateTargetPrice() const {
     return this->getMiniBarFee() + this->getBasePrice();
 }
