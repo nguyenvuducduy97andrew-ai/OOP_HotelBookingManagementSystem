@@ -1,9 +1,12 @@
 #pragma once
 #include <QWidget>
-#include <QGridLayout>
-#include <QLineEdit>
-#include <QComboBox>
+#include <QList>
 #include "HotelManager.h"
+#include "roomcard.h"
+
+namespace Ui {
+class RoomStatusPageWidget;
+}
 
 class RoomStatusPageWidget : public QWidget {
     Q_OBJECT
@@ -14,18 +17,17 @@ public:
     void refreshData();
 
 private slots:
-    void onFiltersChanged();
+    void applyFilters();
+    void setFilterType(QString type);
 
 private:
     void setupUI();
-    QWidget* createRoomStatusCard(const std::shared_ptr<Room>& room);
+    // Khong can createRoomStatusCard vi da dung RoomCard
+    // QWidget* createRoomStatusCard(const std::shared_ptr<Room>& room);
 
+    Ui::RoomStatusPageWidget *ui;
     HotelManager* m_manager;
+    QList<RoomCard*> m_roomCards;
+    bool m_isCheckAvailMode = false;
 
-    QLineEdit* m_searchEdit;
-    QComboBox* m_typeCombo;
-    QComboBox* m_statusCombo;
-    
-    QWidget* m_gridContainer;
-    QGridLayout* m_gridLayout;
 };

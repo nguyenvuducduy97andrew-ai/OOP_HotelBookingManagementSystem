@@ -48,10 +48,10 @@ QFrame#headerFrame {
 }
 
 /* Đảm bảo phần ruột trong suốt để ăn theo nền trắng của mainAppContainer */
-QFrame#mainContentFrame, QStackedWidget {
+QFrame#mainContainFrame, QStackedWidget {
         background-color: #FFFFFF;
     border-radius: 24px;
-         border: 1px solid #E5E7EB;
+         border: none;
 }
 
 QPushButton[sidebarBtn=&quot;true&quot;] {

@@ -17,6 +17,7 @@ file(GLOB SOURCE_FILES
     "src/controllers/*.cpp" "src/controllers/*.h"
     "src/database/*.cpp" "src/database/*.h"
     "src/views/*.cpp" "src/views/*.h" "src/views/*.ui"
+    "src/resources/*.qrc"
 )
 
 add_executable(HotelBookingManagement ${SOURCE_FILES})
