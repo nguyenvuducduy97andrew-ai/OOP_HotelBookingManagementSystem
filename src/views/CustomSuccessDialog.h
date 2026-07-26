@@ -5,8 +5,6 @@
 #include <QPushButton>
 
 class CustomSuccessDialog : public QDialog {
-    Q_OBJECT
-
 public:
     explicit CustomSuccessDialog(const QString& message, QWidget* parent = nullptr) 
         : QDialog(parent) {

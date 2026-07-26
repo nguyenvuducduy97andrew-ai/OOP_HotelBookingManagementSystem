@@ -6,8 +6,6 @@
 #include <QLabel>
 
 class InvoiceDialog : public QDialog {
-    Q_OBJECT
-
 public:
     explicit InvoiceDialog(const QString& invoiceDetails, QWidget* parent = nullptr) 
         : QDialog(parent) {

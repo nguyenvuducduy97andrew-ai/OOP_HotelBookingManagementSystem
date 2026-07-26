@@ -6,8 +6,6 @@
 #include <QPushButton>
 
 class CustomConfirmDialog : public QDialog {
-    Q_OBJECT
-
 private:
     bool m_confirmed;
 
