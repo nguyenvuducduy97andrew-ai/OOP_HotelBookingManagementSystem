@@ -16,3 +16,16 @@ void SuiteRoom::setPremiumServiceFee(double fee) {
 double SuiteRoom::calculateTargetPrice() const {
     return getBasePrice() + premiumServiceFee;
 }
+
+std::string SuiteRoom::getRoomTypeName() const {
+    return "Suite";
+}
+
+double SuiteRoom::getExtraFeeAmount() const {
+    // Fixed-modified: Surface the premium service fee through the base room interface.
+    return getPremiumServiceFee();
+}
+
+void SuiteRoom::setExtraFeeAmount(double fee) {
+    setPremiumServiceFee(fee);
+}

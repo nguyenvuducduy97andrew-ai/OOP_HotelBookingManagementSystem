@@ -1,9 +1,10 @@
 #include "Customer.h"
 
 Customer::Customer() {
-    this->customerId = "UNKNOWN";
-    this->name = "UNKNOWN";
-    this->phoneNumber = "UNKNOWN";
+    // Fixed-modified: Keep the default customer invalid until real data is assigned.
+    this->customerId = "";
+    this->name = "";
+    this->phoneNumber = "";
     this->archived = false;
 }
 
@@ -46,5 +47,11 @@ void Customer::setArchived(bool archived) {
     this->archived = archived;
 }
 bool Customer::isValid() const {
-    return !customerId.empty() && !name.empty() && !phoneNumber.empty();
+    // Fixed-modified: Reject empty and placeholder customer records.
+    return !customerId.empty() &&
+           !name.empty() &&
+           !phoneNumber.empty() &&
+           customerId != "UNKNOWN" &&
+           name != "UNKNOWN" &&
+           phoneNumber != "UNKNOWN";
 }

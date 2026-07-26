@@ -356,6 +356,7 @@ QWidget* RoomPageWidget::createRoomCard(const std::shared_ptr<Room>& room) {
     QString specLabel;
     QColor typeColor;
 
+    // Fixed-modified: Use room metadata accessors for type labels and subtype-specific fees.
     if (dynamic_cast<StandardRoom*>(room.get())) {
         typeLabel = "Standard";
         specLabel = "25m² · Queen Bed";
@@ -445,9 +446,7 @@ void RoomPageWidget::refreshData() {
         if (!room) continue;
 
         // Apply type filter
-        QString typeStr = "Standard";
-        if (dynamic_cast<DeluxeRoom*>(room.get())) typeStr = "Deluxe";
-        else if (dynamic_cast<SuiteRoom*>(room.get())) typeStr = "Suite";
+        QString typeStr = QString::fromStdString(room->getRoomTypeName());
 
         if (m_selectedTypeFilter != "All" && m_selectedTypeFilter != typeStr) {
             continue;
@@ -537,28 +536,27 @@ void RoomPageWidget::updateDetailPanel(const std::shared_ptr<Room>& room) {
     m_detailStatusLabel->style()->unpolish(m_detailStatusLabel);
     m_detailStatusLabel->style()->polish(m_detailStatusLabel);
 
-    if (dynamic_cast<StandardRoom*>(room.get())) {
+    const std::string typeName = room->getRoomTypeName();
+    if (typeName == "Standard") {
         m_detailSizeLabel->setText("📏 25m²");
         m_detailBedLabel->setText("🛏 Queen Bed");
         m_detailGuestLabel->setText("👤 2 Guests");
         m_detailExtraFeeLabel->setVisible(false);
         m_detailImageLabel->setText("🏨 Standard Room Image Placeholder");
         m_detailImageLabel->setStyleSheet("background-color: #F4F7FE; border-radius: 14px; font-weight: bold; color: #A3AED0;");
-    } else if (dynamic_cast<DeluxeRoom*>(room.get())) {
-        auto* deluxe = dynamic_cast<DeluxeRoom*>(room.get());
+    } else if (typeName == "Deluxe") {
         m_detailSizeLabel->setText("📏 35m²");
         m_detailBedLabel->setText("🛏 King Bed");
         m_detailGuestLabel->setText("👤 2 Guests");
-        m_detailExtraFeeLabel->setText(QString("💰 Mini Bar Fee: %1đ").arg(formatMoney(deluxe->getMiniBarFee())));
+        m_detailExtraFeeLabel->setText(QString("💰 Mini Bar Fee: %1đ").arg(formatMoney(room->getExtraFeeAmount())));
         m_detailExtraFeeLabel->setVisible(true);
         m_detailImageLabel->setText("✨ Deluxe Room Image Placeholder");
         m_detailImageLabel->setStyleSheet("background-color: #E0F2FE; border-radius: 14px; font-weight: bold; color: #0284C7;");
-    } else if (dynamic_cast<SuiteRoom*>(room.get())) {
-        auto* suite = dynamic_cast<SuiteRoom*>(room.get());
+    } else if (typeName == "Suite") {
         m_detailSizeLabel->setText("📏 55m²");
         m_detailBedLabel->setText("🛏 Super King Bed");
         m_detailGuestLabel->setText("👤 4 Guests");
-        m_detailExtraFeeLabel->setText(QString("👑 Premium Service Fee: %1đ").arg(formatMoney(suite->getPremiumServiceFee())));
+        m_detailExtraFeeLabel->setText(QString("👑 Premium Service Fee: %1đ").arg(formatMoney(room->getExtraFeeAmount())));
         m_detailExtraFeeLabel->setVisible(true);
         m_detailImageLabel->setText("👑 Suite Room Image Placeholder");
         m_detailImageLabel->setStyleSheet("background-color: #FEF3C7; border-radius: 14px; font-weight: bold; color: #D97706;");
@@ -579,16 +577,11 @@ void RoomPageWidget::onAddRoomClicked() {
         }
 
         std::string errMsg;
+        // Fixed-modified: Set subtype fees through the room interface instead of concrete casts.
         if (m_manager->registerRoom(type, roomNum, price, errMsg)) {
             auto room = m_manager->findRoomByNumber(roomNum);
             if (room) {
-                if (type == RoomType::Deluxe) {
-                    auto dlx = std::dynamic_pointer_cast<DeluxeRoom>(room);
-                    if (dlx) dlx->setMiniBarFee(extraFee);
-                } else if (type == RoomType::Suite) {
-                    auto sui = std::dynamic_pointer_cast<SuiteRoom>(room);
-                    if (sui) sui->setPremiumServiceFee(extraFee);
-                }
+                room->setExtraFeeAmount(extraFee);
             }
             refreshData();
             CustomSuccessDialog("Room added successfully.", this).exec();
@@ -606,15 +599,15 @@ void RoomPageWidget::onEditRoomClicked() {
     auto room = m_manager->findRoomByNumber(roomNum);
     if (!room) return;
 
+    // Fixed-modified: Read the room type and extra fee from polymorphic accessors.
     RoomType type = RoomType::Standard;
-    double extraFee = 0.0;
-    if (dynamic_cast<DeluxeRoom*>(room.get())) {
+    const std::string typeName = room->getRoomTypeName();
+    if (typeName == "Deluxe") {
         type = RoomType::Deluxe;
-        extraFee = dynamic_cast<DeluxeRoom*>(room.get())->getMiniBarFee();
-    } else if (dynamic_cast<SuiteRoom*>(room.get())) {
+    } else if (typeName == "Suite") {
         type = RoomType::Suite;
-        extraFee = dynamic_cast<SuiteRoom*>(room.get())->getPremiumServiceFee();
     }
+    double extraFee = room->getExtraFeeAmount();
 
     RoomDialog dialog(QString::fromStdString(roomNum), room->getBasePrice(), type, extraFee, room->getIsAvailable(), this);
     if (dialog.exec() == QDialog::Accepted) {

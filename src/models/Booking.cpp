@@ -4,52 +4,39 @@
 #include <string>
 #include <iomanip>
 #include <sstream>
-#include <chrono>
-#include <QSqlQuery>
-#include <QVariant>
-#include <QSqlError>
-#include <QDebug>
-#include <QDate>
+
+namespace {
+// Fixed-modified: Replace Qt date checks with standard C++ ISO parsing for booking validity.
+bool isIsoDateString(const std::string& value)
+{
+    std::tm parsed{};
+    std::istringstream input(value);
+    input >> std::get_time(&parsed, "%Y-%m-%d");
+    return !input.fail() && input.eof();
+}
+}
 
 //The booking counter started at 1000 to be used as BookingID
 int Booking::bookingCounter = 1000;
 
 Booking::Booking() {
-    bookingCounter++;
-    this->bookingId = "BK" + std::to_string(bookingCounter);
+    // Fixed-modified: Keep booking construction lightweight and assign the ID from HotelManager instead.
     this->cancelled = false;
     this->deleted = false;
-
-#pragma warning(suppress : 4996)
-    std::time_t now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-    std::tm* t = std::localtime(&now);
-
-    std::stringstream ssIn;
-    ssIn << std::put_time(t, "%Y-%m-%d");
-    this->checkInDate = ssIn.str();
-
     this->checkOutDate = "";
+    this->checkInDate = "";
 }
 
-// Read SQLite to get the current largest code to accurately restore the private static counter variable
-void Booking::initCounterFromDatabase() {
-    QSqlQuery query;
-    if (query.exec("SELECT bookingId FROM Booking")) {
-        int maxValue = bookingCounter;
-        while (query.next()) {
-            const QString id = query.value(0).toString();
-            if (!id.startsWith("BK")) {
-                continue;
-            }
-            bool ok = false;
-            int numeric = id.mid(2).toInt(&ok);
-            if (ok && numeric > maxValue) {
-                maxValue = numeric;
-            }
-        }
-        bookingCounter = maxValue;
-    } else {
-        qDebug() << "Error querying to reset the Booking counter:" << query.lastError().text();
+std::string Booking::nextBookingId() {
+    // Fixed-modified: Generate booking IDs only when the manager commits a booking.
+    bookingCounter++;
+    return "BK" + std::to_string(bookingCounter);
+}
+
+// Restore the booking counter from the highest persisted booking number.
+void Booking::initCounterFromDatabase(int maxBookingNumber) {
+    if (maxBookingNumber > bookingCounter) {
+        bookingCounter = maxBookingNumber;
     }
 }
 
@@ -69,11 +56,6 @@ void Booking::setCustomer(const std::shared_ptr<Customer>& customer) {
     this->customer = customer;
 }
 
-void Booking::setCustomer(Customer* customer) {
-    // Legacy raw pointer overload - cannot create weak_ptr from raw pointer safely
-    this->customer = std::weak_ptr<Customer>();
-}
-
 std::shared_ptr<Room> Booking::getRoom() const {
     // Lock the weak_ptr to get a shared_ptr; returns nullptr if expired
     return room.lock();
@@ -81,11 +63,6 @@ std::shared_ptr<Room> Booking::getRoom() const {
 void Booking::setRoom(const std::shared_ptr<Room>& room) {
     // Store weak reference (does not increase refcount)
     this->room = room;
-}
-
-void Booking::setRoom(Room* room) {
-    // Legacy raw pointer overload - cannot create weak_ptr from raw pointer safely
-    this->room = std::weak_ptr<Room>();
 }
 
 std::string Booking::getCheckInDate() const {
@@ -124,7 +101,7 @@ bool Booking::isValid() const {
 
     return lockedCustomer != nullptr &&
            lockedRoom != nullptr &&
-           !checkInDate.empty() &&
-           !checkOutDate.empty() &&
+           isIsoDateString(checkInDate) &&
+           isIsoDateString(checkOutDate) &&
            checkOutDate > checkInDate;
 }

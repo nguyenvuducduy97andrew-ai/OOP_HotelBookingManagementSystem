@@ -24,5 +24,9 @@ public:
     bool isArchived() const;
     void setArchived(bool archived);
 
+    // Fixed-modified: Expose room type and subtype fee behavior through virtual methods instead of casts.
     virtual double calculateTargetPrice() const = 0;
+    virtual std::string getRoomTypeName() const = 0;
+    virtual double getExtraFeeAmount() const = 0;
+    virtual void setExtraFeeAmount(double fee) = 0;
 };

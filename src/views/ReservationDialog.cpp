@@ -181,12 +181,11 @@ void ReservationDialog::updateAvailableRooms() {
         }
 
         if (isFree) {
+            // Fixed-modified: Format room labels from the virtual type name.
             std::string label = roomNum;
             // Add subclass type suffix
             // e.g. "101 (Standard)", "301 (Suite)"
-            if (dynamic_cast<StandardRoom*>(room.get())) label += " (Standard)";
-            else if (dynamic_cast<DeluxeRoom*>(room.get())) label += " (Deluxe)";
-            else if (dynamic_cast<SuiteRoom*>(room.get())) label += " (Suite)";
+            label += " (" + room->getRoomTypeName() + ")";
 
             m_roomCombo->addItem(QString::fromStdString(label), QString::fromStdString(roomNum));
         }

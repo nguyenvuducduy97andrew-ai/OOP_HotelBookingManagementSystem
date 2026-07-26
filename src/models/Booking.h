@@ -4,6 +4,9 @@
 
 class Customer;
 class Room;
+class HotelManager;
+
+enum class BookingState { UPCOMING, ACTIVE, COMPLETED, CANCELLED };
 
 class Booking
 {
@@ -20,18 +23,25 @@ private:
 public:
     Booking();
 
-    static void initCounterFromDatabase();
+    // Fixed-modified: Let HotelManager own booking ID creation and counter sync.
+    friend class HotelManager;
+
+    static std::string nextBookingId();
+    static void initCounterFromDatabase(int maxBookingNumber);
 
     std::string getBookingId() const;
+    
+private:
+    // Fixed-modified: Keep booking IDs write-protected outside the manager layer.
     void setBookingId(const std::string &bookingId);
+
+public:
 
     std::shared_ptr<Customer> getCustomer() const;
     void setCustomer(const std::shared_ptr<Customer> &customer);
-    void setCustomer(Customer *customer);  // Legacy overload for raw pointers
 
     std::shared_ptr<Room> getRoom() const;
     void setRoom(const std::shared_ptr<Room> &room);
-    void setRoom(Room *room);  // Legacy overload for raw pointers
 
     std::string getCheckInDate() const;
     void setCheckInDate(const std::string &checkInDate);

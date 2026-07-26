@@ -110,13 +110,15 @@ void DashboardWidget::populateData()
     int standardCount = 0;
     int deluxeCount = 0;
     int suiteCount = 0;
+    // Fixed-modified: Replace room subclass checks with metadata lookups for type counts.
     for (const auto& r : m_manager->getRooms()) {
         if (!r) continue;
-        if (dynamic_cast<StandardRoom*>(r.get())) {
+        const std::string typeName = r->getRoomTypeName();
+        if (typeName == "Standard") {
             standardCount++;
-        } else if (dynamic_cast<DeluxeRoom*>(r.get())) {
+        } else if (typeName == "Deluxe") {
             deluxeCount++;
-        } else if (dynamic_cast<SuiteRoom*>(r.get())) {
+        } else if (typeName == "Suite") {
             suiteCount++;
         }
     }
@@ -255,14 +257,8 @@ void DashboardWidget::populateData()
         auto room = roomStatsList[i].room;
         int count = roomStatsList[i].bookingCount;
         
-        QString typeLabel = "Standard";
-        if (dynamic_cast<StandardRoom*>(room.get())) {
-            typeLabel = "Standard";
-        } else if (dynamic_cast<DeluxeRoom*>(room.get())) {
-            typeLabel = "Deluxe";
-        } else if (dynamic_cast<SuiteRoom*>(room.get())) {
-            typeLabel = "Suite";
-        }
+        // Fixed-modified: Use the room's virtual type name for summary cards.
+        QString typeLabel = QString::fromStdString(room->getRoomTypeName());
         
         QString roomTitle = QString("Room %1 · %2")
             .arg(QString::fromStdString(room->getRoomNumber()))
@@ -582,17 +578,19 @@ QString DashboardWidget::buildReportHtml() const
 
     std::map<std::string, int> roomBookingCounts;
     if (m_manager) {
+        // Fixed-modified: Count room categories through the virtual type accessor.
         for (const auto& room : m_manager->getRooms()) {
             if (!room || room->isArchived()) {
                 continue;
             }
 
             totalRooms++;
-            if (dynamic_cast<StandardRoom*>(room.get())) {
+            const std::string typeName = room->getRoomTypeName();
+            if (typeName == "Standard") {
                 standardCount++;
-            } else if (dynamic_cast<DeluxeRoom*>(room.get())) {
+            } else if (typeName == "Deluxe") {
                 deluxeCount++;
-            } else if (dynamic_cast<SuiteRoom*>(room.get())) {
+            } else if (typeName == "Suite") {
                 suiteCount++;
             }
 
@@ -653,13 +651,12 @@ QString DashboardWidget::buildReportHtml() const
 
     std::vector<RoomEntry> popularRooms;
     for (const auto& [roomNumber, count] : roomBookingCounts) {
+        // Fixed-modified: Read the room type label without using dynamic_cast.
         QString typeLabel = "Standard";
         if (m_manager) {
             const auto room = m_manager->findRoomByNumber(roomNumber);
-            if (dynamic_cast<DeluxeRoom*>(room.get())) {
-                typeLabel = "Deluxe";
-            } else if (dynamic_cast<SuiteRoom*>(room.get())) {
-                typeLabel = "Suite";
+            if (room) {
+                typeLabel = QString::fromStdString(room->getRoomTypeName());
             }
         }
 

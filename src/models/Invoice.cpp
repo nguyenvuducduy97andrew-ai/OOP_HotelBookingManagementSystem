@@ -5,12 +5,24 @@
 #include <iostream>
 #include <iomanip>
 #include <sstream> // Added for std::stringstream in generateInvoiceDetails
-#include <QLocale>
+#include <locale>
 
 namespace {
+// Fixed-modified: Replace Qt-only helpers with standard C++ parsing/formatting in the invoice model.
+bool isIsoDateString(const std::string& value)
+{
+    std::tm parsed{};
+    std::istringstream input(value);
+    input >> std::get_time(&parsed, "%Y-%m-%d");
+    return !input.fail() && input.eof();
+}
+
 std::string formatMoney(double value)
 {
-    return QLocale(QLocale::Vietnamese, QLocale::Vietnam).toString(value, 'f', 0).toStdString();
+    std::ostringstream output;
+    output.imbue(std::locale::classic());
+    output << std::fixed << std::setprecision(0) << value;
+    return output.str();
 }
 }
 
@@ -54,12 +66,6 @@ void Invoice::setBooking(const std::shared_ptr<Booking>& booking) {
     }
 }
 
-// Modified: Cleaned up raw pointer overload to match the dynamic calculation architecture
-void Invoice::setBooking(Booking* booking) {
-    // Legacy raw pointer overload - cannot create weak_ptr from raw pointer safely
-    this->booking = std::weak_ptr<Booking>();
-}
-
 double Invoice::getTaxRate() const {
     return taxRate;
 }
@@ -91,7 +97,13 @@ void Invoice::setPaymentDate(const std::string& paymentDate) {
 
 // Modified: Validates booking existence, invoice data integrity, and duration validity
 bool Invoice::isValid() const {
-    return !invoiceId.empty() && nights > 0;
+    // Fixed-modified: Require a linked booking, positive stay length, and a real ISO payment date.
+    const auto lockedBooking = booking.lock();
+
+    return !invoiceId.empty() &&
+           lockedBooking != nullptr &&
+           nights > 0 &&
+           isIsoDateString(paymentDate);
 }
 
 // Modified: Computes subtotal on-the-fly using the locally stored 'nights' variable
@@ -114,6 +126,7 @@ double Invoice::calculateTotal() const {
 
 // Modified: Refactored entirely to return std::string instead of QString using std::stringstream
 std::string Invoice::generateInvoiceDetails() const {
+    // Fixed-modified: Keep invoice rendering self-contained while formatting money without Qt locale APIs.
     std::stringstream details;
 
     details << "<h3>====== HOTEL BOOKING INVOICE ======</h3>";

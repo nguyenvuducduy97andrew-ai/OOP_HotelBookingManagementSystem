@@ -8,8 +8,7 @@
 #include "Room.h"
 #include "RoomFactory.h"
 
-enum class BookingState { UPCOMING, ACTIVE, COMPLETED, CANCELLED };
-
+// Fixed-modified: Move booking state ownership closer to the booking model while keeping manager queries intact.
 std::string bookingStateToString(BookingState state);
 
 class HotelManager
@@ -202,6 +201,7 @@ public:
     // ID generation
     std::string nextInvoiceId() const;
 
+    // Fixed-modified: Make booking deletion consistent with the other hard-delete operations.
     // Delete methods
     bool deleteRoom(const std::string& roomNumber, std::string& errorMessage);
     bool deleteCustomer(const std::string& customerId, std::string& errorMessage);

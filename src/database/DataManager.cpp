@@ -254,8 +254,8 @@ bool DataManager::loadAll(HotelManager& manager, const std::string& dataPath) {
         return false;
     }
 
-    // Rebuild the booking ID counter before restoring bookings so new IDs do not collide with persisted records
-    Booking::initCounterFromDatabase();
+    // Fixed-modified: Rebuild the booking counter in the data layer instead of querying from the model.
+    int maxBookingNumber = 1000;
 
     if (query.exec("SELECT bookingId, customerId, roomNumber, checkInDate, checkOutDate, cancelled, deleted FROM Booking")) {
         while (query.next()) {
@@ -267,6 +267,14 @@ bool DataManager::loadAll(HotelManager& manager, const std::string& dataPath) {
             bool cancelled = query.value(5).toInt() == 1;
             bool deleted = query.value(6).toInt() == 1;
 
+            if (bookingId.rfind("BK", 0) == 0) {
+                bool ok = false;
+                const int numeric = QString::fromStdString(bookingId.substr(2)).toInt(&ok);
+                if (ok && numeric > maxBookingNumber) {
+                    maxBookingNumber = numeric;
+                }
+            }
+
             if (!manager.restoreBookingFromDatabase(bookingId, custId, roomNum, checkInStr, checkOutStr, cancelled, deleted, errorMsg)) {
                 qDebug() << "Skipped invalid booking during load:" << QString::fromStdString(errorMsg);
                 continue;
@@ -277,6 +285,9 @@ bool DataManager::loadAll(HotelManager& manager, const std::string& dataPath) {
         qDebug() << "Error reading Booking table: " << query.lastError().text();
         return false;
     }
+
+    // Fixed-modified: Restore the next booking number from persisted rows after loading bookings.
+    Booking::initCounterFromDatabase(maxBookingNumber);
 
     // Reconstruct invoices directly back into the core system memory.
     // Legacy rows with a cancelled flag are ignored by deleting them during migration.

@@ -113,9 +113,8 @@ void RoomStatusPageWidget::refreshData() {
         RoomCard* card = new RoomCard(ui->scrollAreaWidgetContents);
         card->setRoomNumber(QString::fromStdString(room->getRoomNumber()));
 
-        QString roomType = "Standard";
-        if (dynamic_cast<DeluxeRoom*>(room.get())) roomType = "Deluxe";
-        else if (dynamic_cast<SuiteRoom*>(room.get())) roomType = "Suite";
+        // Fixed-modified: Render room cards from the virtual room type name.
+        QString roomType = QString::fromStdString(room->getRoomTypeName());
         card->setRoomType(roomType);
 
         bool isOccupied = false;

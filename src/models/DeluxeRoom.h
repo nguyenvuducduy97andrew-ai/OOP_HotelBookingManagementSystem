@@ -16,4 +16,7 @@ public:
 
     // Override function calculateTargetPrice từ lớp cha Room
     double calculateTargetPrice() const override;
+    std::string getRoomTypeName() const override;
+    double getExtraFeeAmount() const override;
+    void setExtraFeeAmount(double fee) override;
 };

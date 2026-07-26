@@ -177,13 +177,13 @@ bool HotelManager::validateBookingDates(
 {
     const auto checkIn = QDate::fromString(QString::fromStdString(checkInDate), Qt::ISODate);
     const auto checkOut = QDate::fromString(QString::fromStdString(checkOutDate), Qt::ISODate);
-    if (!isValidDateString(checkInDate, errorMessage)|| !isValidDateString(checkOutDate, errorMessage))
+    if (!checkIn.isValid() || !checkOut.isValid())
     {
+        errorMessage = "Dates must use ISO format (YYYY-MM-DD).";
         return false;
     }
 
-
-    if (checkOutDate <= checkInDate)
+    if (checkOut <= checkIn)
     {
         errorMessage = "Check-out must be after check-in.";
         return false;
@@ -698,8 +698,9 @@ bool HotelManager::createBooking(
 
     auto customer = findCustomerById(customerId);
 
-    // Commit — only reached if everything passed
+    // Fixed-modified: Generate and assign the booking ID only after validation succeeds.
     auto booking = std::make_shared<Booking>();
+    booking->setBookingId(Booking::nextBookingId());
     booking->setCustomer(customer);
     booking->setRoom(room);
     booking->setCheckInDate(checkIn);
@@ -753,6 +754,11 @@ bool HotelManager::updateBooking(
     if (!customer)
     {
         errorMessage = "Customer not found.";
+        return false;
+    }
+    if (customer->isArchived())
+    {
+        errorMessage = "Cannot update booking for an archived customer.";
         return false;
     }
 
@@ -834,9 +840,9 @@ bool HotelManager::completeBooking(
             QString::fromStdString(booking->getCheckInDate()),
             Qt::ISODate);
 
-    if (checkout < checkIn)
+    if (checkout <= checkIn)
     {
-        errorMessage = "Checkout date cannot be before check-in date.";
+        errorMessage = "Checkout date must be after check-in date.";
         return false;
     }
 
@@ -1045,9 +1051,9 @@ bool HotelManager::restoreBookingFromDatabase(
 
     const QDate checkIn = QDate::fromString(QString::fromStdString(checkInDate), Qt::ISODate);
     const QDate checkOut = QDate::fromString(QString::fromStdString(checkOutDate), Qt::ISODate);
-    if (checkOut < checkIn)
+    if (checkOut <= checkIn)
     {
-        errorMessage = "Check-out cannot be before check-in.";
+        errorMessage = "Check-out must be after check-in.";
         return false;
     }
 
@@ -1228,6 +1234,7 @@ bool HotelManager::deleteCustomer(const std::string &customerId, std::string &er
 
 bool HotelManager::soft_deleteBooking(const std::string &bookingId, std::string &errorMessage)
 {
+    // Fixed-modified: Treat booking deletion like the other entities and remove the record.
     auto booking = findBookingById(bookingId);
     if (!booking)
     {
@@ -1247,7 +1254,7 @@ bool HotelManager::soft_deleteBooking(const std::string &bookingId, std::string 
         return false;
     }
 
-    booking->setDeleted(true);
+    bookings.erase(std::remove(bookings.begin(), bookings.end(), booking), bookings.end());
     return true;
 }
 

@@ -4,6 +4,7 @@
 #include "Booking.h"
 
 class Booking;
+class HotelManager;
 
 class Invoice
 {
@@ -18,15 +19,22 @@ private:
 public:
     Invoice();
 
+    // Fixed-modified: Let HotelManager manage invoice ID creation and persistence restores.
+    friend class HotelManager;
+
     std::string getInvoiceId() const;
+    
+private:
+    // Fixed-modified: Keep invoice IDs write-protected outside the manager layer.
     void setInvoiceId(const std::string& invoiceId);
+
+public:
 
     std::string getBookingId() const;
     void setBookingId(const std::string& bookingId);
 
     std::shared_ptr<Booking> getBooking() const;
     void setBooking(const std::shared_ptr<Booking>& booking);
-    void setBooking(Booking* booking);  // Legacy overload for raw pointers
 
     double getTaxRate() const;
     void setTaxRate(double taxRate);
