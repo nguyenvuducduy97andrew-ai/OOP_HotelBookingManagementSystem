@@ -10,18 +10,18 @@ private:
     // QList<Booking*> bookingHistory;
 public:
     Customer();
-    Customer(std::string customerId, std::string name, std::string phoneNumber);
+    Customer(const std::string& customerId, const std::string& name, const std::string& phoneNumber);
     //virtual ~Customer() {} virtual dùng cho những class có kế thừa (cha-con) customer ko có -> sẽ bị thừa, ko cần thiết. 
     // Nếu có xuất hiện một class VIP customer chẳng hạn, sẽ restore lại destructor này
 
     std::string getCustomerId() const;
-    void setCustomerId(std::string customerId);
+    void setCustomerId(const std::string& customerId);
 
     std::string getName() const;
-    void setName(std::string name);
+    void setName(const std::string& name);
 
     std::string getPhoneNumber() const;
-    void setPhoneNumber(std::string phoneNumber);
+    void setPhoneNumber(const std::string& phoneNumber);
 
     bool isArchived() const;
     void setArchived(bool archived);

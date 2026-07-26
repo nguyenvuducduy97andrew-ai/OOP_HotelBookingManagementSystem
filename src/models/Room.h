@@ -9,10 +9,10 @@ private:
     bool archived = false;
 
 public:
-    Room(std::string roomNumber, double basePrice);
+    Room(const std::string& roomNumber, double basePrice);
     virtual ~Room() {}
 
-    void setRoomNumber(std::string roomNumber);
+    void setRoomNumber(const std::string& roomNumber);
     std::string getRoomNumber() const;
 
     void setBasePrice(double basePrice);
@@ -24,5 +24,5 @@ public:
     bool isArchived() const;
     void setArchived(bool archived);
 
-    virtual double calculateTargetPrice() = 0;
+    virtual double calculateTargetPrice() const = 0;
 };

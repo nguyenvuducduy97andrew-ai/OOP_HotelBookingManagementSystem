@@ -167,7 +167,6 @@ bool DataManager::initDatabase(const std::string& dataPath) {
         "   taxRate REAL NOT NULL,"
         "   nights INTEGER NOT NULL,"
         "   paymentDate TEXT NOT NULL,"
-        "   cancelled INTEGER DEFAULT 0,"
         "   FOREIGN KEY (bookingId) REFERENCES Booking(bookingId) ON DELETE CASCADE ON UPDATE CASCADE"
         ");";
     if (!query.exec(createInvoice)) {
@@ -279,17 +278,17 @@ bool DataManager::loadAll(HotelManager& manager, const std::string& dataPath) {
         return false;
     }
 
-    // Added: Reconstruct historical invoices directly back into the core system memory
-    if (query.exec("SELECT invoiceId, bookingId, taxRate, nights, paymentDate, cancelled FROM Invoice")) {
+    // Reconstruct invoices directly back into the core system memory.
+    // Legacy rows with a cancelled flag are ignored by deleting them during migration.
+    if (query.exec("SELECT invoiceId, bookingId, taxRate, nights, paymentDate FROM Invoice")) {
         while (query.next()) {
             std::string invId = query.value(0).toString().toStdString();
             std::string bookId = query.value(1).toString().toStdString();
             double tax = query.value(2).toDouble();
             int nightsCount = query.value(3).toInt();
             std::string payDate = query.value(4).toString().toStdString();
-            bool cancelled = query.value(5).toInt() == 1;
 
-            if (!manager.restoreInvoiceFromDatabase(invId, bookId, tax, nightsCount, payDate, cancelled, errorMsg)) {
+            if (!manager.restoreInvoiceFromDatabase(invId, bookId, tax, nightsCount, payDate, errorMsg)) {
                 qDebug() << "Skipped invalid invoice during load:" << QString::fromStdString(errorMsg);
                 continue;
             }
@@ -427,7 +426,7 @@ bool DataManager::saveAll(HotelManager& manager, const std::string& dataPath) {
     }
 
     // Added: 5. Persist Invoice records dynamically calculated up from view layer properties
-    query.prepare("INSERT INTO Invoice (invoiceId, bookingId, taxRate, nights, paymentDate, cancelled) VALUES (?, ?, ?, ?, ?, ?)");
+    query.prepare("INSERT INTO Invoice (invoiceId, bookingId, taxRate, nights, paymentDate) VALUES (?, ?, ?, ?, ?)");
     for (const auto& invoice : manager.getInvoices()) {
         if (!invoice) {
             continue;
@@ -438,8 +437,6 @@ bool DataManager::saveAll(HotelManager& manager, const std::string& dataPath) {
         query.addBindValue(invoice->getTaxRate());
         query.addBindValue(invoice->getNights());
         query.addBindValue(QString::fromStdString(invoice->getPaymentDate()));
-        query.addBindValue(invoice->isCancelled() ? 1 : 0);
-
         if (!query.exec()) {
             m_db.rollback();
             qDebug() << "Error saving Invoice: " << query.lastError().text();
@@ -504,13 +501,12 @@ bool DataManager::saveInvoiceImmediately(const Invoice& invoice) {
         return false;
     }
 
-    query.prepare("INSERT INTO Invoice (invoiceId, bookingId, taxRate, nights, paymentDate, cancelled) VALUES (?, ?, ?, ?, ?, ?)");
+    query.prepare("INSERT INTO Invoice (invoiceId, bookingId, taxRate, nights, paymentDate) VALUES (?, ?, ?, ?, ?)");
     query.addBindValue(QString::fromStdString(invoice.getInvoiceId()));
     query.addBindValue(QString::fromStdString(invoice.getBookingId()));
     query.addBindValue(invoice.getTaxRate());
     query.addBindValue(invoice.getNights());
     query.addBindValue(QString::fromStdString(invoice.getPaymentDate()));
-    query.addBindValue(invoice.isCancelled() ? 1 : 0);
 
     if (!query.exec()) {
         m_db.rollback();

@@ -11,32 +11,13 @@ file(MAKE_DIRECTORY "${CMAKE_SOURCE_DIR}/data")
 
 find_package(Qt6 REQUIRED COMPONENTS Core Sql Widgets Charts)
 
-set(SOURCE_FILES
-    src/main.cpp
-    src/controllers/HotelManager.cpp
-    src/database/DataManager.cpp
-    src/models/Booking.cpp
-    src/models/Customer.cpp
-    src/models/DeluxeRoom.cpp
-    src/models/Invoice.cpp
-    src/models/Room.cpp
-    src/models/RoomFactory.cpp
-    src/models/StandardRoom.cpp
-    src/models/SuiteRoom.cpp
-    src/views/CustomerDialog.cpp
-    src/views/CustomerPageWidget.cpp
-    src/views/DashboardWidget.cpp
-    src/views/dashboardwidgets.cpp
-    src/views/mainwindow.cpp
-    src/views/ReservationDialog.cpp
-    src/views/ReservationsPageWidget.cpp
-    src/views/RoomDialog.cpp
-    src/views/RoomPageWidget.cpp
-    src/views/RoomStatusPageWidget.cpp
-)
-
-file(GLOB CONFIGURE_DEPENDS VIEW_HEADERS
-    "src/views/*.h"
+file(GLOB SOURCE_FILES
+    "src/*.cpp" "src/*.h"
+    "src/models/*.cpp" "src/models/*.h"
+    "src/controllers/*.cpp" "src/controllers/*.h"
+    "src/database/*.cpp" "src/database/*.h"
+    "src/views/*.cpp" "src/views/*.h" "src/views/*.ui"
+    "src/resources/*.qrc"
 )
 
 add_executable(HotelBookingManagement ${SOURCE_FILES} ${VIEW_HEADERS})

@@ -43,6 +43,40 @@ int main(int argc, char *argv[]) {
         return -1;
     }
 
+    // Tự động tạo 100 phòng demo nếu chưa có dữ liệu phòng nào
+    if (hotelManager.getRooms().empty()) {
+        std::string err;
+        for (int i = 0; i < 100; ++i) {
+            std::string roomNum = std::to_string(101 + i);
+            RoomType type = RoomType::Standard;
+            double price = 500000;
+            
+            if (i % 3 == 0) {
+                type = RoomType::Suite;
+                price = 2000000;
+            } else if (i % 2 == 0) {
+                type = RoomType::Deluxe;
+                price = 1000000;
+            }
+            
+            hotelManager.registerRoom(type, roomNum, price, err);
+            
+            if (i == 2) {
+                auto room = hotelManager.findRoomByNumber(roomNum);
+                if (room) room->setIsAvailable(false); // Maintenance
+            } else if (i % 2 == 0) {
+                // Tạo khách hàng và booking giả lập để phòng thành OCC
+                std::string custId = "CCCD_" + std::to_string(i);
+                hotelManager.registerCustomer(custId, "Nguyen Van Kai", "0901234567", err);
+                
+                std::string dateIn = QDate::currentDate().toString("yyyy-MM-dd").toStdString();
+                std::string dateOut = QDate::currentDate().addDays(1).toString("yyyy-MM-dd").toStdString();
+                hotelManager.createBooking(custId, roomNum, dateIn, dateOut, err);
+            }
+        }
+        DataManager::getInstance().saveAll(hotelManager, databasePath.toStdString());
+    }
+
     // Inject the managed core logic pointer into the UI view layer and display window
     MainWindow mainWindow(&hotelManager);
     mainWindow.show();

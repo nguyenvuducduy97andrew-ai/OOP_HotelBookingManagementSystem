@@ -12,5 +12,5 @@ public:
     double getPremiumServiceFee() const;
     void setPremiumServiceFee(double fee);
 
-    double calculateTargetPrice() override;
+    double calculateTargetPrice() const override;
 };

@@ -71,6 +71,11 @@ private:
         std::string& errorMessage
         ) const;
 
+    void addRoom(std::shared_ptr<Room> room);
+    void addCustomer(std::shared_ptr<Customer> customer);
+    void addBooking(std::shared_ptr<Booking> booking);
+    void addInvoice(std::shared_ptr<Invoice> invoice);
+
 public:
     HotelManager();
 
@@ -81,10 +86,7 @@ public:
     const std::vector<std::shared_ptr<Invoice>>& getInvoices() const;
 
     // Modified: Moved internal add methods to public so DataManager can populate entities when loading database
-    void addRoom(std::shared_ptr<Room> room);
-    void addCustomer(std::shared_ptr<Customer> customer);
-    void addBooking(std::shared_ptr<Booking> booking);
-    void addInvoice(std::shared_ptr<Invoice> invoice);
+    
     void clearAll();
 
     // Existence checks
@@ -192,7 +194,6 @@ public:
         double taxRate,
         int nights,
         const std::string& paymentDate,
-        bool cancelled,
         std::string& errorMessage
     );
     // Added: Soft-cancels a reservation by changing its status and releasing the assigned room back to inventory
@@ -204,6 +205,6 @@ public:
     // Delete methods
     bool deleteRoom(const std::string& roomNumber, std::string& errorMessage);
     bool deleteCustomer(const std::string& customerId, std::string& errorMessage);
-    bool deleteBooking(const std::string& bookingId, std::string& errorMessage);
+    bool soft_deleteBooking(const std::string& bookingId, std::string& errorMessage);
     bool deleteInvoice(const std::string& invoiceId, std::string& errorMessage);
 };
