@@ -243,10 +243,6 @@ void ReservationsPageWidget::setupUI() {
     legCancel->setStyleSheet("background-color: #FFFBEB; color: #92400E; border: 1px solid #FDE68A; font-weight: bold; border-radius: 10px; padding: 2px 8px; font-size: 11px;");
     legendRow->addWidget(legCancel);
 
-    auto* legDelete = new QLabel("🗑 Delete", this);
-    legDelete->setStyleSheet("background-color: #FEF2F2; color: #991B1B; border: 1px solid #FCA5A5; font-weight: bold; border-radius: 10px; padding: 2px 8px; font-size: 11px;");
-    legendRow->addWidget(legDelete);
-
     mainLayout->addLayout(legendRow);
 
     // Filter Row
@@ -257,7 +253,7 @@ void ReservationsPageWidget::setupUI() {
 
     m_statusCombo = new QComboBox(this);
     m_statusCombo->setObjectName("statusCombo");
-    m_statusCombo->addItems({"All statuses", "Upcoming", "Active", "Completed", "Cancelled"});
+    m_statusCombo->addItems({"All statuses", "Upcoming", "Active", "Cancelled"});
 
     filterRow->addWidget(m_searchEdit);
     filterRow->addWidget(m_statusCombo);
@@ -277,7 +273,7 @@ void ReservationsPageWidget::setupUI() {
     }
     m_tableWidget->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Stretch); // Let Customer Name take remaining space
     m_tableWidget->horizontalHeader()->setSectionResizeMode(8, QHeaderView::Fixed);
-    m_tableWidget->setColumnWidth(8, 160);
+    m_tableWidget->setColumnWidth(8, 100);
     m_tableWidget->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_tableWidget->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_tableWidget->setSelectionMode(QAbstractItemView::SingleSelection);
@@ -312,16 +308,17 @@ void ReservationsPageWidget::onAddBookingClicked() {
         std::string checkOut = dialog.getCheckOutDate().toStdString();
 
         std::string errMsg;
-        // 1. Register customer if they do not exist
-        if (!m_manager->customerIdExists(custId)) {
-            if (!m_manager->registerCustomer(custId, name, phone, errMsg)) {
-                QMessageBox::critical(this, "Customer registration error", QString::fromStdString(errMsg));
-                return;
-            }
+        if (!m_manager->resolveCustomerForBooking(custId, name, phone, errMsg)) {
+            QMessageBox::critical(this, "Customer verification error", QString::fromStdString(errMsg));
+            return;
         }
 
-        // 2. Create the booking
         if (m_manager->createBooking(custId, roomNum, checkIn, checkOut, errMsg)) {
+            if (!DataManager::getInstance().commitChanges(*m_manager)) {
+                refreshData();
+                QMessageBox::critical(this, "Save Booking Failed", "The reservation was not saved. The previous database state has been restored.");
+                return;
+            }
             refreshData();
             CustomSuccessDialog("Reservation completed successfully.", this).exec();
         } else {
@@ -338,14 +335,16 @@ void ReservationsPageWidget::refreshData() {
     for (const auto& booking : m_manager->getBookings()) {
         if (!booking || booking->isDeleted()) continue;
 
-        // Apply Status Filter
         BookingState state = m_manager->getBookingState(*booking);
+        // Modified and optimized performance: completed bookings move to Dashboard History and are removed from the operational table.
+        if (state == BookingState::COMPLETED) continue;
+
+        // Apply Status Filter
         if (m_statusFilterIndex > 0) {
             bool matches = false;
             if (m_statusFilterIndex == 1 && state == BookingState::UPCOMING) matches = true;
             else if (m_statusFilterIndex == 2 && state == BookingState::ACTIVE) matches = true;
-            else if (m_statusFilterIndex == 3 && state == BookingState::COMPLETED) matches = true;
-            else if (m_statusFilterIndex == 4 && state == BookingState::CANCELLED) matches = true;
+            else if (m_statusFilterIndex == 3 && state == BookingState::CANCELLED) matches = true;
 
             if (!matches) continue;
         }
@@ -433,15 +432,6 @@ void ReservationsPageWidget::refreshData() {
             connect(editBtn, &QPushButton::clicked, this, &ReservationsPageWidget::onTableActionClicked);
             actionLayout->addWidget(editBtn);
 
-            // Delete
-            auto* deleteBtn = new QPushButton("🗑", actionContainer);
-            configureActionButton(deleteBtn, "Delete reservation");
-            deleteBtn->setStyleSheet("background-color: #FEF2F2; color: #991B1B; border: 1px solid #FCA5A5; border-radius: 8px; font-size: 14px; min-width: 30px; max-width: 30px; min-height: 30px; max-height: 30px; padding: 0px;");
-            deleteBtn->setProperty("bookingId", bId);
-            deleteBtn->setProperty("actionType", "delete");
-            connect(deleteBtn, &QPushButton::clicked, this, &ReservationsPageWidget::onTableActionClicked);
-            actionLayout->addWidget(deleteBtn);
-
         } else if (state == BookingState::UPCOMING) {
             // Cancel
             auto* cancelBtn = new QPushButton("❌", actionContainer);
@@ -461,23 +451,6 @@ void ReservationsPageWidget::refreshData() {
             connect(editBtn, &QPushButton::clicked, this, &ReservationsPageWidget::onTableActionClicked);
             actionLayout->addWidget(editBtn);
 
-            // Delete
-            auto* deleteBtn = new QPushButton("🗑", actionContainer);
-            configureActionButton(deleteBtn, "Delete reservation");
-            deleteBtn->setStyleSheet("background-color: #FEF2F2; color: #991B1B; border: 1px solid #FCA5A5; border-radius: 8px; font-size: 14px; min-width: 30px; max-width: 30px; min-height: 30px; max-height: 30px; padding: 0px;");
-            deleteBtn->setProperty("bookingId", bId);
-            deleteBtn->setProperty("actionType", "delete");
-            connect(deleteBtn, &QPushButton::clicked, this, &ReservationsPageWidget::onTableActionClicked);
-            actionLayout->addWidget(deleteBtn);
-        } else {
-            // Completed / Cancelled -> only allow Delete
-            auto* deleteBtn = new QPushButton("🗑", actionContainer);
-            configureActionButton(deleteBtn, "Delete reservation");
-            deleteBtn->setStyleSheet("background-color: #FEF2F2; color: #991B1B; border: 1px solid #FCA5A5; border-radius: 8px; font-size: 14px; min-width: 30px; max-width: 30px; min-height: 30px; max-height: 30px; padding: 0px;");
-            deleteBtn->setProperty("bookingId", bId);
-            deleteBtn->setProperty("actionType", "delete");
-            connect(deleteBtn, &QPushButton::clicked, this, &ReservationsPageWidget::onTableActionClicked);
-            actionLayout->addWidget(deleteBtn);
         }
 
         m_tableWidget->setCellWidget(row, 8, actionContainer);
@@ -501,21 +474,15 @@ void ReservationsPageWidget::onTableActionClicked() {
         if (dialog.exec() == QDialog::Accepted && dialog.isConfirmed()) {
             std::string errMsg;
             if (m_manager->cancelBooking(bookingId, errMsg)) {
+                if (!DataManager::getInstance().commitChanges(*m_manager)) {
+                    refreshData();
+                    QMessageBox::critical(this, "Save Cancellation Failed", "The cancellation was not saved. The previous database state has been restored.");
+                    return;
+                }
                 refreshData();
                 CustomSuccessDialog("Reservation has been canceled.", this).exec();
             } else {
                 QMessageBox::critical(this, "Cancel reservation error", QString::fromStdString(errMsg));
-            }
-        }
-    } else if (actionType == "delete") {
-        CustomConfirmDialog dialog("Confirm delete reservation", QString("Are you sure you want to permanently delete reservation %1 from the system?").arg(QString::fromStdString(bookingId)), true, this);
-        if (dialog.exec() == QDialog::Accepted && dialog.isConfirmed()) {
-            std::string errMsg;
-            if (m_manager->soft_deleteBooking(bookingId, errMsg)) {
-                refreshData();
-                CustomSuccessDialog("Reservation has been deleted permanently.", this).exec();
-            } else {
-                QMessageBox::critical(this, "Delete reservation error", QString::fromStdString(errMsg));
             }
         }
     } else if (actionType == "edit") {
@@ -523,20 +490,29 @@ void ReservationsPageWidget::onTableActionClicked() {
         dialog.setEditBooking(bookingId);
         if (dialog.exec() == QDialog::Accepted) {
             std::string errMsg;
-            auto customer = booking->getCustomer();
-            if (customer) {
-                customer->setName(dialog.getCustomerName().toStdString());
-                customer->setPhoneNumber(dialog.getCustomerPhone().toStdString());
+            const std::string custId = dialog.getCustomerId().toStdString();
+            const std::string name = dialog.getCustomerName().toStdString();
+            const std::string phone = dialog.getCustomerPhone().toStdString();
+
+            if (!m_manager->resolveCustomerForBooking(custId, name, phone, errMsg)) {
+                QMessageBox::critical(this, "Customer verification error", QString::fromStdString(errMsg));
+                return;
             }
 
             if (!m_manager->updateBooking(
                     bookingId,
-                    dialog.getCustomerId().toStdString(),
+                    custId,
                     dialog.getRoomNumber().toStdString(),
                     dialog.getCheckInDate().toStdString(),
                     dialog.getCheckOutDate().toStdString(),
                     errMsg)) {
                 QMessageBox::critical(this, "Update reservation error", QString::fromStdString(errMsg));
+                return;
+            }
+
+            if (!DataManager::getInstance().commitChanges(*m_manager)) {
+                refreshData();
+                QMessageBox::critical(this, "Save Booking Failed", "The reservation changes were not saved. The previous database state has been restored.");
                 return;
             }
 
@@ -557,37 +533,37 @@ void ReservationsPageWidget::onTableActionClicked() {
                 return;
             }
 
-            if (!DataManager::getInstance().saveAll(*m_manager)) {
-                QMessageBox::warning(this, "Save Warning", "Booking data could not be saved before creating the invoice.");
-                return;
-            }
-
             int nights = checkIn.daysTo(today);
             if (nights <= 0) nights = 1; // Minimum charge 1 night
 
-            // 2. Generate and create Invoice
+            // Modified and optimized performance: stage checkout and invoice together before one atomic persistence commit.
             std::string invoiceId = m_manager->nextInvoiceId();
             double taxRate = 0.1; // 10% VAT
 
-            if (m_manager->createInvoice(invoiceId, bookingId, taxRate, nights, todayStr, errMsg)) {
-                auto invoice = m_manager->findInvoiceById(invoiceId);
-                if (invoice) {
-                    std::string details = invoice->generateInvoiceDetails();
-                    InvoiceDialog dialog(QString::fromStdString(details), this);
-                    dialog.exec();
-                }
-
-                if (!invoice || !DataManager::getInstance().saveInvoiceImmediately(*invoice)) {
-                    QMessageBox::warning(this, "Save Warning", "Invoice was created, but the database could not be updated immediately.");
-                } else if (!DataManager::getInstance().invoiceExistsInCurrentDatabase(invoiceId)) {
-                    QMessageBox::warning(this, "Save Warning", "Invoice was created, but it was not found in the database file after saving.");
-                } else {
-                    CustomSuccessDialog("Invoice created and data saved successfully.", this).exec();
-                }
+            if (!m_manager->createInvoice(invoiceId, bookingId, taxRate, nights, todayStr, errMsg)) {
+                DataManager::getInstance().restoreLastSavedState(*m_manager);
                 refreshData();
-            } else {
                 QMessageBox::critical(this, "Invoice generation error", QString::fromStdString(errMsg));
+                return;
             }
+
+            // Modified and optimized performance: commit checkout and invoice as one database snapshot or restore the prior state.
+            if (!DataManager::getInstance().commitChanges(*m_manager)) {
+                refreshData();
+                emit bookingCompleted();
+                QMessageBox::critical(this, "Check-out Save Failed", "Check-out and invoice were not saved. The previous database state has been restored.");
+                return;
+            }
+
+            auto invoice = m_manager->findInvoiceById(invoiceId);
+            refreshData();
+            emit bookingCompleted();
+
+            if (invoice) {
+                InvoiceDialog invoiceDialog(QString::fromStdString(invoice->generateInvoiceDetails()), this);
+                invoiceDialog.exec();
+            }
+            CustomSuccessDialog("Check-out and invoice saved successfully.", this).exec();
         }
     }
 }

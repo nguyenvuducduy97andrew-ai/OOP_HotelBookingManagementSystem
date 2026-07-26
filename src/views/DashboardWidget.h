@@ -9,6 +9,8 @@
 #include <QTimer>
 #include <QTextBrowser>
 
+class QUrl;
+
 namespace Ui {
 class DashboardWidget;
 }
@@ -31,6 +33,7 @@ private slots:
     // Hàm này sẽ được gọi mỗi khi timer hết thời gian
     void updateDateTime();
     void exportReport();
+    void onBookingHistoryLinkClicked(const QUrl& url);
 
 private:
     // Khai báo timer tại đây
@@ -41,11 +44,12 @@ private:
     void buildTrendChart();  // tạo QChartView và nhét vào trendChartHost
     void buildBarChart();    // tạo QChartView và nhét vào barChartHost
     void applyStyle();       // style theme sáng cho phần thân dashboard
-    void refreshDeletedBookingsView();
-    QString buildDeletedBookingsAuditHtml() const;
+    void refreshBookingHistoryView();
+    QString buildBookingHistoryHtml() const;
     QString buildReportHtml() const;
 
-    QTextBrowser *deletedBookingsBrowser;
+    QTextBrowser *bookingHistoryBrowser;
+    int m_historyPage = 0;
 };
 
 #endif

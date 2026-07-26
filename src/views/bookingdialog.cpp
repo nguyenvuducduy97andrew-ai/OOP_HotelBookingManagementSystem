@@ -1,9 +1,11 @@
 #include "bookingdialog.h"
 #include "ui_bookingdialog.h"
+#include "HotelManager.h"
 
 #include <QMessageBox>
 #include <QDateTime>
 #include <QPropertyAnimation>
+#include <QRegularExpression>
 
 BookingDialog::BookingDialog(QWidget *parent)
     : QDialog(parent)
@@ -79,7 +81,33 @@ QString BookingDialog::getDateIn() const { return ui->dateTimeCheckIn->date().to
 QString BookingDialog::getDateOut() const { return ui->dateTimeCheckOut->date().toString("dd/MM"); }
 
 void BookingDialog::onConfirmClicked() {
-    if (getGuestName().isEmpty() || getIdNumber().isEmpty() || getPhoneNumber().isEmpty()) {
+    const QString guestName = getGuestName();
+    const QString idNumber = getIdNumber();
+    const QString phoneNumber = getPhoneNumber();
+
+    if (!HotelManager::isValidCustomerIdFormat(idNumber.toStdString())) {
+        shake();
+        ui->lblSubtitle->setText("*Customer ID must contain exactly 12 digits");
+        ui->lblSubtitle->setStyleSheet("color: #E53935; font-size: 13px; font-weight: bold;");
+        return;
+    }
+
+    if (!HotelManager::isValidCustomerNameFormat(guestName.toStdString())) {
+        shake();
+        ui->lblSubtitle->setText("*Name must have at least 2 words and include both uppercase and lowercase letters");
+        ui->lblSubtitle->setStyleSheet("color: #E53935; font-size: 13px; font-weight: bold;");
+        return;
+    }
+
+    static const QRegularExpression digitsPattern(QStringLiteral(R"(^\+?\d{8,15}$)"));
+    if (!digitsPattern.match(phoneNumber).hasMatch()) {
+        shake();
+        ui->lblSubtitle->setText("*Phone number must contain only digits, optionally starting with '+'");
+        ui->lblSubtitle->setStyleSheet("color: #E53935; font-size: 13px; font-weight: bold;");
+        return;
+    }
+
+    if (guestName.isEmpty() || idNumber.isEmpty() || phoneNumber.isEmpty()) {
         shake();
         ui->lblSubtitle->setText("*Please fill in all required fields");
         ui->lblSubtitle->setStyleSheet("color: #E53935; font-size: 13px; font-weight: bold;");

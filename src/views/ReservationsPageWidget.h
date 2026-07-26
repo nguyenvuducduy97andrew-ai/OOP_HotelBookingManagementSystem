@@ -14,6 +14,10 @@ public:
 
     void refreshData();
 
+signals:
+    // Modified and optimized performance: notify dependent dashboard data only after checkout persistence completes.
+    void bookingCompleted();
+
 private slots:
     void onSearchChanged(const QString& text);
     void onFilterStatusChanged(int index);
@@ -25,7 +29,7 @@ private:
 
     HotelManager* m_manager;
     QString m_searchQuery;
-    int m_statusFilterIndex; // 0: All, 1: Upcoming, 2: Active, 3: Completed, 4: Cancelled
+    int m_statusFilterIndex; // 0: All, 1: Upcoming, 2: Active, 3: Cancelled
 
     QLineEdit* m_searchEdit;
     QComboBox* m_statusCombo;

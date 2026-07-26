@@ -1,6 +1,7 @@
 #include <QApplication>
 #include <QMessageBox>
 #include <QDir>
+#include <QString>
 // Force rebuild comment
 #include "mainwindow.h"
 #include "HotelManager.h"
@@ -66,8 +67,8 @@ int main(int argc, char *argv[]) {
                 if (room) room->setIsAvailable(false); // Maintenance
             } else if (i % 2 == 0) {
                 // Tạo khách hàng và booking giả lập để phòng thành OCC
-                std::string custId = "CCCD_" + std::to_string(i);
-                hotelManager.registerCustomer(custId, "Nguyen Van Kai", "0901234567", err);
+                std::string custId = QString("%1").arg(100000000000ULL + static_cast<unsigned long long>(i), 12, 10, QChar('0')).toStdString();
+                hotelManager.registerCustomer(custId, "Nguyen Van Kai", "+84901234567", err);
                 
                 std::string dateIn = QDate::currentDate().toString("yyyy-MM-dd").toStdString();
                 std::string dateOut = QDate::currentDate().addDays(1).toString("yyyy-MM-dd").toStdString();

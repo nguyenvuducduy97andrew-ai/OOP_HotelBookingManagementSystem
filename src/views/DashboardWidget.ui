@@ -425,7 +425,6 @@
         <property name="bottomMargin"><number>0</number></property>
         <property name="spacing"><number>16</number></property>
         <item>
-         <property name="stretch"><number>1</number></property>
          <widget class="StatCard" name="statCard1" native="true">
           <property name="sizePolicy">
            <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
@@ -436,7 +435,6 @@
          </widget>
         </item>
         <item>
-         <property name="stretch"><number>1</number></property>
          <widget class="StatCard" name="statCard2" native="true">
           <property name="sizePolicy">
            <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
@@ -447,7 +445,6 @@
          </widget>
         </item>
         <item>
-         <property name="stretch"><number>1</number></property>
          <widget class="StatCard" name="statCard3" native="true">
           <property name="sizePolicy">
            <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
@@ -458,7 +455,6 @@
          </widget>
         </item>
         <item>
-         <property name="stretch"><number>1</number></property>
          <widget class="StatCard" name="statCard4" native="true">
           <property name="sizePolicy">
            <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
@@ -488,7 +484,6 @@
         <property name="bottomMargin"><number>0</number></property>
         <property name="spacing"><number>16</number></property>
         <item>
-         <property name="stretch"><number>1</number></property>
          <widget class="MiniCard" name="miniCard1" native="true">
           <property name="sizePolicy">
            <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
@@ -499,7 +494,6 @@
          </widget>
         </item>
         <item>
-         <property name="stretch"><number>1</number></property>
          <widget class="MiniCard" name="miniCard2" native="true">
           <property name="sizePolicy">
            <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
@@ -510,7 +504,6 @@
          </widget>
         </item>
         <item>
-         <property name="stretch"><number>1</number></property>
          <widget class="MiniCard" name="miniCard3" native="true">
           <property name="sizePolicy">
            <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
@@ -521,7 +514,6 @@
          </widget>
         </item>
         <item>
-         <property name="stretch"><number>1</number></property>
          <widget class="MiniCard" name="miniCard4" native="true">
           <property name="sizePolicy">
            <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
@@ -562,11 +554,11 @@
 
      <!-- Hàng dưới: bar chart + room list -->
      <item>
-      <layout class="QHBoxLayout" name="bottomRowLayout">
+      <!-- Modified and optimized performance: keep the chart and room-list columns proportioned without invalid item stretch properties. -->
+      <layout class="QHBoxLayout" name="bottomRowLayout" stretch="3,2">
        <property name="spacing"><number>14</number></property>
 
        <item>
-        <property name="stretch"><number>3</number></property>
         <widget class="QFrame" name="barCard">
          <property name="objectName"><string notr="true">ChartCard</string></property>
          <layout class="QVBoxLayout" name="barCardLayout">
@@ -591,7 +583,6 @@
        </item>
 
        <item>
-        <property name="stretch"><number>2</number></property>
         <widget class="QFrame" name="roomListCard">
          <property name="objectName"><string notr="true">ChartCard</string></property>
          <layout class="QVBoxLayout" name="roomListCardLayout">

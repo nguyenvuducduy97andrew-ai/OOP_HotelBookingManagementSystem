@@ -21,6 +21,8 @@
 #include <QPageSize>
 #include <QPageLayout>
 #include <QFileInfo>
+#include <QScrollBar>
+#include <QUrl>
 #include <vector>
 #include <map>
 #include <unordered_set>
@@ -32,20 +34,6 @@ QString escapeHtml(const QString& text)
     return text.toHtmlEscaped();
 }
 
-struct CustomerAbuseRow
-{
-    QString customerId;
-    QString customerName;
-    QString phoneNumber;
-    int totalBookings = 0;
-    int cancelledBookings = 0;
-    int deletedBookings = 0;
-
-    int abuseScore() const
-    {
-        return cancelledBookings + deletedBookings;
-    }
-};
 }
 
 #include <QtCharts/QChart>
@@ -62,7 +50,7 @@ DashboardWidget::DashboardWidget(HotelManager *manager, QWidget *parent)
     : QWidget(parent)
     , ui(new Ui::DashboardWidget)
     , m_manager(manager)
-    , deletedBookingsBrowser(nullptr)
+    , bookingHistoryBrowser(nullptr)
 {
     ui->setupUi(this);
 
@@ -79,7 +67,11 @@ DashboardWidget::DashboardWidget(HotelManager *manager, QWidget *parent)
     updateDateTime();
 
     // 4. Kết nối tín hiệu combobox lọc thời gian
-    connect(ui->cmbDateRange, &QComboBox::currentIndexChanged, this, &DashboardWidget::refreshDashboard);
+    // Modified and optimized performance: reset history pagination only when its selected time range changes.
+    connect(ui->cmbDateRange, &QComboBox::currentIndexChanged, this, [this](int) {
+        m_historyPage = 0;
+        refreshDashboard();
+    });
     connect(ui->btnExport, &QPushButton::clicked, this, &DashboardWidget::exportReport);
 
     if (ui->horizontalLayout) {
@@ -99,14 +91,14 @@ DashboardWidget::DashboardWidget(HotelManager *manager, QWidget *parent)
         ui->mainVerticalLayout->setStretch(1, 1);
     }
     if (ui->bodyScrollArea) {
-        ui->bodyScrollArea->setStyleSheet("QScrollArea { background: transparent; border: none; }");
+        ui->bodyScrollArea->verticalScrollBar()->setSingleStep(18);
     }
 
     // ---- Phần mới: dựng nội dung dashboard ----
     populateData();
     buildTrendChart();
     buildBarChart();
-    refreshDeletedBookingsView();
+    refreshBookingHistoryView();
     applyStyle();
 
     auto *auditFrame = new QFrame(ui->scrollAreaWidgetContents);
@@ -115,22 +107,29 @@ DashboardWidget::DashboardWidget(HotelManager *manager, QWidget *parent)
     auditLayout->setContentsMargins(18, 16, 18, 16);
     auditLayout->setSpacing(12);
 
-    auto *auditTitle = new QLabel("Deleted Bookings History & Abuse Watchlist", auditFrame);
+    auto *auditTitle = new QLabel("Booking History", auditFrame);
     auditTitle->setObjectName("SectionTitle");
 
-    deletedBookingsBrowser = new QTextBrowser(auditFrame);
-    deletedBookingsBrowser->setObjectName("AuditBrowser");
-    deletedBookingsBrowser->setOpenExternalLinks(false);
-    deletedBookingsBrowser->setFrameShape(QFrame::NoFrame);
-    deletedBookingsBrowser->setMinimumHeight(220);
-    deletedBookingsBrowser->setHtml(buildDeletedBookingsAuditHtml());
+    bookingHistoryBrowser = new QTextBrowser(auditFrame);
+    bookingHistoryBrowser->setObjectName("AuditBrowser");
+    bookingHistoryBrowser->setOpenExternalLinks(false);
+    // Modified and optimized performance: handle local page links without navigating QTextBrowser away from the history view.
+    bookingHistoryBrowser->setOpenLinks(false);
+    bookingHistoryBrowser->setFrameShape(QFrame::NoFrame);
+    bookingHistoryBrowser->setMinimumHeight(170);
+    bookingHistoryBrowser->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    bookingHistoryBrowser->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    bookingHistoryBrowser->document()->setDocumentMargin(0);
+    connect(bookingHistoryBrowser, &QTextBrowser::anchorClicked,
+            this, &DashboardWidget::onBookingHistoryLinkClicked);
 
     auditLayout->addWidget(auditTitle);
-    auditLayout->addWidget(deletedBookingsBrowser);
+    auditLayout->addWidget(bookingHistoryBrowser);
 
     if (ui->bodyLayout) {
         ui->bodyLayout->addWidget(auditFrame);
     }
+    QTimer::singleShot(0, this, &DashboardWidget::refreshBookingHistoryView);
 }
 
 void DashboardWidget::updateDateTime()
@@ -661,9 +660,57 @@ void DashboardWidget::applyStyle()
         }
         QTextBrowser#AuditBrowser {
             background-color: #F8FAFC;
-            border: 1px solid #EEF2F7;
-            border-radius: 12px;
-            padding: 12px;
+            border: 1px solid #E8EEF6;
+            border-radius: 14px;
+            padding: 10px;
+            color: #475569;
+        }
+        QTextBrowser#AuditBrowser QScrollBar:vertical {
+            background: transparent;
+            width: 10px;
+            margin: 10px 3px 10px 0;
+        }
+        QTextBrowser#AuditBrowser QScrollBar::handle:vertical {
+            background: #CBD5E1;
+            border-radius: 4px;
+            min-height: 36px;
+        }
+        QTextBrowser#AuditBrowser QScrollBar::handle:vertical:hover {
+            background: #94A3B8;
+        }
+        QTextBrowser#AuditBrowser QScrollBar::add-line:vertical,
+        QTextBrowser#AuditBrowser QScrollBar::sub-line:vertical {
+            height: 0px;
+        }
+        QTextBrowser#AuditBrowser QScrollBar::add-page:vertical,
+        QTextBrowser#AuditBrowser QScrollBar::sub-page:vertical {
+            background: transparent;
+        }
+        QScrollArea#bodyScrollArea {
+            background: transparent;
+            border: none;
+        }
+        QScrollArea#bodyScrollArea QScrollBar:vertical {
+            background: transparent;
+            width: 12px;
+            margin: 8px 3px 8px 3px;
+        }
+        QScrollArea#bodyScrollArea QScrollBar::handle:vertical {
+            background: #C7D3E3;
+            border: 3px solid transparent;
+            border-radius: 6px;
+            min-height: 48px;
+        }
+        QScrollArea#bodyScrollArea QScrollBar::handle:vertical:hover {
+            background: #94A9C2;
+        }
+        QScrollArea#bodyScrollArea QScrollBar::add-line:vertical,
+        QScrollArea#bodyScrollArea QScrollBar::sub-line:vertical {
+            height: 0px;
+        }
+        QScrollArea#bodyScrollArea QScrollBar::add-page:vertical,
+        QScrollArea#bodyScrollArea QScrollBar::sub-page:vertical {
+            background: transparent;
         }
     )");
 }
@@ -673,142 +720,173 @@ void DashboardWidget::refreshDashboard() {
     populateData();
     buildTrendChart();
     buildBarChart();
-    refreshDeletedBookingsView();
+    refreshBookingHistoryView();
 }
 
-void DashboardWidget::refreshDeletedBookingsView()
+void DashboardWidget::refreshBookingHistoryView()
 {
-    if (deletedBookingsBrowser) {
-        deletedBookingsBrowser->setHtml(buildDeletedBookingsAuditHtml());
+    if (bookingHistoryBrowser) {
+        bookingHistoryBrowser->setHtml(buildBookingHistoryHtml());
+        // Modified and optimized performance: size the browser to its current page so the dashboard owns the main scrollbar.
+        bookingHistoryBrowser->document()->setTextWidth(bookingHistoryBrowser->viewport()->width());
+        const int contentHeight = qCeil(bookingHistoryBrowser->document()->size().height()) + 20;
+        bookingHistoryBrowser->setFixedHeight(qMax(170, contentHeight));
     }
 }
 
-QString DashboardWidget::buildDeletedBookingsAuditHtml() const
+void DashboardWidget::onBookingHistoryLinkClicked(const QUrl& url)
+{
+    if (url.scheme() != "page") {
+        return;
+    }
+
+    bool ok = false;
+    const int page = url.path().toInt(&ok);
+    if (ok && page >= 0) {
+        m_historyPage = page;
+        refreshBookingHistoryView();
+    }
+}
+
+QString DashboardWidget::buildBookingHistoryHtml() const
 {
     QString html;
     QTextStream stream(&html);
     stream << "<style>"
-           << "body{font-family:Segoe UI,Arial,sans-serif;color:#334155;margin:0;padding:0;font-size:11pt;line-height:1.5;}"
-           << "h3{color:#1B2559;margin:0 0 8px 0;font-size:13pt;font-weight:700;}"
-           << "p{margin:0;color:#64748B;}"
-           << "table{border-collapse:collapse;width:100%;margin-top:10px;border-radius:8px;overflow:hidden;}"
-           << "th,td{border:1px solid #E2E8F0;padding:10px 12px;text-align:left;vertical-align:top;}"
-           << "th{background:#F1F5F9;color:#1B2559;font-size:10pt;}"
-           << "tr:nth-child(even){background:#FAFBFC;}"
-           << ".section{background:#FFFFFF;border:1px solid #EEF2F7;border-radius:12px;padding:16px;margin-bottom:12px;}"
-           << ".empty{display:flex;flex-direction:column;align-items:center;text-align:center;padding:20px 12px;color:#94A3B8;}"
-           << ".empty-icon{font-size:28px;margin-bottom:8px;opacity:0.7;}"
-           << ".empty-title{font-size:12pt;font-weight:600;color:#64748B;margin-bottom:4px;}"
-           << ".note{font-size:10pt;color:#94A3B8;}"
+           << "body{font-family:'Segoe UI',Arial,sans-serif;color:#334155;margin:0;padding:0;font-size:10pt;line-height:1.45;background:#F8FAFC;}"
+           << ".audit-section{background:#FFFFFF;border:1px solid #E8EEF6;border-radius:10px;padding:14px;}"
+           << ".section-header{width:100%;border-collapse:collapse;margin:0 0 12px 0;}"
+           << ".kicker{font-size:8pt;font-weight:700;letter-spacing:1px;color:#8F9BB7;margin-bottom:3px;}"
+           << ".section-title{font-size:13pt;font-weight:700;color:#1B2559;margin-bottom:3px;}"
+           << ".section-description{font-size:9pt;color:#8F9BB7;}"
+           << ".history-count{font-size:16pt;font-weight:800;color:#2B6DEF;margin-top:7px;}"
+           << ".badge{background:#EEF4FF;color:#2B6DEF;border:1px solid #DCE8FF;border-radius:9px;padding:4px 8px;font-size:8pt;font-weight:700;}"
+           << ".badge-clear{background:#EAFBF5;color:#099268;border:1px solid #C9F2E3;border-radius:9px;padding:4px 8px;font-size:8pt;font-weight:700;}"
+           << ".empty-state{background:#F8FAFC;border:1px dashed #D9E3EF;border-radius:9px;padding:15px 16px;text-align:center;}"
+           << ".state-mark{font-size:18pt;font-weight:700;color:#2B7BFF;margin-bottom:3px;}"
+           << ".state-mark-clear{font-size:18pt;font-weight:700;color:#05A97B;margin-bottom:3px;}"
+           << ".empty-title{font-size:11pt;font-weight:700;color:#2B3674;margin-bottom:3px;}"
+           << ".note{font-size:9pt;color:#8F9BB7;}"
+           << ".history-row{width:100%;border-collapse:collapse;margin:0 0 7px 0;background:#F8FAFC;border:1px solid #E8EEF6;border-radius:9px;}"
+           << ".history-row td{padding:10px 12px;vertical-align:middle;}"
+           << ".guest-name{font-size:10pt;font-weight:700;color:#2B3674;margin-bottom:2px;}"
+           << ".booking-meta{font-size:8.5pt;color:#8F9BB7;}"
+           << ".stay-date{font-size:9pt;font-weight:600;color:#52637A;margin-top:5px;}"
+           << ".room-chip{background:#EAF1FF;color:#2B6DEF;border-radius:8px;padding:3px 7px;font-size:8pt;font-weight:700;}"
+           << ".pagination{width:100%;margin-top:12px;border-collapse:collapse;}"
+           << ".page-link{display:inline-block;background:#FFFFFF;color:#52637A;border:1px solid #DCE5F0;border-radius:6px;padding:4px 8px;margin:0 3px;font-size:8.5pt;font-weight:700;text-decoration:none;}"
+           << ".page-link-active{display:inline-block;background:#2B6DEF;color:#FFFFFF;border:1px solid #2B6DEF;border-radius:6px;padding:4px 8px;margin:0 3px;font-size:8.5pt;font-weight:700;text-decoration:none;}"
+           << ".data-table{border-collapse:collapse;width:100%;margin-top:6px;}"
+           << ".data-table th,.data-table td{border:1px solid #E8EEF6;padding:8px 9px;text-align:left;vertical-align:top;}"
+           << ".data-table th{background:#F5F8FC;color:#52637A;font-size:8pt;font-weight:700;}"
+           << ".data-table tr:nth-child(even){background:#FAFCFE;}"
            << ".warn{color:#B45309;font-weight:600;}"
-           << ".muted{color:#94A3B8;}"
            << "</style>";
 
-    stream << "<div class='section'>";
-    stream << "<h3>Deleted Bookings History</h3>";
-
     if (!m_manager) {
-        stream << "<div class='empty'><div class='empty-icon'>&#128196;</div>"
+        stream << "<div class='audit-section'><div class='kicker'>COMPLETED STAYS</div>"
+               << "<div class='section-title'>Booking history</div>"
+               << "<div class='empty-state'><div class='state-mark'>&#8226;</div>"
                << "<div class='empty-title'>No data available</div>"
-               << "<p class='note'>Connect the hotel manager to view audit records.</p></div>";
+               << "<div class='note'>Connect the hotel manager to view completed bookings.</div></div>";
         stream << "</div>";
         return html;
     }
 
-    struct DeletedBookingRow {
+    struct HistoryRow {
         QString bookingId;
-        QString customerId;
         QString customerName;
         QString roomNumber;
-        QString checkIn;
-        QString checkOut;
-        QString state;
+        QDate checkIn;
+        QDate checkOut;
     };
 
-    std::vector<DeletedBookingRow> deletedRows;
-    std::map<std::string, CustomerAbuseRow> customerRows;
+    const QDate today = QDate::currentDate();
+    const int rangeIndex = ui->cmbDateRange->currentIndex();
+    const QString rangeLabel = ui->cmbDateRange->currentText();
 
+    const auto isInSelectedRange = [today, rangeIndex](const QDate& date) {
+        if (rangeIndex == 0) {
+            return date == today;
+        }
+        if (rangeIndex == 1) {
+            int dateYear = 0;
+            int todayYear = 0;
+            return date.weekNumber(&dateYear) == today.weekNumber(&todayYear) && dateYear == todayYear;
+        }
+        if (rangeIndex == 2) {
+            return date.month() == today.month() && date.year() == today.year();
+        }
+        return date.year() == today.year();
+    };
+
+    std::vector<HistoryRow> historyRows;
     for (const auto& booking : m_manager->getBookings()) {
-        if (!booking) {
+        if (!booking || booking->isDeleted()
+            || m_manager->getBookingState(*booking) != BookingState::COMPLETED) {
+            continue;
+        }
+
+        const QDate checkIn = QDate::fromString(QString::fromStdString(booking->getCheckInDate()), Qt::ISODate);
+        const QDate checkOut = QDate::fromString(QString::fromStdString(booking->getCheckOutDate()), Qt::ISODate);
+        if (!checkIn.isValid() || !checkOut.isValid() || checkOut > today || !isInSelectedRange(checkOut)) {
             continue;
         }
 
         const auto customer = booking->getCustomer();
         const auto room = booking->getRoom();
-        if (!customer) {
-            continue;
-        }
-
-        auto &customerRow = customerRows[customer->getCustomerId()];
-        customerRow.customerId = QString::fromStdString(customer->getCustomerId());
-        customerRow.customerName = QString::fromStdString(customer->getName());
-        customerRow.phoneNumber = QString::fromStdString(customer->getPhoneNumber());
-        customerRow.totalBookings++;
-        if (booking->isCancelled()) {
-            customerRow.cancelledBookings++;
-        }
-        if (booking->isDeleted()) {
-            customerRow.deletedBookings++;
-        }
-
-        if (booking->isDeleted()) {
-            deletedRows.push_back({
-                QString::fromStdString(booking->getBookingId()),
-                QString::fromStdString(customer->getCustomerId()),
-                QString::fromStdString(customer->getName()),
-                room ? QString::fromStdString(room->getRoomNumber()) : QString("-") ,
-                QString::fromStdString(booking->getCheckInDate()),
-                QString::fromStdString(booking->getCheckOutDate()),
-                QString::fromStdString(bookingStateToString(m_manager->getBookingState(*booking)))
-            });
-        }
+        historyRows.push_back({
+            QString::fromStdString(booking->getBookingId()),
+            customer ? QString::fromStdString(customer->getName()) : QString("Guest not available"),
+            room ? QString::fromStdString(room->getRoomNumber()) : QString("—"),
+            checkIn,
+            checkOut
+        });
     }
 
-    if (deletedRows.empty()) {
-        stream << "<div class='empty'><div class='empty-icon'>&#9989;</div>"
-               << "<div class='empty-title'>No deleted bookings yet</div>"
-               << "<p class='note'>Deleted records will appear here for audit and abuse review.</p></div>";
-    } else {
-        stream << "<table><tr><th>Booking ID</th><th>Customer</th><th>Room</th><th>Check-in</th><th>Check-out</th><th>Status</th></tr>";
-        for (const auto& row : deletedRows) {
-            stream << "<tr><td>" << escapeHtml(row.bookingId) << "</td><td>" << escapeHtml(row.customerName) << " (" << escapeHtml(row.customerId) << ")</td><td>" << escapeHtml(row.roomNumber) << "</td><td>" << escapeHtml(row.checkIn) << "</td><td>" << escapeHtml(row.checkOut) << "</td><td class='warn'>" << escapeHtml(row.state) << "</td></tr>";
+    std::sort(historyRows.begin(), historyRows.end(), [](const HistoryRow& a, const HistoryRow& b) {
+        if (a.checkOut != b.checkOut) {
+            return a.checkOut > b.checkOut;
         }
-        stream << "</table>";
-    }
-    stream << "</div>";
-
-    std::vector<CustomerAbuseRow> abuseRows;
-    for (const auto& [customerId, row] : customerRows) {
-        if (row.abuseScore() >= 2) {
-            abuseRows.push_back(row);
-        }
-    }
-
-    std::sort(abuseRows.begin(), abuseRows.end(), [](const CustomerAbuseRow& a, const CustomerAbuseRow& b) {
-        if (a.abuseScore() != b.abuseScore()) {
-            return a.abuseScore() > b.abuseScore();
-        }
-        if (a.deletedBookings != b.deletedBookings) {
-            return a.deletedBookings > b.deletedBookings;
-        }
-        return a.customerId < b.customerId;
+        return a.customerName < b.customerName;
     });
 
-    stream << "<div class='section'>";
-    stream << "<h3>Customer Cancel/Delete Abuse Watchlist</h3>";
-    stream << "<p class='note'>Customers with 2 or more combined cancel/delete actions are flagged below.</p>";
+    // Modified and optimized performance: render only seven completed stays per page to keep history responsive and compact.
+    constexpr int pageSize = 7;
+    const int pageCount = qMax(1, static_cast<int>((historyRows.size() + pageSize - 1) / pageSize));
+    const int currentPage = qBound(0, m_historyPage, pageCount - 1);
+    const int firstRow = currentPage * pageSize;
+    const int lastRow = qMin(firstRow + pageSize, static_cast<int>(historyRows.size()));
 
-    if (abuseRows.empty()) {
-        stream << "<div class='empty'><div class='empty-icon'>&#128737;</div>"
-               << "<div class='empty-title'>All clear</div>"
-               << "<p class='note'>No suspicious customer patterns found yet.</p></div>";
+    stream << "<div class='audit-section'><table class='section-header' width='100%' cellspacing='0' cellpadding='0'><tr><td>"
+           << "<div class='kicker'>COMPLETED STAYS</div>"
+           << "<div class='section-title'>Booking history</div>"
+           << "<div class='section-description'>Completed stays that checked out during " << escapeHtml(rangeLabel) << ".</div>"
+           << "</td><td align='right' valign='middle'><div class='history-count'>" << historyRows.size() << " stay" << (historyRows.size() == 1 ? "" : "s") << "</div></td></tr></table>";
+
+    if (historyRows.empty()) {
+        stream << "<div class='empty-state'><div class='state-mark'>&#10003;</div>"
+               << "<div class='empty-title'>No completed stays yet</div>"
+               << "<div class='note'>Completed bookings in " << escapeHtml(rangeLabel) << " will appear here.</div></div>";
     } else {
-        stream << "<table><tr><th>Customer</th><th>Total Bookings</th><th>Cancelled</th><th>Deleted</th><th>Action Score</th><th>Contact</th></tr>";
-        for (const auto& row : abuseRows) {
-            const bool highRisk = row.abuseScore() >= 4;
-            stream << "<tr><td>" << escapeHtml(row.customerName) << " (" << escapeHtml(row.customerId) << ")</td><td>" << row.totalBookings << "</td><td>" << row.cancelledBookings << "</td><td>" << row.deletedBookings << "</td><td class='" << (highRisk ? "warn" : "") << "'>" << row.abuseScore() << "</td><td>" << escapeHtml(row.phoneNumber) << "</td></tr>";
+        for (int i = firstRow; i < lastRow; ++i) {
+            const auto& row = historyRows[i];
+            stream << "<table class='history-row' cellspacing='0' cellpadding='0'><tr><td width='58%'>"
+                   << "<div class='guest-name'>" << escapeHtml(row.customerName) << "</div>"
+                   << "<div class='booking-meta'>Booking #" << escapeHtml(row.bookingId) << "</div>"
+                   << "</td><td align='right'><span class='room-chip'>Room " << escapeHtml(row.roomNumber) << "</span>"
+                   << "<div class='stay-date'>" << escapeHtml(row.checkIn.toString("dd MMM")) << " — "
+                   << escapeHtml(row.checkOut.toString("dd MMM yyyy")) << "</div></td></tr></table>";
         }
-        stream << "</table>";
+
+        if (pageCount > 1) {
+            stream << "<table class='pagination' width='100%' cellspacing='0' cellpadding='0'><tr><td align='center'>";
+            for (int page = 0; page < pageCount; ++page) {
+                const QString cssClass = page == currentPage ? "page-link-active" : "page-link";
+                stream << "<a class='" << cssClass << "' href='page:" << page << "'>" << (page + 1) << "</a>";
+            }
+            stream << "</td></tr></table>";
+        }
     }
     stream << "</div>";
 
@@ -839,7 +917,52 @@ QString DashboardWidget::buildReportHtml() const
         int bookingCount = 0;
     };
 
+    struct BookingEntry {
+        QString bookingId;
+        QString customerName;
+        QString customerId;
+        QString phone;
+        QString roomNumber;
+        QString roomType;
+        QString status;
+        QDate checkIn;
+        QDate checkOut;
+    };
+
+    const auto isInSelectedRange = [today, rangeIndex](const QDate& date) {
+        if (!date.isValid()) {
+            return false;
+        }
+        if (rangeIndex == 0) {
+            return date == today;
+        }
+        if (rangeIndex == 1) {
+            int dateWeekYear = 0;
+            const int dateWeek = date.weekNumber(&dateWeekYear);
+            int todayWeekYear = 0;
+            const int todayWeek = today.weekNumber(&todayWeekYear);
+            return dateWeek == todayWeek && dateWeekYear == todayWeekYear;
+        }
+        if (rangeIndex == 2) {
+            return date.month() == today.month() && date.year() == today.year();
+        }
+        return date.year() == today.year();
+    };
+
+    const auto statusText = [](BookingState state) {
+        switch (state) {
+        case BookingState::UPCOMING: return QString("Upcoming");
+        case BookingState::ACTIVE: return QString("Active");
+        case BookingState::COMPLETED: return QString("Completed");
+        case BookingState::CANCELLED: return QString("Cancelled");
+        }
+        return QString("Unknown");
+    };
+
     std::map<std::string, int> roomBookingCounts;
+    std::vector<BookingEntry> scheduledBookings;
+    std::vector<BookingEntry> completedStays;
+    std::vector<BookingEntry> cancelledBookings;
     if (m_manager) {
         // Fixed-modified: Count room categories through the virtual type accessor.
         for (const auto& room : m_manager->getRooms()) {
@@ -876,6 +999,7 @@ QString DashboardWidget::buildReportHtml() const
             }
 
             const QDate checkIn = QDate::fromString(QString::fromStdString(booking->getCheckInDate()), Qt::ISODate);
+            const QDate checkOut = QDate::fromString(QString::fromStdString(booking->getCheckOutDate()), Qt::ISODate);
             if (checkIn.isValid() && checkIn.month() == today.month() && checkIn.year() == today.year()) {
                 bookingsThisMonth++;
             }
@@ -883,26 +1007,37 @@ QString DashboardWidget::buildReportHtml() const
                 bookingsThisYear++;
             }
 
-            bool match = false;
-            if (rangeIndex == 0) {
-                match = (checkIn == today);
-            } else if (rangeIndex == 1) {
-                int checkInYear = 0;
-                int checkInWeek = checkIn.weekNumber(&checkInYear);
-                int todayYear = 0;
-                int todayWeek = today.weekNumber(&todayYear);
-                match = (checkInWeek == todayWeek && checkInYear == todayYear);
-            } else if (rangeIndex == 2) {
-                match = (checkIn.month() == today.month() && checkIn.year() == today.year());
-            } else if (rangeIndex == 3) {
-                match = (checkIn.year() == today.year());
-            }
+            const bool match = isInSelectedRange(checkIn);
 
             if (match && !booking->isCancelled()) {
                 const auto room = booking->getRoom();
                 if (room && !room->isArchived()) {
                     roomBookingCounts[room->getRoomNumber()]++;
                 }
+            }
+
+            const auto customer = booking->getCustomer();
+            const auto room = booking->getRoom();
+            const BookingEntry entry{
+                QString::fromStdString(booking->getBookingId()),
+                customer ? QString::fromStdString(customer->getName()) : QString("Guest not available"),
+                customer ? QString::fromStdString(customer->getCustomerId()) : QString("—"),
+                customer ? QString::fromStdString(customer->getPhoneNumber()) : QString("—"),
+                room ? QString::fromStdString(room->getRoomNumber()) : QString("—"),
+                room ? QString::fromStdString(room->getRoomTypeName()) : QString("—"),
+                statusText(state),
+                checkIn,
+                checkOut
+            };
+
+            if (state == BookingState::COMPLETED && isInSelectedRange(checkOut)) {
+                completedStays.push_back(entry);
+            }
+            if ((state == BookingState::ACTIVE || state == BookingState::UPCOMING) && isInSelectedRange(checkIn)) {
+                scheduledBookings.push_back(entry);
+            }
+            if (state == BookingState::CANCELLED && isInSelectedRange(checkIn)) {
+                cancelledBookings.push_back(entry);
             }
         }
     }
@@ -933,64 +1068,164 @@ QString DashboardWidget::buildReportHtml() const
         return a.roomNumber < b.roomNumber;
     });
 
-    QString rangeLabel = "today";
-    if (rangeIndex == 1) {
-        rangeLabel = "this week";
+    std::sort(scheduledBookings.begin(), scheduledBookings.end(), [](const BookingEntry& left, const BookingEntry& right) {
+        if (left.checkIn != right.checkIn) {
+            return left.checkIn < right.checkIn;
+        }
+        return left.bookingId < right.bookingId;
+    });
+    std::sort(completedStays.begin(), completedStays.end(), [](const BookingEntry& left, const BookingEntry& right) {
+        if (left.checkOut != right.checkOut) {
+            return left.checkOut > right.checkOut;
+        }
+        return left.bookingId < right.bookingId;
+    });
+    std::sort(cancelledBookings.begin(), cancelledBookings.end(), [](const BookingEntry& left, const BookingEntry& right) {
+        if (left.checkIn != right.checkIn) {
+            return left.checkIn < right.checkIn;
+        }
+        return left.bookingId < right.bookingId;
+    });
+
+    QString rangeLabel;
+    if (rangeIndex == 0) {
+        rangeLabel = today.toString("dd MMMM yyyy");
+    } else if (rangeIndex == 1) {
+        const QDate weekStart = today.addDays(1 - today.dayOfWeek());
+        rangeLabel = QString("%1 — %2").arg(weekStart.toString("dd MMM yyyy"), weekStart.addDays(6).toString("dd MMM yyyy"));
     } else if (rangeIndex == 2) {
-        rangeLabel = "this month";
-    } else if (rangeIndex == 3) {
-        rangeLabel = "this year";
+        rangeLabel = today.toString("MMMM yyyy");
+    } else {
+        rangeLabel = QString::number(today.year());
     }
 
     QString html;
     QTextStream stream(&html);
+    // Modified and optimized performance: define print-safe wrapper classes so compact report sections remain cohesive across PDF page boundaries.
     stream << "<html><head><meta charset='utf-8'>"
            << "<style>"
-            << "body{font-family:Segoe UI,Arial,sans-serif;color:#1f2937;padding:18px;font-size:13pt;line-height:1.45;}"
-            << "h1{color:#2B3674;margin:0 0 10px 0;font-size:28pt;}"
-            << "h2{color:#2B3674;margin:24px 0 12px 0;font-size:17pt;}"
-            << "table{border-collapse:collapse;width:100%;margin-top:12px;}"
-            << "th,td{border:1px solid #e5e7eb;padding:12px 14px;text-align:left;vertical-align:top;font-size:12.5pt;}"
-           << "th{background:#f8fafc;color:#2B3674;}"
-            << ".meta{color:#6b7280;margin-bottom:20px;font-size:11.5pt;}"
-            << ".summary{border-collapse:separate;border-spacing:12px 0;margin-top:12px;}"
-            << ".summary td{border:1px solid #e5e7eb;border-radius:12px;padding:18px 20px;background:#fff;width:25%;}"
-            << ".label{font-size:11pt;color:#94a3b8;margin-bottom:6px;}"
-            << ".value{font-size:24pt;font-weight:700;color:#2B3674;margin-top:6px;}"
-            << ".sectionNote{font-size:11pt;color:#94a3b8;margin-top:4px;}"
+            << "body{font-family:'Segoe UI',Arial,sans-serif;color:#24324A;font-size:9pt;line-height:1.42;margin:0;padding:0;}"
+            << "h1{color:#142A5E;margin:0;font-size:24pt;font-weight:800;letter-spacing:.2px;}"
+            << "h2{color:#142A5E;margin:0 0 7px;font-size:14pt;font-weight:750;}"
+            << "table{border-collapse:collapse;width:100%;}"
+            << ".header{background:#F4F7FE;border:1px solid #DCE6F5;border-radius:12px;padding:18px 20px;}"
+            << ".eyebrow{color:#2B6DEF;font-size:8pt;font-weight:800;letter-spacing:1.2px;margin-bottom:4px;}"
+            << ".meta{color:#6F819D;font-size:8.5pt;margin-top:7px;}"
+            << ".range-badge{background:#E7F0FF;color:#1F5FD6;border:1px solid #CFE0FF;border-radius:8px;padding:6px 10px;font-size:8.5pt;font-weight:700;}"
+            << ".section-note{color:#7B8BA5;font-size:8.5pt;margin:0 0 10px;}"
+            << ".report-section{margin-top:22px;}"
+            << ".report-section.compact{page-break-inside:avoid;}"
+            << ".section-heading{page-break-after:avoid;}"
+            << ".overview-grid,.compact-shell{margin-top:22px;border-collapse:separate;border-spacing:9px 0;page-break-inside:avoid;}"
+            << ".detail-shell{margin-top:22px;page-break-inside:avoid;}"
+            << ".page-break-before{page-break-before:always;}"
+            << ".overview-grid td{width:50%;vertical-align:top;}"
+            << ".small-card{border:1px solid #DFE8F5;border-radius:10px;padding:12px;background:#FFFFFF;}"
+            << ".small-card h2{margin-top:0;}"
+            << ".summary{border-collapse:separate;border-spacing:8px 0;margin-top:14px;}"
+            << ".summary td{border:1px solid #DFE8F5;border-radius:10px;padding:12px 14px;background:#FFFFFF;width:20%;}"
+            << ".metric-label{font-size:8pt;color:#7B8BA5;font-weight:650;}"
+            << ".metric-value{font-size:19pt;font-weight:800;color:#1B3F83;margin-top:3px;}"
+            << ".data-table{border:1px solid #DDE6F2;margin-top:8px;}"
+            << ".data-table th{background:#EEF4FF;color:#25477D;font-size:8pt;font-weight:800;padding:8px 9px;text-align:left;border:1px solid #DDE6F2;}"
+            << ".data-table td{padding:8px 9px;border:1px solid #E5ECF5;vertical-align:top;font-size:8.3pt;}"
+            << ".data-table tr:nth-child(even) td{background:#FAFCFF;}"
+            << ".status{font-weight:750;color:#2A5FC5;}"
+            << ".empty{border:1px dashed #C9D6E8;color:#7B8BA5;background:#FBFCFE;padding:13px;text-align:center;font-size:8.5pt;}"
+            << ".footer{margin-top:22px;padding-top:9px;border-top:1px solid #E2EAF4;color:#8A99B0;font-size:7.5pt;}"
+            << ".compact .data-table{page-break-inside:avoid;}"
+            << "tr{page-break-inside:avoid;}"
            << "</style></head><body>";
 
-    stream << "<h1>Booking Management Dashboard Report</h1>";
-    stream << "<div class='meta'>Generated at: " << escapeHtml(now.toString("dd/MM/yyyy HH:mm:ss")) << "</div>";
-    stream << "<div class='sectionNote'>Selected range: " << escapeHtml(rangeLabel) << "</div>";
+    // Modified and optimized performance: render a print-first report with full operational booking data instead of embedding the interactive dashboard card.
+    stream << "<div class='header'><table><tr><td>"
+           << "<div class='eyebrow'>HOTEL OPERATIONS REPORT</div>"
+           << "<h1>Booking Management Dashboard</h1>"
+           << "<div class='meta'>Generated " << escapeHtml(now.toString("dd MMM yyyy, HH:mm"))
+           << " &nbsp;•&nbsp; Reporting period: " << escapeHtml(rangeLabel) << "</div>"
+           << "</td><td align='right' valign='middle'><span class='range-badge'>" << escapeHtml(ui->cmbDateRange->currentText()) << "</span></td></tr></table></div>";
 
     stream << "<table class='summary'><tr>";
-    stream << "<td><div class='label'>Total rooms</div><div class='value'>" << totalRooms << "</div></td>";
-    stream << "<td><div class='label'>Room types</div><div class='value'>" << ((standardCount > 0) + (deluxeCount > 0) + (suiteCount > 0)) << "</div></td>";
-    stream << "<td><div class='label'>Occupancy rate</div><div class='value'>" << qRound(occupancyRate) << "%</div></td>";
-    stream << "<td><div class='label'>Active bookings</div><div class='value'>" << activeCount << "</div></td>";
+    stream << "<td><div class='metric-label'>Total rooms</div><div class='metric-value'>" << totalRooms << "</div></td>";
+    stream << "<td><div class='metric-label'>Occupied rooms</div><div class='metric-value'>" << occupiedRooms << "</div></td>";
+    stream << "<td><div class='metric-label'>Occupancy rate</div><div class='metric-value'>" << qRound(occupancyRate) << "%</div></td>";
+    stream << "<td><div class='metric-label'>Active bookings</div><div class='metric-value'>" << activeCount << "</div></td>";
+    stream << "<td><div class='metric-label'>Completed stays</div><div class='metric-value'>" << completedCount << "</div></td>";
     stream << "</tr></table>";
 
-    stream << "<h2>Booking status</h2>";
-    stream << "<table><tr><th>Upcoming</th><th>Active</th><th>Completed</th><th>Cancelled</th><th>This month</th><th>This year</th></tr>";
-    stream << "<tr><td>" << upcomingCount << "</td><td>" << activeCount << "</td><td>" << completedCount << "</td><td>" << cancelledCount << "</td><td>" << bookingsThisMonth << "</td><td>" << bookingsThisYear << "</td></tr></table>";
+    // Modified and optimized performance: use one-row wrapper tables for compact report blocks so Qt keeps their title and content on the same PDF page.
+    stream << "<table class='overview-grid'><tr><td><div class='small-card'><h2>Portfolio overview</h2><div class='section-note'>Current operational status and booking volume.</div>";
+    stream << "<table class='data-table'><tr><th>Upcoming</th><th>Active</th><th>Completed</th><th>Cancelled</th><th>Check-ins this month</th><th>Check-ins this year</th></tr>";
+    stream << "<tr><td>" << upcomingCount << "</td><td>" << activeCount << "</td><td>" << completedCount << "</td><td>" << cancelledCount << "</td><td>" << bookingsThisMonth << "</td><td>" << bookingsThisYear << "</td></tr></table></div></td><td><div class='small-card'><h2>Room inventory</h2><div class='section-note'>Active room portfolio by category.</div>";
 
-    stream << "<h2>Rooms by type</h2>";
-    stream << "<table><tr><th>Standard</th><th>Deluxe</th><th>Suite</th></tr>";
-    stream << "<tr><td>" << standardCount << "</td><td>" << deluxeCount << "</td><td>" << suiteCount << "</td></tr></table>";
+    stream << "<table class='data-table'><tr><th>Standard</th><th>Deluxe</th><th>Suite</th></tr>";
+    stream << "<tr><td>" << standardCount << "</td><td>" << deluxeCount << "</td><td>" << suiteCount << "</td></tr></table></div></td></tr></table>";
 
-    stream << "<h2>Popular rooms (" << escapeHtml(rangeLabel) << ")</h2>";
-    stream << "<table><tr><th>#</th><th>Room</th><th>Type</th><th>Bookings</th></tr>";
+    // Modified and optimized performance: begin the top-room summary on a fresh page so its heading and table always remain one cohesive PDF block.
+    stream << "<table class='compact-shell page-break-before'><tr><td><div class='small-card'><h2>Top rooms in selected period</h2><div class='section-note'>Ranked by check-ins during " << escapeHtml(rangeLabel) << ".</div>";
+    stream << "<table class='data-table'><tr><th width='8%'>#</th><th width='28%'>Room</th><th width='36%'>Type</th><th width='28%'>Bookings</th></tr>";
     const int topCount = std::min(3, static_cast<int>(popularRooms.size()));
-    for (int i = 0; i < topCount; ++i) {
-        const auto& item = popularRooms[i];
-        stream << "<tr><td>" << (i + 1) << "</td><td>" << escapeHtml(item.roomNumber) << "</td><td>" << escapeHtml(item.type) << "</td><td>" << item.bookingCount << "</td></tr>";
+    if (topCount == 0) {
+        stream << "<tr><td colspan='4' class='empty'>No bookings in the selected period.</td></tr>";
+    } else {
+        for (int i = 0; i < topCount; ++i) {
+            const auto& item = popularRooms[i];
+            stream << "<tr><td>" << (i + 1) << "</td><td>" << escapeHtml(item.roomNumber) << "</td><td>" << escapeHtml(item.type) << "</td><td>" << item.bookingCount << "</td></tr>";
+        }
     }
-    stream << "</table>";
+    stream << "</table></div></td></tr></table>";
 
-    stream << "<h2>Deleted bookings history & abuse watchlist</h2>";
-    stream << buildDeletedBookingsAuditHtml();
+    // Modified and optimized performance: keep each detailed report heading with its table, moving the complete block to the next page when needed.
+    stream << "<table class='detail-shell'><tr><td><div class='small-card'><h2>Open booking activity</h2><div class='section-note'>Upcoming and active stays with check-in dates in the selected period.</div>";
+    stream << "<table class='data-table'><tr><th>Booking ID</th><th>Guest</th><th>Customer ID</th><th>Phone</th><th>Room</th><th>Check-in</th><th>Planned check-out</th><th>Status</th></tr>";
+    if (scheduledBookings.empty()) {
+        stream << "<tr><td colspan='8' class='empty'>No open bookings in the selected period.</td></tr>";
+    } else {
+        for (const auto& entry : scheduledBookings) {
+            stream << "<tr><td>" << escapeHtml(entry.bookingId) << "</td><td>" << escapeHtml(entry.customerName)
+                   << "</td><td>" << escapeHtml(entry.customerId) << "</td><td>" << escapeHtml(entry.phone)
+                   << "</td><td>" << escapeHtml(entry.roomNumber) << "<br/><span class='section-note'>" << escapeHtml(entry.roomType)
+                   << "</span></td><td>" << escapeHtml(entry.checkIn.toString("dd MMM yyyy"))
+                   << "</td><td>" << escapeHtml(entry.checkOut.toString("dd MMM yyyy"))
+                   << "</td><td class='status'>" << escapeHtml(entry.status) << "</td></tr>";
+        }
+    }
+    stream << "</table></div></td></tr></table>";
 
+    // Modified and optimized performance: keep the cancellation heading and its empty state or table in one compact PDF block.
+    stream << "<table class='compact-shell'><tr><td><div class='small-card'><h2>Cancelled reservations</h2><div class='section-note'>Reservations with check-in dates in the selected period.</div>";
+    if (cancelledBookings.empty()) {
+        stream << "<div class='empty'>No cancelled reservations in the selected period.</div>";
+    } else {
+        stream << "<table class='data-table'><tr><th>Booking ID</th><th>Guest</th><th>Customer ID</th><th>Room</th><th>Check-in</th><th>Planned check-out</th></tr>";
+        for (const auto& entry : cancelledBookings) {
+            stream << "<tr><td>" << escapeHtml(entry.bookingId) << "</td><td>" << escapeHtml(entry.customerName)
+                   << "</td><td>" << escapeHtml(entry.customerId) << "</td><td>" << escapeHtml(entry.roomNumber)
+                   << "<br/><span class='section-note'>" << escapeHtml(entry.roomType)
+                   << "</span></td><td>" << escapeHtml(entry.checkIn.toString("dd MMM yyyy"))
+                   << "</td><td>" << escapeHtml(entry.checkOut.toString("dd MMM yyyy")) << "</td></tr>";
+        }
+        stream << "</table>";
+    }
+    stream << "</div></td></tr></table>";
+
+    // Modified and optimized performance: begin completed history on a new page so its complete heading, note, and table stay together.
+    stream << "<table class='detail-shell page-break-before'><tr><td><div class='small-card'><h2>Completed booking history</h2><div class='section-note'>Bookings checked out during " << escapeHtml(rangeLabel) << ".</div>";
+    stream << "<table class='data-table'><tr><th>Booking ID</th><th>Guest</th><th>Customer ID</th><th>Phone</th><th>Room</th><th>Check-in</th><th>Checked out</th></tr>";
+    if (completedStays.empty()) {
+        stream << "<tr><td colspan='7' class='empty'>No completed stays in the selected period.</td></tr>";
+    } else {
+        for (const auto& entry : completedStays) {
+            stream << "<tr><td>" << escapeHtml(entry.bookingId) << "</td><td>" << escapeHtml(entry.customerName)
+                   << "</td><td>" << escapeHtml(entry.customerId) << "</td><td>" << escapeHtml(entry.phone)
+                   << "</td><td>" << escapeHtml(entry.roomNumber) << "<br/><span class='section-note'>" << escapeHtml(entry.roomType)
+                   << "</span></td><td>" << escapeHtml(entry.checkIn.toString("dd MMM yyyy"))
+                   << "</td><td>" << escapeHtml(entry.checkOut.toString("dd MMM yyyy")) << "</td></tr>";
+        }
+    }
+    stream << "</table></div></td></tr></table>";
+
+    stream << "<div class='footer'>Hotel Booking Management • Internal operational report • Generated automatically</div>";
     stream << "</body></html>";
     return html;
 }
@@ -1018,16 +1253,18 @@ void DashboardWidget::exportReport()
     QPageLayout pageLayout(QPageSize(QPageSize::A4), QPageLayout::Landscape, QMarginsF(10, 10, 10, 10));
     writer.setPageLayout(pageLayout);
     writer.setResolution(300);
+    writer.setTitle("Booking Management Dashboard Report");
+    writer.setCreator("Hotel Booking Management");
 
     QTextDocument document;
-    document.setDefaultFont(QFont("Segoe UI", 12));
+    document.setDefaultFont(QFont("Segoe UI", 9));
     document.setDocumentMargin(0);
     document.setHtml(buildReportHtml());
     document.setPageSize(QSizeF(pageLayout.paintRectPoints().size()));
 
     document.print(&writer);
 
-    if (QFileInfo::exists(finalPath)) {
+    if (QFileInfo(finalPath).exists() && QFileInfo(finalPath).size() > 0) {
         QMessageBox::information(this, "Export Report", "Dashboard report exported successfully as PDF.");
         return;
     }

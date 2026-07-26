@@ -4,6 +4,7 @@
 #include <QLineEdit>
 #include <QPushButton>
 #include <QLabel>
+#include <unordered_set>
 #include "HotelManager.h"
 
 class RoomPageWidget : public QWidget {
@@ -27,10 +28,13 @@ private:
     void setupUI();
     QWidget* createRoomCard(const std::shared_ptr<Room>& room);
     void updateDetailPanel(const std::shared_ptr<Room>& room);
+    void refreshOccupancyCache();
+    bool isRoomOccupied(const std::string& roomNumber) const;
 
     HotelManager* m_manager;
     QString m_searchQuery;
     QString m_selectedTypeFilter; // "All", "Standard", "Deluxe", "Suite"
+    std::unordered_set<std::string> m_occupiedRoomNumbers;
 
     QLineEdit* m_searchEdit;
     QPushButton* m_filterAllBtn;

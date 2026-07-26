@@ -34,7 +34,8 @@ public:
     // and to ensure the new Booking lifecycle state is correctly saved back to the database
     bool saveAll(HotelManager& manager, const std::string& dataPath = "");
 
-    bool invoiceExistsInCurrentDatabase(const std::string& invoiceId) const;
+    // Modified and optimized performance: commits one atomic database snapshot and restores memory if persistence fails.
+    bool commitChanges(HotelManager& manager);
+    bool restoreLastSavedState(HotelManager& manager);
 
-    bool saveInvoiceImmediately(const Invoice& invoice);
 };

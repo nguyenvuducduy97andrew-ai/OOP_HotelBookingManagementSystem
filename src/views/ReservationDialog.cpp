@@ -1,4 +1,5 @@
 #include "ReservationDialog.h"
+#include "CountryInputRules.h"
 #include "StandardRoom.h"
 #include "DeluxeRoom.h"
 #include "SuiteRoom.h"
@@ -7,6 +8,7 @@
 #include <QFormLayout>
 #include <QPushButton>
 #include <QMessageBox>
+#include <QRegularExpression>
 
 ReservationDialog::ReservationDialog(HotelManager* manager, QWidget *parent)
     : QDialog(parent), m_manager(manager), m_editingBookingId("") {
@@ -32,6 +34,9 @@ void setupReservationDialogStyle(QDialog* dialog) {
             padding: 6px 12px;
             font-size: 13px;
             color: #2B3674;
+        }
+        QComboBox {
+            padding-right: 28px;
         }
         QLineEdit:focus, QComboBox:focus, QDateEdit:focus {
             border: 1px solid #005BFE;
@@ -100,17 +105,34 @@ void ReservationDialog::setupUI() {
     auto* formLayout = new QFormLayout();
     formLayout->setSpacing(12);
 
+    // Modified and optimized performance: keep reservation ID validation consistent with Customer Management.
+    auto* idRow = new QHBoxLayout();
+    idRow->setSpacing(8);
+    m_customerIdCountry = new QComboBox(this);
+    for (const auto& rule : countryInputRules()) {
+        m_customerIdCountry->addItem(rule.name, rule.key);
+    }
     m_customerIdEdit = new QLineEdit(this);
-    m_customerIdEdit->setPlaceholderText("ID card number or Guest ID");
-    formLayout->addRow("Customer ID (CCCD):", m_customerIdEdit);
+    idRow->addWidget(m_customerIdCountry, 0);
+    idRow->addWidget(m_customerIdEdit, 1);
+    formLayout->addRow("Customer ID:", idRow);
 
     m_customerNameEdit = new QLineEdit(this);
     m_customerNameEdit->setPlaceholderText("Customer name");
     formLayout->addRow("Customer Name:", m_customerNameEdit);
 
-    m_customerPhoneEdit = new QLineEdit(this);
-    m_customerPhoneEdit->setPlaceholderText("Phone number");
-    formLayout->addRow("Phone Number:", m_customerPhoneEdit);
+    auto* phoneRow = new QHBoxLayout();
+    phoneRow->setSpacing(8);
+    m_customerPhoneCode = new QComboBox(this);
+    for (const auto& rule : countryInputRules()) {
+        m_customerPhoneCode->addItem(QString("%1 (%2)").arg(rule.name, rule.callingCode), rule.key);
+    }
+    m_customerPhoneLocalEdit = new QLineEdit(this);
+    phoneRow->addWidget(m_customerPhoneCode, 0);
+    phoneRow->addWidget(m_customerPhoneLocalEdit, 1);
+    formLayout->addRow("Phone Number:", phoneRow);
+    updateIdPlaceholder();
+    updatePhonePlaceholder();
 
     QDate today = QDate::currentDate();
     m_checkInDateEdit = new QDateEdit(today, this);
@@ -144,8 +166,31 @@ void ReservationDialog::setupUI() {
 
     connect(m_checkInDateEdit, &QDateEdit::dateChanged, this, &ReservationDialog::updateAvailableRooms);
     connect(m_checkOutDateEdit, &QDateEdit::dateChanged, this, &ReservationDialog::updateAvailableRooms);
+    connect(m_customerIdCountry, &QComboBox::currentIndexChanged, this, &ReservationDialog::updateIdPlaceholder);
+    connect(m_customerPhoneCode, &QComboBox::currentIndexChanged, this, [this]() { updatePhonePlaceholder(); normalizePhoneInput(); });
+    connect(m_customerPhoneLocalEdit, &QLineEdit::textChanged, this, &ReservationDialog::normalizePhoneInput);
     connect(cancelBtn, &QPushButton::clicked, this, &QDialog::reject);
     connect(saveBtn, &QPushButton::clicked, this, &ReservationDialog::onAccept);
+}
+
+void ReservationDialog::updateIdPlaceholder() {
+    const auto& rule = countryInputRule(m_customerIdCountry->currentData().toString());
+    m_customerIdEdit->setPlaceholderText(rule.idHint);
+    m_customerIdEdit->setMaxLength(rule.idMaxLength);
+}
+
+void ReservationDialog::updatePhonePlaceholder() {
+    const auto& rule = countryInputRule(m_customerPhoneCode->currentData().toString());
+    m_customerPhoneLocalEdit->setPlaceholderText(rule.phoneHint);
+    m_customerPhoneLocalEdit->setMaxLength(rule.phoneDigits + 1);
+}
+
+void ReservationDialog::normalizePhoneInput() {
+    // Modified and optimized performance: store a clean local number before adding the selected dialing code.
+    const QString normalized = normalizeLocalPhoneNumber(m_customerPhoneLocalEdit->text());
+    if (normalized != m_customerPhoneLocalEdit->text()) {
+        m_customerPhoneLocalEdit->setText(normalized);
+    }
 }
 
 void ReservationDialog::updateAvailableRooms() {
@@ -193,10 +238,39 @@ void ReservationDialog::updateAvailableRooms() {
 }
 
 void ReservationDialog::onAccept() {
-    if (m_customerIdEdit->text().trimmed().isEmpty() ||
-        m_customerNameEdit->text().trimmed().isEmpty() ||
-        m_customerPhoneEdit->text().trimmed().isEmpty()) {
-        QMessageBox::warning(this, "Missing information", "Please fill out the guest information completely.");
+    const auto& idRule = countryInputRule(m_customerIdCountry->currentData().toString());
+    const auto& phoneRule = countryInputRule(m_customerPhoneCode->currentData().toString());
+    const QString customerId = m_customerIdEdit->text().trimmed().toUpper();
+    const QString customerName = m_customerNameEdit->text().trimmed();
+    const QString phoneLocal = normalizeLocalPhoneNumber(m_customerPhoneLocalEdit->text());
+    const QString fullPhone = phoneRule.callingCode + phoneLocal;
+
+    m_customerIdEdit->setText(customerId);
+    m_customerPhoneLocalEdit->setText(phoneLocal);
+
+    if (!idRule.idPattern.match(customerId).hasMatch()) {
+        QMessageBox::warning(this, "Invalid customer ID", QString("Customer ID for %1 must be %2.").arg(idRule.name, idRule.idHint));
+        return;
+    }
+
+    if (!HotelManager::isValidCustomerNameFormat(customerName.toStdString())) {
+        QMessageBox::warning(this, "Invalid customer name", "Customer name must have at least 2 words and include both uppercase and lowercase letters.");
+        return;
+    }
+
+    static const QRegularExpression digitsPattern(QStringLiteral(R"(^\d+$)"));
+    if (!digitsPattern.match(phoneLocal).hasMatch()) {
+        QMessageBox::warning(this, "Invalid phone number", "Phone number must contain digits only.");
+        return;
+    }
+
+    if (phoneLocal.size() != phoneRule.phoneDigits) {
+        QMessageBox::warning(this, "Invalid phone number", QString("Phone number for %1 must be %2.").arg(phoneRule.name, phoneRule.phoneHint));
+        return;
+    }
+
+    if (!HotelManager::isValidPhoneNumberFormat(fullPhone.toStdString())) {
+        QMessageBox::warning(this, "Invalid phone number", "Phone number format is invalid.");
         return;
     }
 
@@ -214,7 +288,7 @@ void ReservationDialog::onAccept() {
 }
 
 QString ReservationDialog::getCustomerId() const {
-    return m_customerIdEdit->text().trimmed();
+    return m_customerIdEdit->text().trimmed().toUpper();
 }
 
 QString ReservationDialog::getCustomerName() const {
@@ -222,7 +296,8 @@ QString ReservationDialog::getCustomerName() const {
 }
 
 QString ReservationDialog::getCustomerPhone() const {
-    return m_customerPhoneEdit->text().trimmed();
+    const auto& rule = countryInputRule(m_customerPhoneCode->currentData().toString());
+    return rule.callingCode + normalizeLocalPhoneNumber(m_customerPhoneLocalEdit->text());
 }
 
 QString ReservationDialog::getRoomNumber() const {
@@ -245,11 +320,33 @@ void ReservationDialog::setEditBooking(const std::string& bookingId) {
     if (!booking) return;
 
     setWindowTitle("Edit Reservation");
-    m_customerIdEdit->setText(QString::fromStdString(booking->getCustomer()->getCustomerId()));
+    const QString existingId = QString::fromStdString(booking->getCustomer()->getCustomerId()).trimmed().toUpper();
+    for (int i = 0; i < m_customerIdCountry->count(); ++i) {
+        const auto& rule = countryInputRule(m_customerIdCountry->itemData(i).toString());
+        if (rule.idPattern.match(existingId).hasMatch()) {
+            m_customerIdCountry->setCurrentIndex(i);
+            break;
+        }
+    }
+    m_customerIdEdit->setText(existingId);
     m_customerIdEdit->setEnabled(false); // Disallow editing Guest ID to protect DB references
 
     m_customerNameEdit->setText(QString::fromStdString(booking->getCustomer()->getName()));
-    m_customerPhoneEdit->setText(QString::fromStdString(booking->getCustomer()->getPhoneNumber()));
+
+    const QString existingPhone = QString::fromStdString(booking->getCustomer()->getPhoneNumber()).trimmed();
+    bool matchedCode = false;
+    for (int i = 0; i < m_customerPhoneCode->count(); ++i) {
+        const auto& rule = countryInputRule(m_customerPhoneCode->itemData(i).toString());
+        if (existingPhone.startsWith(rule.callingCode)) {
+            m_customerPhoneCode->setCurrentIndex(i);
+            m_customerPhoneLocalEdit->setText(existingPhone.mid(rule.callingCode.size()));
+            matchedCode = true;
+            break;
+        }
+    }
+    if (!matchedCode) {
+        m_customerPhoneLocalEdit->setText(existingPhone);
+    }
 
     QDate checkIn = QDate::fromString(QString::fromStdString(booking->getCheckInDate()), "yyyy-MM-dd");
     QDate checkOut = QDate::fromString(QString::fromStdString(booking->getCheckOutDate()), "yyyy-MM-dd");

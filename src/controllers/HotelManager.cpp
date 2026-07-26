@@ -1,9 +1,45 @@
 #include "HotelManager.h"
 #include <QDate>
+#include <QList>
+#include <QRegularExpression>
 #include <QString>
+#include <QStringList>
 #include <algorithm>
 #include <cctype>
 #include <utility>
+
+namespace {
+std::string collapseWhitespace(const std::string& value)
+{
+    return QString::fromStdString(value).simplified().toStdString();
+}
+
+bool hasMixedCaseLetters(const QString& value)
+{
+    bool hasUpper = false;
+    bool hasLower = false;
+
+    for (const QChar ch : value) {
+        if (ch.isUpper()) {
+            hasUpper = true;
+        } else if (ch.isLower()) {
+            hasLower = true;
+        }
+
+        if (hasUpper && hasLower) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool isSingleNameTokenValid(const QString& token)
+{
+    static const QRegularExpression tokenPattern(QStringLiteral(R"(^[\p{L}][\p{L}'’\-]*$)"));
+    return tokenPattern.match(token).hasMatch();
+}
+}
 
 std::string bookingStateToString(BookingState state)
 {
@@ -23,6 +59,55 @@ std::string bookingStateToString(BookingState state)
 }
 
 HotelManager::HotelManager() = default;
+
+bool HotelManager::isValidCustomerIdFormat(const std::string& customerId)
+{
+    // Modified and optimized performance: validate the supported national ID formats before data reaches persistence.
+    const QString id = QString::fromStdString(customerId).trimmed().toUpper();
+    static const QList<QRegularExpression> idPatterns = {
+        QRegularExpression(QStringLiteral(R"(^\d{12}$)")),
+        QRegularExpression(QStringLiteral(R"(^\d{9}$)")),
+        QRegularExpression(QStringLiteral(R"(^[A-CEGHJ-PR-TW-Z]{2}\d{6}[A-D]$)")),
+        QRegularExpression(QStringLiteral(R"(^[STFGM]\d{7}[A-Z]$)")),
+        QRegularExpression(QStringLiteral(R"(^\d{13}$)")),
+        QRegularExpression(QStringLiteral(R"(^\d{10}$)")),
+        QRegularExpression(QStringLiteral(R"(^[A-Z0-9]{9}$)"))
+    };
+
+    return std::any_of(idPatterns.cbegin(), idPatterns.cend(), [&id](const QRegularExpression& pattern) {
+        return pattern.match(id).hasMatch();
+    });
+}
+
+bool HotelManager::isValidCustomerNameFormat(const std::string& customerName)
+{
+    const QString normalized = QString::fromStdString(collapseWhitespace(customerName));
+    if (normalized.isEmpty()) {
+        return false;
+    }
+
+    const QStringList tokens = normalized.split(' ', Qt::SkipEmptyParts);
+    if (tokens.size() < 2) {
+        return false;
+    }
+
+    for (const QString& token : tokens) {
+        if (!isSingleNameTokenValid(token)) {
+            return false;
+        }
+    }
+
+    return hasMixedCaseLetters(normalized);
+}
+
+bool HotelManager::isValidPhoneNumberFormat(const std::string& phoneNumber)
+{
+    // Modified and optimized performance: validate E.164-style numbers for the selectable country dialing codes.
+    const QString phone = QString::fromStdString(collapseWhitespace(phoneNumber));
+    static const QRegularExpression phonePattern(
+        QStringLiteral(R"(^(?:\+84\d{9}|\+1\d{10}|\+60\d{9}|\+44\d{10}|\+81\d{10}|\+65\d{8}|\+82\d{10}|\+66\d{9}|\+61\d{9}|\+49\d{10})$)"));
+    return phonePattern.match(phone).hasMatch();
+}
 
 // =========================
 // Internal add methods
@@ -123,21 +208,21 @@ bool HotelManager::validateCustomerInput(
     const std::string &phone,
     std::string &errorMessage) const
 {
-    if (id.empty())
+    if (!isValidCustomerIdFormat(id))
     {
-        errorMessage = "Customer ID is required.";
+        errorMessage = "Customer ID does not match a supported national ID format.";
         return false;
     }
 
-    if (name.empty())
+    if (!isValidCustomerNameFormat(name))
     {
-        errorMessage = "Customer name is required.";
+        errorMessage = "Customer name must have at least 2 words and include both uppercase and lowercase letters.";
         return false;
     }
 
-    if (phone.empty())
+    if (!isValidPhoneNumberFormat(phone))
     {
-        errorMessage = "Phone number is required.";
+        errorMessage = "Phone number does not match the selected country format.";
         return false;
     }
 
@@ -199,6 +284,10 @@ bool HotelManager::isRoomFreeForDates(
     std::string &errorMessage,
     const std::string &excludedBookingId) const
 {
+    const QDate requestedCheckIn = QDate::fromString(QString::fromStdString(checkIn), Qt::ISODate);
+    const QDate requestedCheckOut = QDate::fromString(QString::fromStdString(checkOut), Qt::ISODate);
+    const QDate today = QDate::currentDate();
+
     for (const auto &booking : bookings)
     {
         if (!booking)
@@ -217,6 +306,14 @@ bool HotelManager::isRoomFreeForDates(
         auto bookedRoom = booking->getRoom();
         if (!bookedRoom || bookedRoom->getRoomNumber() != roomNumber)
             continue;
+
+        // Modified and optimized performance: keep a room unavailable for any stay covering today until its guest explicitly checks out.
+        if (getBookingState(*booking) == BookingState::ACTIVE
+            && requestedCheckIn <= today && today < requestedCheckOut)
+        {
+            errorMessage = "Room " + roomNumber + " still has an active stay that must be checked out first.";
+            return false;
+        }
 
         bool overlaps = checkIn < booking->getCheckOutDate() &&
                         booking->getCheckInDate() < checkOut;
@@ -314,6 +411,12 @@ bool HotelManager::validateInvoiceInput(
     if (!booking)
     {
         errorMessage = "Booking not found.";
+        return false;
+    }
+
+    if (booking->isDeleted())
+    {
+        errorMessage = "Cannot create invoice for a deleted booking.";
         return false;
     }
 
@@ -455,6 +558,11 @@ std::vector<std::shared_ptr<Room>> HotelManager::getAvailableRooms() const
                 continue;
             }
 
+            if (booking->isDeleted())
+            {
+                continue;
+            }
+
             if (booking->getRoom()->getRoomNumber() != room->getRoomNumber())
             {
                 continue;
@@ -510,7 +618,7 @@ std::vector<std::shared_ptr<Booking>> HotelManager::getBookingsByStatus(BookingS
     std::vector<std::shared_ptr<Booking>> filteredBookings;
     for (const auto &booking : bookings)
     {
-        if (booking && getBookingState(*booking) == state)
+        if (booking && !booking->isDeleted() && getBookingState(*booking) == state)
         {
             filteredBookings.push_back(booking);
         }
@@ -524,7 +632,7 @@ std::vector<std::shared_ptr<Booking>> HotelManager::getArrivalsByDate(const std:
     std::vector<std::shared_ptr<Booking>> checkIns;
     for (const auto &booking : bookings)
     {
-        if (booking && booking->getCheckInDate() == dateStr && !booking->isCancelled())
+        if (booking && booking->getCheckInDate() == dateStr && !booking->isCancelled() && !booking->isDeleted())
         {
             checkIns.push_back(booking);
         }
@@ -538,7 +646,7 @@ std::vector<std::shared_ptr<Booking>> HotelManager::getDeparturesByDate(const st
     std::vector<std::shared_ptr<Booking>> checkOuts;
     for (const auto &booking : bookings)
     {
-        if (booking && booking->getCheckOutDate() == dateStr && !booking->isCancelled())
+        if (booking && booking->getCheckOutDate() == dateStr && !booking->isCancelled() && !booking->isDeleted())
         {
             checkOuts.push_back(booking);
         }
@@ -553,13 +661,19 @@ BookingState HotelManager::getBookingState(const Booking &booking) const
         return BookingState::CANCELLED;
     }
 
+    // Modified and optimized performance: make completion depend on the persisted checkout action instead of the planned departure date.
+    if (booking.isCheckedOut())
+    {
+        return BookingState::COMPLETED;
+    }
+
     const QDate today = QDate::currentDate();
     const QDate checkIn = QDate::fromString(QString::fromStdString(booking.getCheckInDate()), Qt::ISODate);
     const QDate checkOut = QDate::fromString(QString::fromStdString(booking.getCheckOutDate()), Qt::ISODate);
 
     if (!checkIn.isValid() || !checkOut.isValid())
     {
-        return BookingState::COMPLETED;
+        return BookingState::UPCOMING;
     }
 
     if (today < checkIn)
@@ -567,12 +681,7 @@ BookingState HotelManager::getBookingState(const Booking &booking) const
         return BookingState::UPCOMING;
     }
 
-    if (today < checkOut)
-    {
-        return BookingState::ACTIVE;
-    }
-
-    return BookingState::COMPLETED;
+    return BookingState::ACTIVE;
 }
 
 // Modified: Disregards Canceled or Completed records when calculating active occupancy data
@@ -588,7 +697,7 @@ std::vector<std::shared_ptr<Room>> HotelManager::getRoomsByOccupancy(bool occupi
         bool isOccupied = false;
         for (const auto &booking : bookings)
         {
-            if (!booking || !booking->getRoom())
+            if (!booking || booking->isDeleted() || !booking->getRoom())
                 continue;
 
             const BookingState bookingState = getBookingState(*booking);
@@ -684,6 +793,37 @@ bool HotelManager::registerCustomer(
     return true;
 }
 
+bool HotelManager::resolveCustomerForBooking(
+    const std::string &id,
+    const std::string &name,
+    const std::string &phone,
+    std::string &errorMessage)
+{
+    auto customer = findCustomerById(id);
+    if (!customer) {
+        return registerCustomer(id, name, phone, errorMessage);
+    }
+
+    if (customer->isArchived()) {
+        errorMessage = "Archived customers cannot be used for bookings.";
+        return false;
+    }
+
+    const QString storedName = QString::fromStdString(customer->getName()).simplified();
+    const QString inputName = QString::fromStdString(collapseWhitespace(name)).simplified();
+    if (storedName.compare(inputName, Qt::CaseInsensitive) != 0) {
+        errorMessage = "Customer name does not match the registered customer for this ID.";
+        return false;
+    }
+
+    if (customer->getPhoneNumber() != phone) {
+        errorMessage = "Phone number does not match the registered customer for this ID.";
+        return false;
+    }
+
+    return true;
+}
+
 bool HotelManager::createBooking(
     const std::string &customerId,
     const std::string &roomNumber,
@@ -708,6 +848,7 @@ bool HotelManager::createBooking(
 
     booking->setCancelled(false);
     booking->setDeleted(false);
+    booking->setCheckedOut(false);
     addBooking(booking);
     return true;
 }
@@ -840,14 +981,16 @@ bool HotelManager::completeBooking(
             QString::fromStdString(booking->getCheckInDate()),
             Qt::ISODate);
 
-    if (checkout <= checkIn)
+    // Modified and optimized performance: allow same-day stays while still rejecting a checkout before check-in.
+    if (checkout < checkIn)
     {
-        errorMessage = "Checkout date must be after check-in date.";
+        errorMessage = "Checkout date cannot be before check-in date.";
         return false;
     }
 
     booking->setCheckOutDate(actualCheckoutDate);
     booking->setCancelled(false);
+    booking->setCheckedOut(true);
 
     return true;
 }
@@ -865,6 +1008,11 @@ bool HotelManager::createInvoice( // In practice, checkout first, then create in
         return false;
     }
     const auto booking = findBookingById(bookingId);
+    if (booking && booking->isDeleted())
+    {
+        errorMessage = "Cannot create invoice for a deleted booking.";
+        return false;
+    }
 
     auto invoice = std::make_shared<Invoice>();
     invoice->setInvoiceId(invoiceId);
@@ -900,7 +1048,7 @@ bool HotelManager::setRoomAvailability(
     {
         for (const auto &booking : bookings)
         {
-            if (!booking || booking->isCancelled())
+            if (!booking || booking->isCancelled() || booking->isDeleted())
                 continue;
 
             if (!booking->getRoom() || booking->getRoom()->getRoomNumber() != roomNumber)
@@ -930,7 +1078,7 @@ bool HotelManager::archiveRoom(const std::string &roomNumber, std::string &error
 
     for (const auto &booking : bookings)
     {
-        if (!booking || booking->isCancelled())
+        if (!booking || booking->isCancelled() || booking->isDeleted())
             continue;
 
         auto bookedRoom = booking->getRoom();
@@ -959,7 +1107,7 @@ bool HotelManager::archiveCustomer(const std::string &customerId, std::string &e
 
     for (const auto &booking : bookings)
     {
-        if (!booking || booking->isCancelled())
+        if (!booking || booking->isCancelled() || booking->isDeleted())
             continue;
 
         auto bookingCustomer = booking->getCustomer();
@@ -1013,6 +1161,7 @@ bool HotelManager::restoreBookingFromDatabase(
     const std::string &checkOutDate,
     bool cancelled,
     bool deleted,
+    bool checkedOut,
     std::string &errorMessage)
 {
     if (bookingId.empty())
@@ -1051,9 +1200,10 @@ bool HotelManager::restoreBookingFromDatabase(
 
     const QDate checkIn = QDate::fromString(QString::fromStdString(checkInDate), Qt::ISODate);
     const QDate checkOut = QDate::fromString(QString::fromStdString(checkOutDate), Qt::ISODate);
-    if (checkOut <= checkIn)
+    // Modified and optimized performance: restore completed same-day stays from SQLite while rejecting only a checkout before check-in.
+    if (checkOut < checkIn)
     {
-        errorMessage = "Check-out must be after check-in.";
+        errorMessage = "Check-out cannot be before check-in.";
         return false;
     }
 
@@ -1065,8 +1215,44 @@ bool HotelManager::restoreBookingFromDatabase(
     booking->setCheckOutDate(checkOutDate);
     booking->setCancelled(cancelled);
     booking->setDeleted(deleted);
+    booking->setCheckedOut(checkedOut);
 
     addBooking(booking);
+    return true;
+}
+
+bool HotelManager::restoreCustomerFromDatabase(
+    const std::string &customerId,
+    const std::string &name,
+    const std::string &phone,
+    bool archived,
+    std::string &errorMessage)
+{
+    if (customerId.empty())
+    {
+        errorMessage = "Persisted customer ID is empty.";
+        return false;
+    }
+
+    if (customerIdExists(customerId))
+    {
+        errorMessage = "Duplicate persisted customer ID: " + customerId;
+        return false;
+    }
+
+    if (name.empty() || phone.empty())
+    {
+        errorMessage = "Persisted customer record is incomplete.";
+        return false;
+    }
+
+    auto customer = std::make_shared<Customer>();
+    customer->setCustomerId(customerId);
+    customer->setName(name);
+    customer->setPhoneNumber(phone);
+    customer->setArchived(archived);
+
+    addCustomer(customer);
     return true;
 }
 
@@ -1095,6 +1281,12 @@ bool HotelManager::restoreInvoiceFromDatabase(
     if (!booking)
     {
         errorMessage = "Booking not found for persisted invoice.";
+        return false;
+    }
+
+    if (booking->isDeleted())
+    {
+        errorMessage = "Invoice can not be restored for a deleted booking.";
         return false;
     }
 
@@ -1179,9 +1371,9 @@ bool HotelManager::cancelBooking(const std::string &bookingId, std::string &erro
 }
 
 // =========================
-// Delete methods (Hard deletions)
+// Delete methods
 // =========================
-// Added: Hard-deletes a room, customer, booking, or invoice only if no active references exist
+// Added: Hard-deletes a room, customer, or invoice only if no active references exist
 bool HotelManager::deleteRoom(const std::string &roomNumber, std::string &errorMessage)
 {
     auto room = findRoomByNumber(roomNumber);
@@ -1234,7 +1426,7 @@ bool HotelManager::deleteCustomer(const std::string &customerId, std::string &er
 
 bool HotelManager::soft_deleteBooking(const std::string &bookingId, std::string &errorMessage)
 {
-    // Fixed-modified: Treat booking deletion like the other entities and remove the record.
+    // Keep the booking record for history and audit purposes.
     auto booking = findBookingById(bookingId);
     if (!booking)
     {
@@ -1254,7 +1446,7 @@ bool HotelManager::soft_deleteBooking(const std::string &bookingId, std::string 
         return false;
     }
 
-    bookings.erase(std::remove(bookings.begin(), bookings.end(), booking), bookings.end());
+    booking->setDeleted(true);
     return true;
 }
 

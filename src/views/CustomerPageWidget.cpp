@@ -2,6 +2,7 @@
 #include "CustomerDialog.h"
 #include "CustomConfirmDialog.h"
 #include "CustomSuccessDialog.h"
+#include "DataManager.h"
 #include <QVBoxLayout>
 #include <QLabel>
 #include <QHeaderView>
@@ -305,6 +306,13 @@ void CustomerPageWidget::onAddCustomerClicked() {
         return;
     }
 
+    // Modified and optimized performance: persist each customer mutation immediately instead of waiting for application shutdown.
+    if (!DataManager::getInstance().commitChanges(*m_manager)) {
+        refreshDataInternal();
+        QMessageBox::critical(this, "Save Customer Failed", "The customer was not saved. The previous database state has been restored.");
+        return;
+    }
+
     refreshDataInternal();
 }
 
@@ -327,6 +335,11 @@ void CustomerPageWidget::onEditCustomerClicked() {
 
     customer->setName(dialog.getCustomerName().toStdString());
     customer->setPhoneNumber(dialog.getCustomerPhone().toStdString());
+    if (!DataManager::getInstance().commitChanges(*m_manager)) {
+        refreshDataInternal();
+        QMessageBox::critical(this, "Save Customer Failed", "The customer changes were not saved. The previous database state has been restored.");
+        return;
+    }
     refreshDataInternal();
 }
 
@@ -353,6 +366,12 @@ void CustomerPageWidget::onArchiveCustomerClicked() {
         return;
     }
 
+    if (!DataManager::getInstance().commitChanges(*m_manager)) {
+        refreshDataInternal();
+        QMessageBox::critical(this, "Save Customer Failed", "The customer status was not saved. The previous database state has been restored.");
+        return;
+    }
+
     QMessageBox::information(this, "Customer Updated", QString("Customer %1 successful.").arg(action));
     refreshDataInternal();
 }
@@ -376,6 +395,12 @@ void CustomerPageWidget::onDeleteCustomerClicked() {
     std::string errorMessage;
     if (!m_manager->deleteCustomer(customerId.toStdString(), errorMessage)) {
         QMessageBox::critical(this, "Delete Customer Failed", QString::fromStdString(errorMessage));
+        return;
+    }
+
+    if (!DataManager::getInstance().commitChanges(*m_manager)) {
+        refreshDataInternal();
+        QMessageBox::critical(this, "Delete Customer Failed", "The customer was not deleted because the database could not be updated.");
         return;
     }
 

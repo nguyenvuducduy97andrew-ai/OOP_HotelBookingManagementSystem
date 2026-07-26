@@ -1,6 +1,7 @@
 #pragma once
 #include <memory>
 #include <QDialog>
+#include <QComboBox>
 #include <QLineEdit>
 #include <QPushButton>
 
@@ -27,11 +28,17 @@ private:
     void populateFields();
     bool validate();
     void setFieldError(QLineEdit* field, bool hasError);
+    void updateIdPlaceholder();
+    void updatePhonePlaceholder();
+    void normalizePhoneInput();
 
     std::shared_ptr<Customer> m_customer;
+    QComboBox* m_idCountry;
     QLineEdit* m_idEdit;
-    QLineEdit* m_nameEdit;
-    QLineEdit* m_phoneEdit;
+    QLineEdit* m_lastNameEdit;
+    QLineEdit* m_firstNameEdit;
+    QComboBox* m_phoneCountryCode;
+    QLineEdit* m_phoneLocalEdit;
     QPushButton* m_okButton;
     QLabel* m_errorLabel;
 };

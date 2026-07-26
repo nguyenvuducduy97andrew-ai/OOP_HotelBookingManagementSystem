@@ -5,6 +5,7 @@
 #include "SuiteRoom.h"
 #include "CustomSuccessDialog.h"
 #include "CustomConfirmDialog.h"
+#include "DataManager.h"
 #include <QHBoxLayout>
 #include <QVBoxLayout>
 #include <QScrollArea>
@@ -399,18 +400,7 @@ QWidget* RoomPageWidget::createRoomCard(const std::shared_ptr<Room>& room) {
     rightCol->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
 
     // Dynamic Occupied status
-    bool isOccupied = false;
-    if (m_manager) {
-        for (const auto& booking : m_manager->getBookings()) {
-            if (booking && !booking->isCancelled() && !booking->isDeleted() && booking->getRoom() &&
-                booking->getRoom()->getRoomNumber() == room->getRoomNumber()) {
-                if (m_manager->getBookingState(*booking) == BookingState::ACTIVE) {
-                    isOccupied = true;
-                    break;
-                }
-            }
-        }
-    }
+    const bool isOccupied = isRoomOccupied(room->getRoomNumber());
 
     auto* statusBadge = new QLabel(card);
     if (!room->getIsAvailable()) {
@@ -441,6 +431,8 @@ QWidget* RoomPageWidget::createRoomCard(const std::shared_ptr<Room>& room) {
 void RoomPageWidget::refreshData() {
     m_roomListWidget->clear();
     if (!m_manager) return;
+
+    refreshOccupancyCache();
 
     for (const auto& room : m_manager->getRooms()) {
         if (!room) continue;
@@ -502,19 +494,21 @@ void RoomPageWidget::updateDetailPanel(const std::shared_ptr<Room>& room) {
     m_detailTitleLabel->setText("Room " + QString::fromStdString(room->getRoomNumber()));
 
     // Dynamic Occupied status
-    bool isOccupied = false;
+    const bool isOccupied = isRoomOccupied(room->getRoomNumber());
     std::string occupantName = "";
-    if (m_manager) {
+    if (isOccupied && m_manager) {
         for (const auto& booking : m_manager->getBookings()) {
-            if (booking && !booking->isCancelled() && !booking->isDeleted() && booking->getRoom() &&
-                booking->getRoom()->getRoomNumber() == room->getRoomNumber()) {
-                if (m_manager->getBookingState(*booking) == BookingState::ACTIVE) {
-                    isOccupied = true;
-                    if (booking->getCustomer()) {
-                        occupantName = booking->getCustomer()->getName();
-                    }
-                    break;
+            if (!booking || booking->isCancelled() || booking->isDeleted() || !booking->getRoom()) {
+                continue;
+            }
+            if (booking->getRoom()->getRoomNumber() != room->getRoomNumber()) {
+                continue;
+            }
+            if (m_manager->getBookingState(*booking) == BookingState::ACTIVE) {
+                if (booking->getCustomer()) {
+                    occupantName = booking->getCustomer()->getName();
                 }
+                break;
             }
         }
     }
@@ -563,6 +557,34 @@ void RoomPageWidget::updateDetailPanel(const std::shared_ptr<Room>& room) {
     }
 }
 
+void RoomPageWidget::refreshOccupancyCache()
+{
+    m_occupiedRoomNumbers.clear();
+    if (!m_manager) {
+        return;
+    }
+
+    for (const auto& booking : m_manager->getBookings()) {
+        if (!booking || booking->isCancelled() || booking->isDeleted()) {
+            continue;
+        }
+
+        const auto room = booking->getRoom();
+        if (!room) {
+            continue;
+        }
+
+        if (m_manager->getBookingState(*booking) == BookingState::ACTIVE) {
+            m_occupiedRoomNumbers.insert(room->getRoomNumber());
+        }
+    }
+}
+
+bool RoomPageWidget::isRoomOccupied(const std::string& roomNumber) const
+{
+    return m_occupiedRoomNumbers.find(roomNumber) != m_occupiedRoomNumbers.end();
+}
+
 void RoomPageWidget::onAddRoomClicked() {
     RoomDialog dialog(this);
     if (dialog.exec() == QDialog::Accepted) {
@@ -582,6 +604,12 @@ void RoomPageWidget::onAddRoomClicked() {
             auto room = m_manager->findRoomByNumber(roomNum);
             if (room) {
                 room->setExtraFeeAmount(extraFee);
+            }
+            // Modified and optimized performance: commit room creation immediately and recover the last saved state on failure.
+            if (!DataManager::getInstance().commitChanges(*m_manager)) {
+                refreshData();
+                QMessageBox::critical(this, "Save Room Failed", "The room was not saved. The previous database state has been restored.");
+                return;
             }
             refreshData();
             CustomSuccessDialog("Room added successfully.", this).exec();
@@ -625,6 +653,12 @@ void RoomPageWidget::onEditRoomClicked() {
             if (sui) sui->setPremiumServiceFee(newExtraFee);
         }
 
+        if (!DataManager::getInstance().commitChanges(*m_manager)) {
+            refreshData();
+            QMessageBox::critical(this, "Save Room Failed", "The room changes were not saved. The previous database state has been restored.");
+            return;
+        }
+
         refreshData();
         CustomSuccessDialog("Room information updated successfully.", this).exec();
     }
@@ -640,6 +674,11 @@ void RoomPageWidget::onDeleteRoomClicked() {
     if (dialog.exec() == QDialog::Accepted && dialog.isConfirmed()) {
         std::string errMsg;
         if (m_manager->deleteRoom(roomNum, errMsg)) {
+            if (!DataManager::getInstance().commitChanges(*m_manager)) {
+                refreshData();
+                QMessageBox::critical(this, "Delete Room Failed", "The room was not deleted because the database could not be updated.");
+                return;
+            }
             refreshData();
             CustomSuccessDialog("Room deleted successfully.", this).exec();
         } else {

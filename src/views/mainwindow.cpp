@@ -33,6 +33,10 @@ MainWindow::MainWindow(HotelManager* manager, QWidget *parent)
     m_reservationsPage = new ReservationsPageWidget(m_manager, this);
     m_reservationsPage->setObjectName("pageReservations");
 
+    // Modified and optimized performance: refresh history immediately after a persisted checkout.
+    connect(m_reservationsPage, &ReservationsPageWidget::bookingCompleted,
+            m_dashboardPage, &DashboardWidget::refreshDashboard);
+
     m_customerPage = new CustomerPageWidget(m_manager, this);
     m_customerPage->setObjectName("pageCustomer");
 

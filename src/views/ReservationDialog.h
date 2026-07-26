@@ -26,13 +26,18 @@ private slots:
 
 private:
     void setupUI();
+    void updateIdPlaceholder();
+    void updatePhonePlaceholder();
+    void normalizePhoneInput();
 
     HotelManager* m_manager;
     std::string m_editingBookingId;
 
+    QComboBox* m_customerIdCountry;
     QLineEdit* m_customerIdEdit;
     QLineEdit* m_customerNameEdit;
-    QLineEdit* m_customerPhoneEdit;
+    QComboBox* m_customerPhoneCode;
+    QLineEdit* m_customerPhoneLocalEdit;
     QDateEdit* m_checkInDateEdit;
     QDateEdit* m_checkOutDateEdit;
     QComboBox* m_roomCombo;

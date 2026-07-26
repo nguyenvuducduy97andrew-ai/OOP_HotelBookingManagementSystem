@@ -23,6 +23,7 @@ Booking::Booking() {
     // Fixed-modified: Keep booking construction lightweight and assign the ID from HotelManager instead.
     this->cancelled = false;
     this->deleted = false;
+    this->checkedOut = false;
     this->checkOutDate = "";
     this->checkInDate = "";
 }
@@ -95,6 +96,14 @@ void Booking::setDeleted(bool deleted) {
     this->deleted = deleted;
 }
 
+bool Booking::isCheckedOut() const {
+    return checkedOut;
+}
+
+void Booking::setCheckedOut(bool checkedOut) {
+    this->checkedOut = checkedOut;
+}
+
 bool Booking::isValid() const {
     auto lockedCustomer = customer.lock();
     auto lockedRoom = room.lock();
@@ -103,5 +112,6 @@ bool Booking::isValid() const {
            lockedRoom != nullptr &&
            isIsoDateString(checkInDate) &&
            isIsoDateString(checkOutDate) &&
-           checkOutDate > checkInDate;
+           // Modified and optimized performance: keep restored same-day completed stays valid while booking creation still enforces an overnight stay.
+           checkOutDate >= checkInDate;
 }

@@ -157,6 +157,11 @@ void RoomStatusPageWidget::refreshData() {
                 CustomConfirmDialog dialog("Confirm return to service", QString("Complete maintenance for room %1 and return it to service?").arg(QString::fromStdString(room->getRoomNumber())), false, this);
                 if (dialog.exec() == QDialog::Accepted && dialog.isConfirmed()) {
                     room->setIsAvailable(true);
+                    if (!DataManager::getInstance().commitChanges(*m_manager)) {
+                        refreshData();
+                        QMessageBox::critical(this, "Save Room Status Failed", "The maintenance update was not saved. The previous database state has been restored.");
+                        return;
+                    }
                     refreshData();
                 }
                 return;
@@ -191,16 +196,51 @@ void RoomStatusPageWidget::refreshData() {
                 if (card->getStatus() == "OCC" && !card->isTempAvailMode()) {
                     // Update existing booking
                     if (activeBooking) {
-                        m_manager->registerCustomer(idNumber.toStdString(), guestName.toStdString(), phone.toStdString(), err);
-                        m_manager->updateBooking(activeBooking->getBookingId(), idNumber.toStdString(), room->getRoomNumber(), dIn.toString("yyyy-MM-dd").toStdString(), dOut.toString("yyyy-MM-dd").toStdString(), err);
+                        auto existingCustomer = m_manager->findCustomerById(idNumber.toStdString());
+                        if (existingCustomer) {
+                            if (existingCustomer->isArchived()) {
+                                QMessageBox::critical(this, "Customer error", "Archived customers cannot be used for bookings.");
+                                return;
+                            }
+                            existingCustomer->setName(guestName.toStdString());
+                            existingCustomer->setPhoneNumber(phone.toStdString());
+                        } else if (!m_manager->registerCustomer(idNumber.toStdString(), guestName.toStdString(), phone.toStdString(), err)) {
+                            QMessageBox::critical(this, "Customer error", QString::fromStdString(err));
+                            return;
+                        }
+
+                        if (!m_manager->updateBooking(activeBooking->getBookingId(), idNumber.toStdString(), room->getRoomNumber(), dIn.toString("yyyy-MM-dd").toStdString(), dOut.toString("yyyy-MM-dd").toStdString(), err)) {
+                            QMessageBox::critical(this, "Booking update error", QString::fromStdString(err));
+                            return;
+                        }
                     }
                 } else {
                     // Create new booking
-                    m_manager->registerCustomer(idNumber.toStdString(), guestName.toStdString(), phone.toStdString(), err);
-                    m_manager->createBooking(idNumber.toStdString(), room->getRoomNumber(), dIn.toString("yyyy-MM-dd").toStdString(), dOut.toString("yyyy-MM-dd").toStdString(), err);
+                    auto existingCustomer = m_manager->findCustomerById(idNumber.toStdString());
+                    if (existingCustomer) {
+                        if (existingCustomer->isArchived()) {
+                            QMessageBox::critical(this, "Customer error", "Archived customers cannot be used for bookings.");
+                            return;
+                        }
+                        existingCustomer->setName(guestName.toStdString());
+                        existingCustomer->setPhoneNumber(phone.toStdString());
+                    } else if (!m_manager->registerCustomer(idNumber.toStdString(), guestName.toStdString(), phone.toStdString(), err)) {
+                        QMessageBox::critical(this, "Customer error", QString::fromStdString(err));
+                        return;
+                    }
+
+                    if (!m_manager->createBooking(idNumber.toStdString(), room->getRoomNumber(), dIn.toString("yyyy-MM-dd").toStdString(), dOut.toString("yyyy-MM-dd").toStdString(), err)) {
+                        QMessageBox::critical(this, "Booking error", QString::fromStdString(err));
+                        return;
+                    }
                 }
                 
-                DataManager::getInstance().saveAll(*m_manager);
+                // Modified and optimized performance: persist maintenance status before refreshing the room grid.
+                if (!DataManager::getInstance().commitChanges(*m_manager)) {
+                    refreshData();
+                    QMessageBox::critical(this, "Save Booking Failed", "The booking changes were not saved. The previous database state has been restored.");
+                    return;
+                }
                 
                 card->setTempAvailMode(false); // Thoát khỏi trạng thái ảo
                 refreshData(); // Cập nhật lại UI từ DB

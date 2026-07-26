@@ -19,6 +19,8 @@ private:
     std::string checkOutDate;
     bool cancelled; 
     bool deleted;
+    // Modified and optimized performance: persist the explicit checkout event independently from planned stay dates.
+    bool checkedOut;
 
 public:
     Booking();
@@ -54,6 +56,10 @@ public:
 
     bool isDeleted() const;
     void setDeleted(bool deleted);
+
+    // Modified and optimized performance: expose the persisted checkout state used by operational and history views.
+    bool isCheckedOut() const;
+    void setCheckedOut(bool checkedOut);
 
     bool isValid() const;  // Check if booking has valid (non-expired) customer and room
 };

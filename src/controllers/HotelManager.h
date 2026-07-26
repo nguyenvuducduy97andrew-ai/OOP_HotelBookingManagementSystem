@@ -78,6 +78,10 @@ private:
 public:
     HotelManager();
 
+    static bool isValidCustomerIdFormat(const std::string& customerId);
+    static bool isValidCustomerNameFormat(const std::string& customerName);
+    static bool isValidPhoneNumberFormat(const std::string& phoneNumber);
+
     // Getters
     const std::vector<std::shared_ptr<Room>>& getRooms() const;
     const std::vector<std::shared_ptr<Customer>>& getCustomers() const;
@@ -125,6 +129,13 @@ public:
         );
 
     bool registerCustomer(
+        const std::string& id,
+        const std::string& name,
+        const std::string& phone,
+        std::string& errorMessage
+        );
+
+    bool resolveCustomerForBooking(
         const std::string& id,
         const std::string& name,
         const std::string& phone,
@@ -185,6 +196,14 @@ public:
         const std::string& checkOutDate,
         bool cancelled,
         bool deleted,
+        bool checkedOut,
+        std::string& errorMessage
+    );
+    bool restoreCustomerFromDatabase(
+        const std::string& customerId,
+        const std::string& name,
+        const std::string& phone,
+        bool archived,
         std::string& errorMessage
     );
     bool restoreInvoiceFromDatabase(

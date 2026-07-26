@@ -5,7 +5,9 @@
 #include <QSqlQuery>
 #include <QSqlError>
 #include <QDebug>
+#include <QDate>
 #include <QString>
+#include <utility>
 
 // Creates or returns the one shared DataManager instance.
 // Reference helps ensuring only one DataManager instance exist
@@ -111,6 +113,7 @@ bool DataManager::initDatabase(const std::string& dataPath) {
         "   checkOutDate TEXT NOT NULL,"
         "   cancelled INTEGER NOT NULL DEFAULT 0,"
         "   deleted INTEGER NOT NULL DEFAULT 0,"
+        "   checkedOut INTEGER NOT NULL DEFAULT 0,"
         "   FOREIGN KEY (customerId) REFERENCES Customer(customerId) ON DELETE CASCADE ON UPDATE CASCADE,"
         "   FOREIGN KEY (roomNumber) REFERENCES Room(roomNumber) ON DELETE RESTRICT ON UPDATE CASCADE"
         ");";
@@ -119,10 +122,12 @@ bool DataManager::initDatabase(const std::string& dataPath) {
         return false;
     }
 
+    bool checkedOutColumnAdded = false;
     QSqlQuery bookingSchemaQuery;
     if (bookingSchemaQuery.exec("PRAGMA table_info(Booking)")) {
         bool hasCancelled = false;
         bool hasDeleted = false;
+        bool hasCheckedOut = false;
         bool hasStatus = false;
         while (bookingSchemaQuery.next()) {
             const QString columnName = bookingSchemaQuery.value(1).toString();
@@ -130,6 +135,8 @@ bool DataManager::initDatabase(const std::string& dataPath) {
                 hasCancelled = true;
             } else if (columnName == "deleted") {
                 hasDeleted = true;
+            } else if (columnName == "checkedOut") {
+                hasCheckedOut = true;
             } else if (columnName == "status") {
                 hasStatus = true;
             }
@@ -154,6 +161,14 @@ bool DataManager::initDatabase(const std::string& dataPath) {
                 return false;
             }
         }
+
+        if (!hasCheckedOut) {
+            if (!bookingSchemaQuery.exec("ALTER TABLE Booking ADD COLUMN checkedOut INTEGER NOT NULL DEFAULT 0")) {
+                qDebug() << "Error adding checked-out column: " << bookingSchemaQuery.lastError().text();
+                return false;
+            }
+            checkedOutColumnAdded = true;
+        }
     } else {
         qDebug() << "Error inspecting Booking schema: " << bookingSchemaQuery.lastError().text();
         return false;
@@ -174,6 +189,20 @@ bool DataManager::initDatabase(const std::string& dataPath) {
         return false;
     }
 
+    if (checkedOutColumnAdded) {
+        // Modified and optimized performance: preserve legacy completed stays once while moving future completion decisions to the explicit checkout flag.
+        QSqlQuery migrateCompletedBookings;
+        migrateCompletedBookings.prepare(
+            "UPDATE Booking SET checkedOut = 1 "
+            "WHERE cancelled = 0 AND deleted = 0 "
+            "AND (checkOutDate <= ? OR bookingId IN (SELECT bookingId FROM Invoice))");
+        migrateCompletedBookings.addBindValue(QDate::currentDate().toString(Qt::ISODate));
+        if (!migrateCompletedBookings.exec()) {
+            qDebug() << "Error migrating completed booking state: " << migrateCompletedBookings.lastError().text();
+            return false;
+        }
+    }
+
     qDebug() << "The SQLite database is all set and ready!";
     return true;
 }
@@ -184,7 +213,8 @@ bool DataManager::loadAll(HotelManager& manager, const std::string& dataPath) {
         return false;
     }
 
-    manager.clearAll();
+    // Modified and optimized performance: stage the complete database load before replacing live state, preventing invalid rows from being silently dropped and later saved away.
+    HotelManager loadedManager;
 
     // Modified: Removed legacy counter initializer since entity counters are managed dynamically
     QSqlQuery query;
@@ -198,14 +228,9 @@ bool DataManager::loadAll(HotelManager& manager, const std::string& dataPath) {
             std::string phone = query.value(2).toString().toStdString();
             bool archived = query.value(3).toInt() == 1;
 
-            manager.registerCustomer(custId, name, phone, errorMsg);
-            if (!manager.customerIdExists(custId)) {
-                qDebug() << "Skipped invalid customer during load:" << QString::fromStdString(errorMsg);
-                continue;
-            }
-            auto customer = manager.findCustomerById(custId);
-            if (customer) {
-                customer->setArchived(archived);
+            if (!loadedManager.restoreCustomerFromDatabase(custId, name, phone, archived, errorMsg)) {
+                qDebug() << "Failed to restore customer during load:" << QString::fromStdString(errorMsg);
+                return false;
             }
         }
     } else {
@@ -228,12 +253,12 @@ bool DataManager::loadAll(HotelManager& manager, const std::string& dataPath) {
             if (typeStr == "Deluxe") type = RoomType::Deluxe;
             else if (typeStr == "Suite") type = RoomType::Suite;
 
-            if (!manager.registerRoom(type, roomNum, price, errorMsg)) {
-                qDebug() << "Skipped invalid room during load:" << QString::fromStdString(errorMsg);
-                continue;
+            if (!loadedManager.registerRoom(type, roomNum, price, errorMsg)) {
+                qDebug() << "Failed to restore room during load:" << QString::fromStdString(errorMsg);
+                return false;
             }
 
-            auto room = manager.findRoomByNumber(roomNum);
+            auto room = loadedManager.findRoomByNumber(roomNum);
             if (room) {
                 room->setIsAvailable(isAvailable == 1);
                 room->setArchived(archived);
@@ -257,7 +282,8 @@ bool DataManager::loadAll(HotelManager& manager, const std::string& dataPath) {
     // Fixed-modified: Rebuild the booking counter in the data layer instead of querying from the model.
     int maxBookingNumber = 1000;
 
-    if (query.exec("SELECT bookingId, customerId, roomNumber, checkInDate, checkOutDate, cancelled, deleted FROM Booking")) {
+    // Modified and optimized performance: load the explicit checkout flag so completed history is not inferred from dates.
+    if (query.exec("SELECT bookingId, customerId, roomNumber, checkInDate, checkOutDate, cancelled, deleted, checkedOut FROM Booking")) {
         while (query.next()) {
             std::string bookingId = query.value(0).toString().toStdString();
             std::string custId = query.value(1).toString().toStdString();
@@ -266,6 +292,7 @@ bool DataManager::loadAll(HotelManager& manager, const std::string& dataPath) {
             std::string checkOutStr = query.value(4).toString().toStdString();
             bool cancelled = query.value(5).toInt() == 1;
             bool deleted = query.value(6).toInt() == 1;
+            bool checkedOut = query.value(7).toInt() == 1;
 
             if (bookingId.rfind("BK", 0) == 0) {
                 bool ok = false;
@@ -275,9 +302,9 @@ bool DataManager::loadAll(HotelManager& manager, const std::string& dataPath) {
                 }
             }
 
-            if (!manager.restoreBookingFromDatabase(bookingId, custId, roomNum, checkInStr, checkOutStr, cancelled, deleted, errorMsg)) {
-                qDebug() << "Skipped invalid booking during load:" << QString::fromStdString(errorMsg);
-                continue;
+            if (!loadedManager.restoreBookingFromDatabase(bookingId, custId, roomNum, checkInStr, checkOutStr, cancelled, deleted, checkedOut, errorMsg)) {
+                qDebug() << "Failed to restore booking during load:" << QString::fromStdString(errorMsg);
+                return false;
             }
 
         }
@@ -285,9 +312,6 @@ bool DataManager::loadAll(HotelManager& manager, const std::string& dataPath) {
         qDebug() << "Error reading Booking table: " << query.lastError().text();
         return false;
     }
-
-    // Fixed-modified: Restore the next booking number from persisted rows after loading bookings.
-    Booking::initCounterFromDatabase(maxBookingNumber);
 
     // Reconstruct invoices directly back into the core system memory.
     // Legacy rows with a cancelled flag are ignored by deleting them during migration.
@@ -299,9 +323,9 @@ bool DataManager::loadAll(HotelManager& manager, const std::string& dataPath) {
             int nightsCount = query.value(3).toInt();
             std::string payDate = query.value(4).toString().toStdString();
 
-            if (!manager.restoreInvoiceFromDatabase(invId, bookId, tax, nightsCount, payDate, errorMsg)) {
-                qDebug() << "Skipped invalid invoice during load:" << QString::fromStdString(errorMsg);
-                continue;
+            if (!loadedManager.restoreInvoiceFromDatabase(invId, bookId, tax, nightsCount, payDate, errorMsg)) {
+                qDebug() << "Failed to restore invoice during load:" << QString::fromStdString(errorMsg);
+                return false;
             }
         }
     } else {
@@ -309,6 +333,9 @@ bool DataManager::loadAll(HotelManager& manager, const std::string& dataPath) {
         return false;
     }
 
+    // Modified and optimized performance: publish only a fully validated snapshot and update the booking ID counter after a successful load.
+    manager = std::move(loadedManager);
+    Booking::initCounterFromDatabase(maxBookingNumber);
     return true;
 }
 
@@ -404,7 +431,8 @@ bool DataManager::saveAll(HotelManager& manager, const std::string& dataPath) {
         }
     }
 
-    query.prepare("INSERT INTO Booking (bookingId, customerId, roomNumber, checkInDate, checkOutDate, cancelled, deleted) VALUES (?, ?, ?, ?, ?, ?, ?)");
+    // Modified and optimized performance: persist checkout state with every atomic booking snapshot.
+    query.prepare("INSERT INTO Booking (bookingId, customerId, roomNumber, checkInDate, checkOutDate, cancelled, deleted, checkedOut) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
     for (const auto& booking : manager.getBookings()) {
         if (!booking) {
             continue;
@@ -428,6 +456,7 @@ bool DataManager::saveAll(HotelManager& manager, const std::string& dataPath) {
 
         query.addBindValue(booking->isCancelled() ? 1 : 0);
         query.addBindValue(booking->isDeleted() ? 1 : 0);
+        query.addBindValue(booking->isCheckedOut() ? 1 : 0);
 
         if (!query.exec()) {
             m_db.rollback();
@@ -463,73 +492,24 @@ bool DataManager::saveAll(HotelManager& manager, const std::string& dataPath) {
     return true;
 }
 
-bool DataManager::invoiceExistsInCurrentDatabase(const std::string& invoiceId) const {
-    if (m_dataPath.empty() || invoiceId.empty()) {
+bool DataManager::restoreLastSavedState(HotelManager& manager)
+{
+    if (m_dataPath.empty()) {
+        qDebug() << "No database path available for restoring the last saved state.";
         return false;
     }
 
-    const QString connectionName = QString("invoice_verify_%1").arg(reinterpret_cast<quintptr>(this));
-    bool exists = false;
-    {
-        QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE", connectionName);
-        db.setDatabaseName(QString::fromStdString(m_dataPath));
-
-        if (!db.open()) {
-            qDebug() << "Verification database open failed:" << db.lastError().text();
-            return false;
-        }
-
-        QSqlQuery query(db);
-        query.prepare("SELECT COUNT(*) FROM Invoice WHERE invoiceId = ?");
-        query.addBindValue(QString::fromStdString(invoiceId));
-        if (!query.exec() || !query.next()) {
-            qDebug() << "Verification query failed:" << query.lastError().text();
-            db.close();
-            return false;
-        }
-
-        exists = query.value(0).toInt() > 0;
-        db.close();
-    }
-
-    QSqlDatabase::removeDatabase(connectionName);
-    return exists;
+    return loadAll(manager, m_dataPath);
 }
 
-bool DataManager::saveInvoiceImmediately(const Invoice& invoice) {
-    if (m_dataPath.empty()) {
-        qDebug() << "No active database path available for invoice save.";
-        return false;
+bool DataManager::commitChanges(HotelManager& manager)
+{
+    // Modified and optimized performance: keep the in-memory model synchronized with the last successful SQLite transaction.
+    if (saveAll(manager)) {
+        return true;
     }
 
-    if (!m_db.isOpen() && !initDatabase(m_dataPath)) {
-        return false;
-    }
-
-    QSqlQuery query(m_db);
-    if (!m_db.transaction()) {
-        qDebug() << "Failed to start invoice save transaction:" << m_db.lastError().text();
-        return false;
-    }
-
-    query.prepare("INSERT INTO Invoice (invoiceId, bookingId, taxRate, nights, paymentDate) VALUES (?, ?, ?, ?, ?)");
-    query.addBindValue(QString::fromStdString(invoice.getInvoiceId()));
-    query.addBindValue(QString::fromStdString(invoice.getBookingId()));
-    query.addBindValue(invoice.getTaxRate());
-    query.addBindValue(invoice.getNights());
-    query.addBindValue(QString::fromStdString(invoice.getPaymentDate()));
-
-    if (!query.exec()) {
-        m_db.rollback();
-        qDebug() << "Error saving invoice immediately:" << query.lastError().text();
-        return false;
-    }
-
-    if (!m_db.commit()) {
-        m_db.rollback();
-        qDebug() << "Failed to commit immediate invoice save:" << m_db.lastError().text();
-        return false;
-    }
-
-    return true;
+    qDebug() << "Save failed; restoring the in-memory model from the last committed database state.";
+    restoreLastSavedState(manager);
+    return false;
 }
