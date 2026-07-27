@@ -7,14 +7,17 @@ Hotel Booking Management System is a C++17 / Qt6 desktop application with four c
 ```text
 views  ── user interaction, rendering, signals/slots
   │
-  ├── HotelManager ── business rules and domain queries
+  ├── HotelManager ── in-memory collections, lookups, and UI-compatible facade
   │       │
   │       └── models ── Room, Customer, Booking, Invoice
+  │
+  ├── ReservationService ─────── booking, availability, checkout, and invoice workflow
+  └── ReportService ──────────── Dashboard/PDF reporting snapshot aggregation
   │
   └── DataManager ── SQLite load, migration, and atomic persistence
 ```
 
-The view layer owns presentation only. `HotelManager` is the in-memory domain authority. `DataManager` is the only component that reads or writes SQLite.
+The view layer owns presentation only. `HotelManager` owns the in-memory model collections and exposes a compatibility facade for current widgets. Focused services hold the corresponding business workflows. `DataManager` is the only component that reads or writes SQLite.
 
 ## Project layout
 
@@ -28,7 +31,7 @@ The view layer owns presentation only. `HotelManager` is the in-memory domain au
 └── src/
     ├── main.cpp                  # Startup, database-path resolution, app shutdown save
     ├── models/                   # Domain objects and Room hierarchy
-    ├── controllers/              # HotelManager and business rules
+    ├── controllers/              # HotelManager store/facade and focused business services
     ├── database/                 # DataManager singleton
     └── views/                    # Qt widgets, dialogs, dashboard, resources, .ui files
 ```
@@ -48,7 +51,8 @@ main.cpp
   ├── MainWindow(&hotelManager)
   └── QApplication event loop
           │
-          ├── views call HotelManager for business operations
+          ├── views call HotelManager's compatibility facade
+          │     └── facade delegates booking, availability, and invoice rules to focused services
           └── views call DataManager::commitChanges() after a mutation
                    ├── saveAll() in one SQLite transaction
                    └── on failure, restoreLastSavedState()
@@ -66,7 +70,7 @@ HotelManager owns shared_ptr collections
   └── Invoice ── weak_ptr<Booking>
 ```
 
-`HotelManager` has sole ownership of model objects through `std::shared_ptr` vectors. Relationships use `std::weak_ptr`, which prevents ownership cycles and permits safe `lock()` checks when references are accessed.
+`HotelManager` has sole ownership of model objects through `std::shared_ptr` vectors. Relationships use `std::weak_ptr`, which prevents ownership cycles and permits safe `lock()` checks when references are accessed. Supporting reservation-workflow components are friends only for controlled creation paths; they do not own the collections.
 
 ### Room hierarchy
 
@@ -109,7 +113,7 @@ Upcoming ──► Active ── explicit checkout + invoice ──► Completed
 | `COMPLETED` | Persisted `Booking::checkedOut` is true. |
 | `CANCELLED` | Persisted `Booking::cancelled` is true; this has highest priority. |
 
-The important distinction is that planned checkout date is not completion. `completeBooking()` records the explicit staff action, stores the actual checkout date, and sets `checkedOut = true`. Only then does the reservation leave the operational list and enter Booking History.
+The important distinction is that planned checkout date is not completion. `BookingService::completeBooking()` records the explicit staff action, stores the actual checkout date, and sets `checkedOut = true`. Only then does the reservation leave the operational list and enter Booking History.
 
 ### Booking constraints
 
@@ -187,13 +191,17 @@ Completed stays are intentionally absent from `ReservationsPageWidget`; `Dashboa
 
 Dashboard PDF export uses `QPdfWriter` and `QTextDocument` in A4 landscape. It includes a selected reporting period, summary metrics, room portfolio, top rooms, open bookings, cancellations, and completed stays. The HTML uses wrapper tables and page-break classes to keep headings with their related content; Top Rooms and Completed Booking History begin on fresh pages.
 
+`ReportService` builds the sorted reporting snapshot used by the PDF renderer. `DashboardWidget` supplies only the selected range and renders that snapshot to HTML/PDF, avoiding duplicate domain filtering inside the view.
+
 ## Layer boundaries
 
 | Dependency | Allowed | Reason |
 |---|---:|---|
-| Views → `HotelManager` | Yes | Trigger validated business operations. |
+| Views → `HotelManager` facade | Yes | Trigger operations without coupling current widgets to service classes. |
 | Views → `DataManager` | Yes | Request persistence after a successful UI action. |
-| `HotelManager` → models | Yes | Own and coordinate domain objects. |
+| `ReservationService` → `HotelManager` / models | Yes | Apply booking, availability, checkout, and invoice rules without owning data. |
+| `ReportService` → `HotelManager` / models | Yes | Build read-only metrics and selected-period report entries. |
+| `HotelManager` → models | Yes | Own and look up domain objects; retain simple read queries. |
 | `DataManager` → `HotelManager` / models | Yes | Restore and serialize domain state. |
 | Models → views | No | Domain entities do not depend on UI. |
 | Models → `DataManager` | No | Domain entities are persistence-agnostic. |
@@ -205,7 +213,7 @@ Dashboard PDF export uses `QPdfWriter` and `QTextDocument` in A4 landscape. It i
 - **Abstraction**: `Room` is an abstract interface for every room type.
 - **Factory**: `RoomFactory` centralizes room construction.
 - **Singleton**: `DataManager` provides one shared database connection and persistence service.
-- **Repository/controller style**: `HotelManager` centralizes collections, validation, state transitions, and queries.
+- **Facade and application services**: `HotelManager` centralizes collections and backwards-compatible entry points; `ReservationService` owns the complete operational stay workflow and `ReportService` owns read-only report aggregation.
 
 ## Operational notes
 

@@ -34,7 +34,7 @@ Upcoming ── check-in date reached ──► Active ── explicit checkout 
 ### Checkout and billing
 
 1. Staff selects **Check-out** for an active booking.
-2. `HotelManager::completeBooking()` records the actual checkout date and sets `checkedOut`.
+2. `BookingService::completeBooking()` records the actual checkout date and sets `checkedOut`; `HotelManager` keeps the existing UI-facing facade.
 3. An invoice is created for the completed stay.
 4. `DataManager::commitChanges()` writes both changes atomically.
 
@@ -76,7 +76,7 @@ PDF sections use print-safe grouping so a section heading is kept with its conte
 src/
 ├── main.cpp
 ├── models/        Domain entities and room hierarchy
-├── controllers/   HotelManager business rules and queries
+├── controllers/   HotelManager data store/facade plus Reservation and reporting services
 ├── database/      DataManager SQLite load/save and migrations
 └── views/         Qt widgets, dialogs, dashboard, and .ui files
 ```
@@ -108,7 +108,9 @@ Run the executable produced in the build directory. On first launch with an empt
 | `Customer` | Guest identity and contact information |
 | `Booking` | Reservation, cancellation flag, and explicit checkout flag |
 | `Invoice` | Post-checkout billing information |
-| `HotelManager` | Validation, lifecycle transitions, occupancy, and queries |
+| `HotelManager` | In-memory entity collections, lookup/query facade, and compatibility API for views |
+| `ReservationService` | Booking lifecycle, availability, checkout, and checkout-invoice workflow |
+| `ReportService` | Builds a sorted Dashboard/PDF reporting snapshot from manager-owned domain data |
 | `DataManager` | SQLite schema, migration, staged load, and transactional save |
 | `RoomFactory` | Room object creation |
 | `MainWindow` / page widgets | Qt desktop UI and navigation |

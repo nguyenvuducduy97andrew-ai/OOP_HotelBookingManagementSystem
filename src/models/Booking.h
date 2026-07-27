@@ -5,6 +5,7 @@
 class Customer;
 class Room;
 class HotelManager;
+class BookingService;
 
 enum class BookingState { UPCOMING, ACTIVE, COMPLETED, CANCELLED };
 
@@ -25,8 +26,9 @@ private:
 public:
     Booking();
 
-    // Fixed-modified: Let HotelManager own booking ID creation and counter sync.
+    // Modified and optimized performance: restrict booking-ID assignment to the manager facade and controlled booking workflow.
     friend class HotelManager;
+    friend class BookingService;
 
     static std::string nextBookingId();
     static void initCounterFromDatabase(int maxBookingNumber);

@@ -5,6 +5,7 @@
 
 class Booking;
 class HotelManager;
+class InvoiceService;
 
 class Invoice
 {
@@ -19,8 +20,9 @@ private:
 public:
     Invoice();
 
-    // Fixed-modified: Let HotelManager manage invoice ID creation and persistence restores.
+    // Modified and optimized performance: restrict invoice-ID assignment to persistence restoration and the controlled invoice workflow.
     friend class HotelManager;
+    friend class InvoiceService;
 
     std::string getInvoiceId() const;
     

@@ -1,4 +1,7 @@
 #include "HotelManager.h"
+#include "BookingService.h"
+#include "InvoiceService.h"
+#include "ReservationService.h"
 #include <QDate>
 #include <QList>
 #include <QRegularExpression>
@@ -249,199 +252,6 @@ bool HotelManager::isValidDateString(
     if (!date.isValid())
     {
         errorMessage = "Date must use ISO format (YYYY-MM-DD).";
-        return false;
-    }
-
-    return true;
-}
-
-bool HotelManager::validateBookingDates(
-    const std::string &checkInDate,
-    const std::string &checkOutDate,
-    std::string &errorMessage) const
-{
-    const auto checkIn = QDate::fromString(QString::fromStdString(checkInDate), Qt::ISODate);
-    const auto checkOut = QDate::fromString(QString::fromStdString(checkOutDate), Qt::ISODate);
-    if (!checkIn.isValid() || !checkOut.isValid())
-    {
-        errorMessage = "Dates must use ISO format (YYYY-MM-DD).";
-        return false;
-    }
-
-    if (checkOut <= checkIn)
-    {
-        errorMessage = "Check-out must be after check-in.";
-        return false;
-    }
-    return true;
-}
-
-// Modified: Completely skips canceled bookings to avoid conflict, freeing up room availability
-bool HotelManager::isRoomFreeForDates(
-    const std::string &roomNumber,
-    const std::string &checkIn,
-    const std::string &checkOut,
-    std::string &errorMessage,
-    const std::string &excludedBookingId) const
-{
-    const QDate requestedCheckIn = QDate::fromString(QString::fromStdString(checkIn), Qt::ISODate);
-    const QDate requestedCheckOut = QDate::fromString(QString::fromStdString(checkOut), Qt::ISODate);
-    const QDate today = QDate::currentDate();
-
-    for (const auto &booking : bookings)
-    {
-        if (!booking)
-            continue;
-
-        if (booking->isCancelled() || booking->isDeleted())
-        {
-            continue;
-        }
-
-        if (!excludedBookingId.empty() && booking->getBookingId() == excludedBookingId)
-        {
-            continue;
-        }
-
-        auto bookedRoom = booking->getRoom();
-        if (!bookedRoom || bookedRoom->getRoomNumber() != roomNumber)
-            continue;
-
-        // Modified and optimized performance: keep a room unavailable for any stay covering today until its guest explicitly checks out.
-        if (getBookingState(*booking) == BookingState::ACTIVE
-            && requestedCheckIn <= today && today < requestedCheckOut)
-        {
-            errorMessage = "Room " + roomNumber + " still has an active stay that must be checked out first.";
-            return false;
-        }
-
-        bool overlaps = checkIn < booking->getCheckOutDate() &&
-                        booking->getCheckInDate() < checkOut;
-        if (overlaps)
-        {
-            errorMessage = "Room " + roomNumber + " is already booked from " + booking->getCheckInDate() + " to " + booking->getCheckOutDate() + " (" + bookingStateToString(getBookingState(*booking)) + ").";
-            return false;
-        }
-    }
-    return true;
-}
-
-bool HotelManager::validateBookingInput(
-    const std::string &customerId,
-    const std::string &roomNumber,
-    const std::string &checkInDate,
-    const std::string &checkOutDate,
-    std::string &errorMessage) const
-{
-
-    if (!validateBookingDates(checkInDate, checkOutDate, errorMessage))
-        return false;
-
-    const auto customer = findCustomerById(customerId);
-    if (!customer)
-    {
-        errorMessage = "Customer not found.";
-        return false;
-    }
-    if (customer->isArchived())
-    {
-        errorMessage = "Cannot create booking for an archived customer.";
-        return false;
-    }
-
-    const auto room = findRoomByNumber(roomNumber);
-    if (!room)
-    {
-        errorMessage = "Room not found.";
-        return false;
-    }
-    if (!room->getIsAvailable())
-    {
-        errorMessage = "Room is currently unavailable for booking.";
-        return false;
-    }
-    if (room->isArchived())
-    {
-        errorMessage = "Cannot create booking for an archived room.";
-        return false;
-    }
-    if (!isRoomFreeForDates(roomNumber, checkInDate, checkOutDate, errorMessage))
-        return false;
-    return true;
-}
-
-bool HotelManager::validateInvoiceInput(
-    const std::string &invoiceId,
-    const std::string &bookingId,
-    double taxRate,
-    int nights,
-    const std::string &paymentDate,
-    std::string &errorMessage) const
-{
-    if (invoiceId.empty())
-    {
-        errorMessage = "Invoice ID is required.";
-        return false;
-    }
-
-    if (invoiceIdExists(invoiceId))
-    {
-        errorMessage = "Invoice ID already exists.";
-        return false;
-    }
-
-    if (taxRate < 0)
-    {
-        errorMessage = "Tax rate must not be negative.";
-        return false;
-    }
-
-    if (nights <= 0)
-    {
-        errorMessage = "Stay duration in nights must be greater than zero.";
-        return false;
-    }
-
-    if (!isValidDateString(paymentDate, errorMessage))
-    {
-        return false;
-    }
-
-    const auto booking = findBookingById(bookingId);
-    if (!booking)
-    {
-        errorMessage = "Booking not found.";
-        return false;
-    }
-
-    if (booking->isDeleted())
-    {
-        errorMessage = "Cannot create invoice for a deleted booking.";
-        return false;
-    }
-
-    const BookingState state = getBookingState(*booking);
-    if (state == BookingState::UPCOMING)
-    {
-        errorMessage = "Cannot create invoice before checkout is completed.";
-        return false;
-    }
-
-    if (state == BookingState::CANCELLED)
-    {
-        errorMessage = "Cannot create invoice for a cancelled booking.";
-        return false;
-    }
-
-    if (state != BookingState::COMPLETED)
-    {
-        errorMessage = "Invoice can only be created after checkout.";
-        return false;
-    }
-
-    if (findInvoiceForBooking(bookingId) != nullptr)
-    {
-        errorMessage = "An invoice already exists for this booking.";
         return false;
     }
 
@@ -831,26 +641,8 @@ bool HotelManager::createBooking(
     const std::string &checkOut,
     std::string &errorMessage)
 {
-    if (!validateBookingInput(customerId, roomNumber, checkIn, checkOut, errorMessage))
-        return false;
-
-    auto room = findRoomByNumber(roomNumber);
-
-    auto customer = findCustomerById(customerId);
-
-    // Fixed-modified: Generate and assign the booking ID only after validation succeeds.
-    auto booking = std::make_shared<Booking>();
-    booking->setBookingId(Booking::nextBookingId());
-    booking->setCustomer(customer);
-    booking->setRoom(room);
-    booking->setCheckInDate(checkIn);
-    booking->setCheckOutDate(checkOut);
-
-    booking->setCancelled(false);
-    booking->setDeleted(false);
-    booking->setCheckedOut(false);
-    addBooking(booking);
-    return true;
+    // Modified and optimized performance: delegate booking creation to the focused service while preserving the existing UI-facing API.
+    return ReservationService(*this).createBooking(customerId, roomNumber, checkIn, checkOut, errorMessage);
 }
 
 bool HotelManager::updateBooking(
@@ -861,78 +653,8 @@ bool HotelManager::updateBooking(
     const std::string &checkOutDate,
     std::string &errorMessage)
 {
-    auto booking = findBookingById(bookingId);
-    if (!booking)
-    {
-        errorMessage = "Booking not found.";
-        return false;
-    }
-
-    if (booking->isDeleted())
-    {
-        errorMessage = "Cannot edit a deleted booking.";
-        return false;
-    }
-
-    if (booking->isCancelled())
-    {
-        errorMessage = "Cannot edit a cancelled booking.";
-        return false;
-    }
-
-    if (getBookingState(*booking) == BookingState::COMPLETED)
-    {
-        errorMessage = "Cannot edit a completed booking.";
-        return false;
-    }
-
-    if (!validateBookingDates(checkInDate, checkOutDate, errorMessage))
-    {
-        return false;
-    }
-
-    auto customer = findCustomerById(customerId);
-    if (!customer)
-    {
-        errorMessage = "Customer not found.";
-        return false;
-    }
-    if (customer->isArchived())
-    {
-        errorMessage = "Cannot update booking for an archived customer.";
-        return false;
-    }
-
-    auto room = findRoomByNumber(roomNumber);
-    if (!room)
-    {
-        errorMessage = "Room not found.";
-        return false;
-    }
-
-    if (!room->getIsAvailable())
-    {
-        errorMessage = "Room is currently unavailable for booking.";
-        return false;
-    }
-
-    if (room->isArchived())
-    {
-        errorMessage = "Cannot update booking for an archived room.";
-        return false;
-    }
-
-    if (!isRoomFreeForDates(roomNumber, checkInDate, checkOutDate, errorMessage, bookingId))
-    {
-        return false;
-    }
-
-    booking->setCustomer(customer);
-    booking->setRoom(room);
-    booking->setCheckInDate(checkInDate);
-    booking->setCheckOutDate(checkOutDate);
-    booking->setCancelled(false);
-    return true;
+    return ReservationService(*this).updateBooking(
+        bookingId, customerId, roomNumber, checkInDate, checkOutDate, errorMessage);
 }
 
 bool HotelManager::completeBooking(
@@ -940,59 +662,7 @@ bool HotelManager::completeBooking(
     const std::string &actualCheckoutDate,
     std::string &errorMessage)
 {
-    auto booking = findBookingById(bookingId);
-    if (!booking)
-    {
-        errorMessage = "Booking not found.";
-        return false;
-    }
-
-    if (booking->isDeleted())
-    {
-        errorMessage = "Cannot complete a deleted booking.";
-        return false;
-    }
-
-    if (booking->isCancelled())
-    {
-        errorMessage = "Cannot complete a cancelled booking.";
-        return false;
-    }
-
-    const BookingState currentState = getBookingState(*booking);
-    if (currentState != BookingState::ACTIVE)
-    {
-        errorMessage = "Only active bookings can be checked out.";
-        return false;
-    }
-
-    if (!isValidDateString(actualCheckoutDate, errorMessage))
-    {
-        return false;
-    }
-
-    const QDate checkout =
-        QDate::fromString(
-            QString::fromStdString(actualCheckoutDate),
-            Qt::ISODate);
-
-    const QDate checkIn =
-        QDate::fromString(
-            QString::fromStdString(booking->getCheckInDate()),
-            Qt::ISODate);
-
-    // Modified and optimized performance: allow same-day stays while still rejecting a checkout before check-in.
-    if (checkout < checkIn)
-    {
-        errorMessage = "Checkout date cannot be before check-in date.";
-        return false;
-    }
-
-    booking->setCheckOutDate(actualCheckoutDate);
-    booking->setCancelled(false);
-    booking->setCheckedOut(true);
-
-    return true;
+    return ReservationService(*this).completeBooking(bookingId, actualCheckoutDate, errorMessage);
 }
 
 bool HotelManager::createInvoice( // In practice, checkout first, then create invoice for completed booking
@@ -1003,33 +673,8 @@ bool HotelManager::createInvoice( // In practice, checkout first, then create in
     const std::string &paymentDate,
     std::string &errorMessage)
 {
-    if (!validateInvoiceInput(invoiceId, bookingId, taxRate, nights, paymentDate, errorMessage))
-    {
-        return false;
-    }
-    const auto booking = findBookingById(bookingId);
-    if (booking && booking->isDeleted())
-    {
-        errorMessage = "Cannot create invoice for a deleted booking.";
-        return false;
-    }
-
-    auto invoice = std::make_shared<Invoice>();
-    invoice->setInvoiceId(invoiceId);
-    invoice->setBookingId(bookingId);
-    invoice->setBooking(booking);
-    invoice->setTaxRate(taxRate);
-    invoice->setNights(nights);
-    invoice->setPaymentDate(paymentDate);
-
-    if (!invoice->isValid())
-    {
-        errorMessage = "Failed to validate invoice details.";
-        return false;
-    }
-
-    addInvoice(invoice);
-    return true;
+    // Modified and optimized performance: keep invoice validation and creation isolated from the in-memory hotel store.
+    return ReservationService(*this).createInvoice(invoiceId, bookingId, taxRate, nights, paymentDate, errorMessage);
 }
 
 bool HotelManager::setRoomAvailability(
@@ -1332,42 +977,9 @@ bool HotelManager::restoreInvoiceFromDatabase(
     addInvoice(invoice);
     return true;
 }
-// Added: Soft-cancels an online/upcoming booking safely without dropping db entries
 bool HotelManager::cancelBooking(const std::string &bookingId, std::string &errorMessage)
 {
-    auto booking = findBookingById(bookingId);
-    if (!booking)
-    {
-        errorMessage = "Booking record not found.";
-        return false;
-    }
-
-    if (booking->isDeleted())
-    {
-        errorMessage = "This booking has already been deleted.";
-        return false;
-    }
-
-    if (getBookingState(*booking) != BookingState::UPCOMING)
-    {
-        if (getBookingState(*booking) == BookingState::ACTIVE)
-        {
-            errorMessage = "This booking is in active. Only Upcoming reservations can be cancelled.";
-        }
-        if (getBookingState(*booking) == BookingState::COMPLETED)
-        {
-            errorMessage = "This booking has already completed. Only Upcoming reservations can be cancelled.";
-        }
-        if (getBookingState(*booking) == BookingState::CANCELLED)
-        {
-            errorMessage = "This booking has already been cancelled.";
-        }
-        return false;
-    }
-
-    booking->setCancelled(true);
-
-    return true;
+    return ReservationService(*this).cancelBooking(bookingId, errorMessage);
 }
 
 // =========================

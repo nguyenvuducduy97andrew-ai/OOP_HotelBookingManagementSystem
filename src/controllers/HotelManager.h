@@ -8,12 +8,20 @@
 #include "Room.h"
 #include "RoomFactory.h"
 
+class BookingService;
+class InvoiceService;
+class ReservationService;
+
 // Fixed-modified: Move booking state ownership closer to the booking model while keeping manager queries intact.
 std::string bookingStateToString(BookingState state);
 
 class HotelManager
 {
 private:
+    // Modified and optimized performance: allow only focused workflow services to append validated domain objects to the manager-owned collections.
+    friend class BookingService;
+    friend class InvoiceService;
+
     std::vector<std::shared_ptr<Room>> rooms;
     std::vector<std::shared_ptr<Customer>> customers;
     std::vector<std::shared_ptr<Booking>> bookings;
@@ -34,40 +42,9 @@ private:
         const std::string& phone,
         std::string& errorMessage
         ) const;
-    bool validateBookingDates(
-        const std::string &checkIn,
-        const std::string &checkOut,
-        std::string &errorMessage
-        ) const;
-
     bool isValidDateString(
         const std::string &dateString,
         std::string &errorMessage
-        ) const;
-
-    bool isRoomFreeForDates(
-        const std::string &roomNumber,
-        const std::string &checkIn,
-        const std::string &checkOut,
-        std::string &errorMessage,
-        const std::string &excludedBookingId = ""
-        ) const;
-    bool validateBookingInput(
-        const std::string& customerId,
-        const std::string& roomNumber,
-        const std::string& checkInDate,
-        const std::string& checkOutDate,
-        std::string& errorMessage
-        ) const;
-
-    // Modified: Added 'nights' and 'paymentDate' parameters to validation helper if needed
-    bool validateInvoiceInput(
-        const std::string& invoiceId,
-        const std::string& bookingId,
-        double taxRate,
-        int nights,
-        const std::string& paymentDate,
-        std::string& errorMessage
         ) const;
 
     void addRoom(std::shared_ptr<Room> room);
@@ -120,7 +97,7 @@ public:
     std::vector<std::shared_ptr<Booking>> getArrivalsByDate(const std::string& dateStr) const;
     std::vector<std::shared_ptr<Booking>> getDeparturesByDate(const std::string& dateStr) const;
 
-    // Use-case methods
+    // Use-case facade methods. Their business rules live in the dedicated services.
     bool registerRoom(
         RoomType kind,
         const std::string& roomNumber,

@@ -2,6 +2,7 @@
 #include "ui_DashboardWidget.h"
 #include "dashboardwidgets.h"
 #include "HotelManager.h"
+#include "ReportService.h"
 #include "StandardRoom.h"
 #include "DeluxeRoom.h"
 #include "SuiteRoom.h"
@@ -895,209 +896,29 @@ QString DashboardWidget::buildBookingHistoryHtml() const
 
 QString DashboardWidget::buildReportHtml() const
 {
-    const QDateTime now = QDateTime::currentDateTime();
-    const QDate today = now.date();
-    const int rangeIndex = ui->cmbDateRange->currentIndex();
-
-    int totalRooms = 0;
-    int standardCount = 0;
-    int deluxeCount = 0;
-    int suiteCount = 0;
-    int occupiedRooms = 0;
-    int upcomingCount = 0;
-    int activeCount = 0;
-    int completedCount = 0;
-    int cancelledCount = 0;
-    int bookingsThisMonth = 0;
-    int bookingsThisYear = 0;
-
-    struct RoomEntry {
-        QString roomNumber;
-        QString type;
-        int bookingCount = 0;
-    };
-
-    struct BookingEntry {
-        QString bookingId;
-        QString customerName;
-        QString customerId;
-        QString phone;
-        QString roomNumber;
-        QString roomType;
-        QString status;
-        QDate checkIn;
-        QDate checkOut;
-    };
-
-    const auto isInSelectedRange = [today, rangeIndex](const QDate& date) {
-        if (!date.isValid()) {
-            return false;
-        }
-        if (rangeIndex == 0) {
-            return date == today;
-        }
-        if (rangeIndex == 1) {
-            int dateWeekYear = 0;
-            const int dateWeek = date.weekNumber(&dateWeekYear);
-            int todayWeekYear = 0;
-            const int todayWeek = today.weekNumber(&todayWeekYear);
-            return dateWeek == todayWeek && dateWeekYear == todayWeekYear;
-        }
-        if (rangeIndex == 2) {
-            return date.month() == today.month() && date.year() == today.year();
-        }
-        return date.year() == today.year();
-    };
-
-    const auto statusText = [](BookingState state) {
-        switch (state) {
-        case BookingState::UPCOMING: return QString("Upcoming");
-        case BookingState::ACTIVE: return QString("Active");
-        case BookingState::COMPLETED: return QString("Completed");
-        case BookingState::CANCELLED: return QString("Cancelled");
-        }
-        return QString("Unknown");
-    };
-
-    std::map<std::string, int> roomBookingCounts;
-    std::vector<BookingEntry> scheduledBookings;
-    std::vector<BookingEntry> completedStays;
-    std::vector<BookingEntry> cancelledBookings;
-    if (m_manager) {
-        // Fixed-modified: Count room categories through the virtual type accessor.
-        for (const auto& room : m_manager->getRooms()) {
-            if (!room || room->isArchived()) {
-                continue;
-            }
-
-            totalRooms++;
-            const std::string typeName = room->getRoomTypeName();
-            if (typeName == "Standard") {
-                standardCount++;
-            } else if (typeName == "Deluxe") {
-                deluxeCount++;
-            } else if (typeName == "Suite") {
-                suiteCount++;
-            }
-
-            roomBookingCounts[room->getRoomNumber()] = 0;
-        }
-
-        occupiedRooms = static_cast<int>(m_manager->getRoomsByOccupancy(true).size());
-
-        for (const auto& booking : m_manager->getBookings()) {
-            if (!booking || booking->isDeleted()) {
-                continue;
-            }
-
-            const BookingState state = m_manager->getBookingState(*booking);
-            switch (state) {
-            case BookingState::UPCOMING: upcomingCount++; break;
-            case BookingState::ACTIVE: activeCount++; break;
-            case BookingState::COMPLETED: completedCount++; break;
-            case BookingState::CANCELLED: cancelledCount++; break;
-            }
-
-            const QDate checkIn = QDate::fromString(QString::fromStdString(booking->getCheckInDate()), Qt::ISODate);
-            const QDate checkOut = QDate::fromString(QString::fromStdString(booking->getCheckOutDate()), Qt::ISODate);
-            if (checkIn.isValid() && checkIn.month() == today.month() && checkIn.year() == today.year()) {
-                bookingsThisMonth++;
-            }
-            if (checkIn.isValid() && checkIn.year() == today.year()) {
-                bookingsThisYear++;
-            }
-
-            const bool match = isInSelectedRange(checkIn);
-
-            if (match && !booking->isCancelled()) {
-                const auto room = booking->getRoom();
-                if (room && !room->isArchived()) {
-                    roomBookingCounts[room->getRoomNumber()]++;
-                }
-            }
-
-            const auto customer = booking->getCustomer();
-            const auto room = booking->getRoom();
-            const BookingEntry entry{
-                QString::fromStdString(booking->getBookingId()),
-                customer ? QString::fromStdString(customer->getName()) : QString("Guest not available"),
-                customer ? QString::fromStdString(customer->getCustomerId()) : QString("—"),
-                customer ? QString::fromStdString(customer->getPhoneNumber()) : QString("—"),
-                room ? QString::fromStdString(room->getRoomNumber()) : QString("—"),
-                room ? QString::fromStdString(room->getRoomTypeName()) : QString("—"),
-                statusText(state),
-                checkIn,
-                checkOut
-            };
-
-            if (state == BookingState::COMPLETED && isInSelectedRange(checkOut)) {
-                completedStays.push_back(entry);
-            }
-            if ((state == BookingState::ACTIVE || state == BookingState::UPCOMING) && isInSelectedRange(checkIn)) {
-                scheduledBookings.push_back(entry);
-            }
-            if (state == BookingState::CANCELLED && isInSelectedRange(checkIn)) {
-                cancelledBookings.push_back(entry);
-            }
-        }
-    }
-
-    double occupancyRate = 0.0;
-    if (totalRooms > 0) {
-        occupancyRate = (static_cast<double>(occupiedRooms) / static_cast<double>(totalRooms)) * 100.0;
-    }
-
-    std::vector<RoomEntry> popularRooms;
-    for (const auto& [roomNumber, count] : roomBookingCounts) {
-        // Fixed-modified: Read the room type label without using dynamic_cast.
-        QString typeLabel = "Standard";
-        if (m_manager) {
-            const auto room = m_manager->findRoomByNumber(roomNumber);
-            if (room) {
-                typeLabel = QString::fromStdString(room->getRoomTypeName());
-            }
-        }
-
-        popularRooms.push_back({QString::fromStdString(roomNumber), typeLabel, count});
-    }
-
-    std::sort(popularRooms.begin(), popularRooms.end(), [](const RoomEntry& a, const RoomEntry& b) {
-        if (a.bookingCount != b.bookingCount) {
-            return a.bookingCount > b.bookingCount;
-        }
-        return a.roomNumber < b.roomNumber;
-    });
-
-    std::sort(scheduledBookings.begin(), scheduledBookings.end(), [](const BookingEntry& left, const BookingEntry& right) {
-        if (left.checkIn != right.checkIn) {
-            return left.checkIn < right.checkIn;
-        }
-        return left.bookingId < right.bookingId;
-    });
-    std::sort(completedStays.begin(), completedStays.end(), [](const BookingEntry& left, const BookingEntry& right) {
-        if (left.checkOut != right.checkOut) {
-            return left.checkOut > right.checkOut;
-        }
-        return left.bookingId < right.bookingId;
-    });
-    std::sort(cancelledBookings.begin(), cancelledBookings.end(), [](const BookingEntry& left, const BookingEntry& right) {
-        if (left.checkIn != right.checkIn) {
-            return left.checkIn < right.checkIn;
-        }
-        return left.bookingId < right.bookingId;
-    });
-
-    QString rangeLabel;
-    if (rangeIndex == 0) {
-        rangeLabel = today.toString("dd MMMM yyyy");
-    } else if (rangeIndex == 1) {
-        const QDate weekStart = today.addDays(1 - today.dayOfWeek());
-        rangeLabel = QString("%1 — %2").arg(weekStart.toString("dd MMM yyyy"), weekStart.addDays(6).toString("dd MMM yyyy"));
-    } else if (rangeIndex == 2) {
-        rangeLabel = today.toString("MMMM yyyy");
-    } else {
-        rangeLabel = QString::number(today.year());
-    }
+    // Modified and optimized performance: delegate report aggregation to ReportService so this widget only renders the PDF document.
+    const DashboardReportData report = ReportService(m_manager).buildDashboardReport(
+        ui->cmbDateRange->currentIndex(),
+        ui->cmbDateRange->currentText());
+    const QDateTime now = report.generatedAt;
+    const QString& rangeLabel = report.rangeLabel;
+    const QString& rangeName = report.rangeName;
+    const int totalRooms = report.totalRooms;
+    const int standardCount = report.standardRooms;
+    const int deluxeCount = report.deluxeRooms;
+    const int suiteCount = report.suiteRooms;
+    const int occupiedRooms = report.occupiedRooms;
+    const int upcomingCount = report.upcomingBookings;
+    const int activeCount = report.activeBookings;
+    const int completedCount = report.completedBookings;
+    const int cancelledCount = report.cancelledBookingsCount;
+    const int bookingsThisMonth = report.bookingsThisMonth;
+    const int bookingsThisYear = report.bookingsThisYear;
+    const double occupancyRate = report.occupancyRate;
+    const auto& popularRooms = report.topRooms;
+    const auto& scheduledBookings = report.openBookings;
+    const auto& completedStays = report.completedStays;
+    const auto& cancelledBookings = report.cancelledBookings;
 
     QString html;
     QTextStream stream(&html);
@@ -1143,7 +964,7 @@ QString DashboardWidget::buildReportHtml() const
            << "<h1>Booking Management Dashboard</h1>"
            << "<div class='meta'>Generated " << escapeHtml(now.toString("dd MMM yyyy, HH:mm"))
            << " &nbsp;•&nbsp; Reporting period: " << escapeHtml(rangeLabel) << "</div>"
-           << "</td><td align='right' valign='middle'><span class='range-badge'>" << escapeHtml(ui->cmbDateRange->currentText()) << "</span></td></tr></table></div>";
+           << "</td><td align='right' valign='middle'><span class='range-badge'>" << escapeHtml(rangeName) << "</span></td></tr></table></div>";
 
     stream << "<table class='summary'><tr>";
     stream << "<td><div class='metric-label'>Total rooms</div><div class='metric-value'>" << totalRooms << "</div></td>";
