@@ -2,7 +2,6 @@
 #include <QMessageBox>
 #include <QDir>
 #include <QString>
-// Force rebuild comment
 #include "mainwindow.h"
 #include "HotelManager.h"
 #include "DataManager.h"
@@ -44,42 +43,7 @@ int main(int argc, char *argv[]) {
         return -1;
     }
 
-    // Automatically seed 100 demo rooms when no room data exists yet.
-    if (hotelManager.getRooms().empty()) {
-        std::string err;
-        for (int i = 0; i < 100; ++i) {
-            std::string roomNum = std::to_string(101 + i);
-            RoomType type = RoomType::Standard;
-            double price = 500000;
-            
-            if (i % 3 == 0) {
-                type = RoomType::Suite;
-                price = 2000000;
-            } else if (i % 2 == 0) {
-                type = RoomType::Deluxe;
-                price = 1000000;
-            }
-            
-            hotelManager.registerRoom(type, roomNum, price, err);
-            
-            if (i == 2) {
-                hotelManager.scheduleRoomMaintenance(
-                    roomNum,
-                    QDate::currentDate().toString(Qt::ISODate).toStdString(),
-                    QDate::currentDate().addDays(1).toString(Qt::ISODate).toStdString(),
-                    "Demo maintenance", err);
-            } else if (i % 2 == 0) {
-                // Create demo customers and bookings so rooms become occupied.
-                std::string custId = QString("%1").arg(100000000000ULL + static_cast<unsigned long long>(i), 12, 10, QChar('0')).toStdString();
-                hotelManager.registerCustomer(custId, "Nguyen Van Kai", "+84901234567", err);
-                
-                std::string dateIn = QDate::currentDate().toString("yyyy-MM-dd").toStdString();
-                std::string dateOut = QDate::currentDate().addDays(1).toString("yyyy-MM-dd").toStdString();
-                hotelManager.createBooking(custId, roomNum, dateIn, dateOut, err);
-            }
-        }
-        DataManager::getInstance().saveAll(hotelManager, databasePath.toStdString());
-    }
+    // Modified: Leave a newly initialized database empty; staff create all operational data through the application.
 
     // Inject the managed core logic pointer into the UI view layer and display window
     MainWindow mainWindow(&hotelManager);

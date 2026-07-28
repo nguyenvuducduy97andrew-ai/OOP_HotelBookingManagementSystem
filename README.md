@@ -121,7 +121,7 @@ cmake -S . -B build
 cmake --build build --target HotelBookingManagement
 ```
 
-Run the executable from the build directory. On a first launch with an empty database, demo rooms are seeded and saved to `data/hotel_data.db`.
+Run the executable from the build directory. On a first launch, `data/hotel_data.db` is created with an empty schema; rooms, customers, bookings, and invoices are created only through the application.
 
 ### Windows Qt kit note
 
