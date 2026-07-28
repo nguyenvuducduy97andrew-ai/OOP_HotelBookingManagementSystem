@@ -3,6 +3,7 @@
 #include "Booking.h"
 #include "Customer.h"
 #include "../hotel/HotelManager.h"
+#include "Invoice.h"
 #include "Room.h"
 
 #include <algorithm>
@@ -128,13 +129,17 @@ DashboardReportData ReportService::buildDashboardReport(int rangeIndex, const QS
 
         const auto customer = booking->getCustomer();
         const auto room = booking->getRoom();
+        const auto invoice = state == BookingState::COMPLETED
+            ? m_hotelManager->findInvoiceForBooking(booking->getBookingId())
+            : nullptr;
+        // Modified: Use immutable invoice data for completed-stay reports when it is available.
         const ReportBookingEntry entry{
             QString::fromStdString(booking->getBookingId()),
-            customer ? QString::fromStdString(customer->getName()) : QStringLiteral("Guest not available"),
-            customer ? QString::fromStdString(customer->getCustomerId()) : QStringLiteral("—"),
-            customer ? QString::fromStdString(customer->getPhoneNumber()) : QStringLiteral("—"),
-            room ? QString::fromStdString(room->getRoomNumber()) : QStringLiteral("—"),
-            room ? QString::fromStdString(room->getRoomTypeName()) : QStringLiteral("—"),
+            invoice ? QString::fromStdString(invoice->getCustomerNameSnapshot()) : (customer ? QString::fromStdString(customer->getName()) : QStringLiteral("Guest not available")),
+            invoice ? QString::fromStdString(invoice->getCustomerIdSnapshot()) : (customer ? QString::fromStdString(customer->getCustomerId()) : QStringLiteral("—")),
+            invoice ? QString::fromStdString(invoice->getCustomerPhoneSnapshot()) : (customer ? QString::fromStdString(customer->getPhoneNumber()) : QStringLiteral("—")),
+            invoice ? QString::fromStdString(invoice->getRoomNumberSnapshot()) : (room ? QString::fromStdString(room->getRoomNumber()) : QStringLiteral("—")),
+            invoice ? QString::fromStdString(invoice->getRoomTypeSnapshot()) : (room ? QString::fromStdString(room->getRoomTypeName()) : QStringLiteral("—")),
             statusText(state),
             checkIn,
             checkOut

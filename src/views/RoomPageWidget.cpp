@@ -14,6 +14,7 @@
 #include <QDate>
 #include <QPainter>
 #include <QLocale>
+#include <vector>
 
 namespace {
 QString formatMoney(double value)
@@ -357,7 +358,7 @@ QWidget* RoomPageWidget::createRoomCard(const std::shared_ptr<Room>& room) {
     QString specLabel;
     QColor typeColor;
 
-    // Fixed-modified: Use room metadata accessors for type labels and subtype-specific fees.
+    // Modified: Use room metadata accessors for type labels and subtype-specific fees.
     if (dynamic_cast<StandardRoom*>(room.get())) {
         typeLabel = "Standard";
         specLabel = "25m² · Queen Bed";
@@ -603,7 +604,7 @@ void RoomPageWidget::onAddRoomClicked() {
         }
 
         std::string errMsg;
-        // Fixed-modified: Set subtype fees through the room interface instead of concrete casts.
+        // Modified: Set subtype fees through the room interface instead of concrete casts.
         if (m_manager->registerRoom(type, roomNum, price, errMsg)) {
             auto room = m_manager->findRoomByNumber(roomNum);
             if (room) {
@@ -619,7 +620,7 @@ void RoomPageWidget::onAddRoomClicked() {
                 QMessageBox::warning(this, "Maintenance schedule conflict", QString::fromStdString(errMsg));
                 return;
             }
-            // Modified and optimized performance: commit room creation immediately and recover the last saved state on failure.
+            // Modified: Commit room creation immediately and recover the last saved state on failure.
             if (!DataManager::getInstance().commitChanges(*m_manager)) {
                 refreshData();
                 QMessageBox::critical(this, "Save Room Failed", "The room was not saved. The previous database state has been restored.");
@@ -641,7 +642,7 @@ void RoomPageWidget::onEditRoomClicked() {
     auto room = m_manager->findRoomByNumber(roomNum);
     if (!room) return;
 
-    // Fixed-modified: Read the room type and extra fee from polymorphic accessors.
+    // Modified: Read the room type and extra fee from polymorphic accessors.
     RoomType type = RoomType::Standard;
     const std::string typeName = room->getRoomTypeName();
     if (typeName == "Deluxe") {
@@ -652,12 +653,25 @@ void RoomPageWidget::onEditRoomClicked() {
     double extraFee = room->getExtraFeeAmount();
 
     RoomDialog dialog(QString::fromStdString(roomNum), room->getBasePrice(), type, extraFee, room->getIsAvailable(), this);
+    std::vector<RoomMaintenance> existingSchedules;
+    const std::string today = QDate::currentDate().toString(Qt::ISODate).toStdString();
+    for (const RoomMaintenance& maintenance : m_manager->getRoomMaintenances()) {
+        if (maintenance.getRoomNumber() == roomNum && maintenance.getEndDate() > today) {
+            existingSchedules.push_back(maintenance);
+        }
+    }
+    dialog.setExistingMaintenanceSchedules(existingSchedules);
     if (dialog.exec() == QDialog::Accepted) {
         double newPrice = dialog.getBasePrice();
         double newExtraFee = dialog.getExtraFee();
         const bool scheduleMaintenance = dialog.shouldScheduleMaintenance();
 
         std::string errorMessage;
+        if (!dialog.getMaintenanceIdToCancel().isEmpty() &&
+            !m_manager->cancelRoomMaintenance(dialog.getMaintenanceIdToCancel().toStdString(), errorMessage)) {
+            QMessageBox::warning(this, "Maintenance cancellation failed", QString::fromStdString(errorMessage));
+            return;
+        }
         if (scheduleMaintenance && !m_manager->scheduleRoomMaintenance(roomNum,
                 dialog.getMaintenanceStartDate().toStdString(),
                 dialog.getMaintenanceEndDate().toStdString(),
@@ -671,7 +685,7 @@ void RoomPageWidget::onEditRoomClicked() {
             return;
         }
 
-        // Modified and optimized performance: schedule maintenance by date range so future bookings remain valid outside the closure interval.
+        // Modified: Schedule maintenance by date range so future bookings remain valid outside the closure interval.
         room->setBasePrice(newPrice);
         if (type == RoomType::Deluxe) {
             auto dlx = std::dynamic_pointer_cast<DeluxeRoom>(room);

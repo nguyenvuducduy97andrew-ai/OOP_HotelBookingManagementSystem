@@ -142,6 +142,15 @@ void RoomDialog::setupUI() {
     m_maintenanceNoteEdit->setFixedHeight(62);
     formLayout->addRow(m_maintenanceNoteLabel, m_maintenanceNoteEdit);
 
+    m_existingMaintenanceLabel = new QLabel("Scheduled maintenance:", this);
+    m_existingMaintenanceCombo = new QComboBox(this);
+    formLayout->addRow(m_existingMaintenanceLabel, m_existingMaintenanceCombo);
+    m_cancelMaintenanceBtn = new QPushButton("Cancel selected schedule", this);
+    formLayout->addRow(QString(), m_cancelMaintenanceBtn);
+    m_existingMaintenanceLabel->setVisible(false);
+    m_existingMaintenanceCombo->setVisible(false);
+    m_cancelMaintenanceBtn->setVisible(false);
+
     m_extraFeeLabel = new QLabel(this);
     m_extraFeeSpin = new QDoubleSpinBox(this);
     m_extraFeeSpin->setRange(0, 100000000);
@@ -168,6 +177,7 @@ void RoomDialog::setupUI() {
 
     connect(m_typeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &RoomDialog::onTypeChanged);
     connect(m_availabilityCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &RoomDialog::onStatusChanged);
+    connect(m_cancelMaintenanceBtn, &QPushButton::clicked, this, &RoomDialog::markSelectedMaintenanceForCancellation);
     connect(cancelBtn, &QPushButton::clicked, this, &QDialog::reject);
     connect(saveBtn, &QPushButton::clicked, this, &RoomDialog::onAccept);
     onStatusChanged(m_availabilityCombo->currentIndex());
@@ -200,6 +210,10 @@ void RoomDialog::onAccept() {
     }
     if (shouldScheduleMaintenance() && m_maintenanceEndDateEdit->date() <= m_maintenanceStartDateEdit->date()) {
         QMessageBox::warning(this, "Invalid maintenance dates", "The date the room becomes available again must be after the maintenance start date.");
+        return;
+    }
+    if (!m_maintenanceIdToCancel.isEmpty() && shouldScheduleMaintenance()) {
+        QMessageBox::warning(this, "Complete one maintenance action", "Save the schedule cancellation first, then create a new maintenance schedule.");
         return;
     }
     accept();
@@ -243,6 +257,47 @@ QString RoomDialog::getMaintenanceEndDate() const {
 
 QString RoomDialog::getMaintenanceNote() const {
     return m_maintenanceNoteEdit->toPlainText().trimmed();
+}
+
+void RoomDialog::setExistingMaintenanceSchedules(const std::vector<RoomMaintenance>& schedules) {
+    m_existingMaintenanceCombo->clear();
+    m_maintenanceIdToCancel.clear();
+
+    for (const RoomMaintenance& maintenance : schedules) {
+        QString label = QString("%1 to %2")
+            .arg(QString::fromStdString(maintenance.getStartDate()),
+                 QString::fromStdString(maintenance.getEndDate()));
+        if (!maintenance.getNote().empty()) {
+            label += QString(" — %1").arg(QString::fromStdString(maintenance.getNote()));
+        }
+        m_existingMaintenanceCombo->addItem(label, QString::fromStdString(maintenance.getMaintenanceId()));
+    }
+
+    const bool hasSchedules = m_existingMaintenanceCombo->count() > 0;
+    m_existingMaintenanceLabel->setText("Scheduled maintenance:");
+    m_existingMaintenanceLabel->setVisible(hasSchedules);
+    m_existingMaintenanceCombo->setVisible(hasSchedules);
+    m_existingMaintenanceCombo->setEnabled(hasSchedules);
+    m_cancelMaintenanceBtn->setText("Cancel selected schedule");
+    m_cancelMaintenanceBtn->setEnabled(hasSchedules);
+    m_cancelMaintenanceBtn->setVisible(hasSchedules);
+}
+
+QString RoomDialog::getMaintenanceIdToCancel() const {
+    return m_maintenanceIdToCancel;
+}
+
+void RoomDialog::markSelectedMaintenanceForCancellation() {
+    if (m_existingMaintenanceCombo->currentIndex() < 0) {
+        return;
+    }
+
+    // Modified: Stage one maintenance cancellation and persist it atomically with the room edit.
+    m_maintenanceIdToCancel = m_existingMaintenanceCombo->currentData().toString();
+    m_existingMaintenanceLabel->setText("Maintenance scheduled for cancellation on save:");
+    m_existingMaintenanceCombo->setEnabled(false);
+    m_cancelMaintenanceBtn->setText("Cancellation selected");
+    m_cancelMaintenanceBtn->setEnabled(false);
 }
 
 void RoomDialog::onStatusChanged(int index) {

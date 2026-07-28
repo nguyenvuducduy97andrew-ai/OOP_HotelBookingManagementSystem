@@ -16,6 +16,15 @@ private:
     double taxRate;
     int nights;                      // Number of nights stayed (passed down from MainWindow)
     std::string paymentDate;         // ISO date format string "YYYY-MM-DD"
+    // Modified: Store immutable billing snapshots so completed invoices do not depend on mutable model records.
+    double unitPrice;
+    std::string customerNameSnapshot;
+    std::string customerIdSnapshot;
+    std::string customerPhoneSnapshot;
+    std::string roomNumberSnapshot;
+    std::string roomTypeSnapshot;
+    std::string checkInDateSnapshot;
+    std::string checkOutDateSnapshot;
 
 public:
     Invoice();
@@ -37,6 +46,8 @@ public:
 
     std::shared_ptr<Booking> getBooking() const;
     void setBooking(const std::shared_ptr<Booking>& booking);
+    // Modified: Capture the linked booking's billable values at invoice creation time.
+    void captureBookingSnapshot(const std::shared_ptr<Booking>& booking);
 
     double getTaxRate() const;
     void setTaxRate(double taxRate);
@@ -47,6 +58,23 @@ public:
 
     std::string getPaymentDate() const;
     void setPaymentDate(const std::string& paymentDate);
+
+    double getUnitPrice() const;
+    void setUnitPrice(double value);
+    std::string getCustomerNameSnapshot() const;
+    void setCustomerNameSnapshot(const std::string& value);
+    std::string getCustomerIdSnapshot() const;
+    void setCustomerIdSnapshot(const std::string& value);
+    std::string getCustomerPhoneSnapshot() const;
+    void setCustomerPhoneSnapshot(const std::string& value);
+    std::string getRoomNumberSnapshot() const;
+    void setRoomNumberSnapshot(const std::string& value);
+    std::string getRoomTypeSnapshot() const;
+    void setRoomTypeSnapshot(const std::string& value);
+    std::string getCheckInDateSnapshot() const;
+    void setCheckInDateSnapshot(const std::string& value);
+    std::string getCheckOutDateSnapshot() const;
+    void setCheckOutDateSnapshot(const std::string& value);
 
     // Modified: Changed return type from QString to std::string to keep Core decoupled from Qt
     std::string generateInvoiceDetails() const;

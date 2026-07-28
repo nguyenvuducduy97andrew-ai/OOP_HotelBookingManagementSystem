@@ -1,29 +1,29 @@
 # Architecture
 
-## Overview
+## Purpose
 
-Hotel Booking Management System is a C++17 / Qt6 desktop application with four cooperating layers:
+Hotel Booking Management System is a C++17 / Qt6 desktop application. Its architecture separates presentation, hotel operations, reporting, domain objects, and SQLite persistence while retaining a small compatibility facade for the existing Qt widgets.
 
 ```text
-views  ── user interaction, rendering, signals/slots
-  │
-  ├── HotelManager ── in-memory collections, lookups, and UI-compatible facade
-  │     ├── BookingManager
-  │     │     └── BookingService, InvoiceService, RoomAvailabilityService
-  │     ├── CustomerManager
-  │     │     └── CustomerService
-  │     └── RoomManager
-  │           └── RoomService
-  │
-  ├── ReportService ── read-only Dashboard/PDF aggregation from HotelManager
-  │
-  ├── models ── Room, RoomMaintenance, Customer, Booking, Invoice
-  └── DataManager ── SQLite load, migration, and atomic persistence
-  │
-  └── DataManager ── SQLite load, migration, and atomic persistence
+Qt views
+  │ signals, dialogs, rendering
+  ▼
+HotelManager ── owns in-memory model collections and three direct managers
+  ├── BookingManager
+  │     ├── BookingService
+  │     ├── InvoiceService
+  │     └── RoomAvailabilityService
+  ├── CustomerManager
+  │     └── CustomerService
+  └── RoomManager
+        └── RoomService
+
+ReportService ── sibling, read-only aggregation over HotelManager
+DataManager   ── SQLite schema, migration, load, reconciliation, and save
+models        ── Room hierarchy, RoomMaintenance, Customer, Booking, Invoice
 ```
 
-The view layer owns presentation only. `HotelManager` owns the in-memory model collections and exposes a compatibility facade for current widgets. Focused services hold the corresponding business workflows. `DataManager` is the only component that reads or writes SQLite.
+`HotelManager` does not directly own services two levels below it. It directly owns only `BookingManager`, `CustomerManager`, and `RoomManager`; each manager owns only its immediate service layer. `ReportService` is deliberately outside that hierarchy because it has independent, read-only reporting rules rather than hotel mutation workflows.
 
 ## Project layout
 
@@ -33,59 +33,42 @@ The view layer owns presentation only. `HotelManager` owns the in-memory model c
 ├── README.md
 ├── ARCHITECTURE.md
 ├── data/
-│   └── hotel_data.db             # Runtime SQLite database; not source-controlled
+│   └── hotel_data.db                 # Runtime SQLite database; ignored by Git
 └── src/
-    ├── main.cpp                  # Startup, database-path resolution, app shutdown save
-    ├── models/                   # Domain objects and Room hierarchy
+    ├── main.cpp                      # Startup, database-path resolution, shutdown safeguard
+    ├── models/                       # Domain objects and Room hierarchy
     ├── controllers/
-    │   ├── hotel/                # HotelManager store/facade
-    │   ├── booking/              # BookingManager
-    │   │   └── services/         # Booking, Invoice, and availability workflows
-    │   ├── customer/             # CustomerManager and CustomerService
-    │   │   └── services/
-    │   ├── room/                 # RoomManager and RoomService
-    │   │   └── services/
-    │   └── report/               # ReportService
-    ├── database/                 # DataManager singleton
-    └── views/                    # Qt widgets, dialogs, dashboard, resources, .ui files
+    │   ├── hotel/                    # HotelManager composition root and facade
+    │   ├── booking/
+    │   │   ├── BookingManager.*
+    │   │   └── services/             # Booking, invoice, and availability workflows
+    │   ├── customer/
+    │   │   ├── CustomerManager.*
+    │   │   └── services/             # Customer workflow
+    │   ├── room/
+    │   │   ├── RoomManager.*
+    │   │   └── services/             # Room and maintenance workflow
+    │   └── report/                   # ReportService and report DTOs
+    ├── database/                     # DataManager singleton
+    └── views/                        # Qt widgets, dialogs, .ui files, and resources
 ```
 
-`CMakeLists.txt` uses C++17, `AUTOMOC`, `AUTOUIC`, `AUTORCC`, and Qt6 Core, SQL, Widgets, and Charts.
+`CMakeLists.txt` enables C++17, `AUTOMOC`, `AUTOUIC`, `AUTORCC`, and links Qt6 Core, SQL, Widgets, and Charts.
 
-## Startup and persistence flow
-
-```text
-main.cpp
-  │
-  ├── resolveDatabasePath() → data/hotel_data.db
-  ├── DataManager::loadAll(hotelManager, path)
-  │     ├── open SQLite and migrate schema
-  │     ├── restore a temporary HotelManager snapshot
-  │     └── replace live manager only after every record is valid
-  ├── MainWindow(&hotelManager)
-  └── QApplication event loop
-          │
-          ├── views call HotelManager's compatibility facade
-          │     └── facade delegates booking, availability, and invoice rules to focused services
-          └── views call DataManager::commitChanges() after a mutation
-                   ├── saveAll() in one SQLite transaction
-                   └── on failure, restoreLastSavedState()
-```
-
-`main.cpp` also calls `saveAll()` as a final shutdown safeguard. Normal UI mutations persist immediately through `commitChanges()`; users do not have to rely on application exit for data durability.
-
-## Domain model and ownership
+## Ownership and relationships
 
 ```text
-HotelManager owns shared_ptr collections
+HotelManager owns vectors of shared_ptr
   ├── Customer
   ├── Room
-  ├── RoomMaintenance ── room number, [start date, end date), note
   ├── Booking ── weak_ptr<Customer>, weak_ptr<Room>
-  └── Invoice ── weak_ptr<Booking>
+  └── Invoice ── weak_ptr<Booking> plus immutable customer/room/date/price snapshot
+
+HotelManager owns vector values
+  └── RoomMaintenance ── room number, [startDate, endDate), note
 ```
 
-`HotelManager` has sole ownership of model objects through `std::shared_ptr` vectors. Relationships use `std::weak_ptr`, which prevents ownership cycles and permits safe `lock()` checks when references are accessed. Supporting reservation-workflow components are friends only for controlled creation paths; they do not own the collections.
+The manager is the sole owner of domain entities. Cross-entity links use `std::weak_ptr` so bookings and invoices do not create ownership cycles. Services are friends only where controlled construction or mutation needs access to the manager-owned collections; services do not own collections.
 
 ### Room hierarchy
 
@@ -96,145 +79,180 @@ Room (abstract)
 └── SuiteRoom     → base rate + premium service fee
 ```
 
-`RoomFactory` creates the appropriate concrete type. Views and the controller work against the `Room` abstraction through virtual methods such as room type and pricing accessors.
+`RoomFactory` creates concrete room types. Controllers and views use the `Room` abstraction and virtual accessors instead of coupling normal workflows to room subclasses.
 
-### Booking and invoice relationship
+## Business boundaries
+
+| Component | Direct responsibility | Does not own |
+|---|---|---|
+| `HotelManager` | Collections, lookups, query facade, manager composition | Booking/customer/room service objects directly |
+| `BookingManager` | Reservation, checkout, and invoice use cases | Customer or room service layers |
+| `BookingService` | Booking date/state validation and mutations | Persistence or report rendering |
+| `InvoiceService` | Invoice validation and creation after checkout | SQLite operations |
+| `RoomAvailabilityService` | Shared booking/maintenance availability calculation | UI navigation or persistence |
+| `CustomerManager` / `CustomerService` | Customer validation, conflict detection, archive/delete workflows | Booking, room, or report workflows |
+| `RoomManager` / `RoomService` | Room registration and dated maintenance workflows | Booking, customer, or report workflows |
+| `ReportService` | Read-only selected-period Dashboard/PDF data snapshot | Mutation and persistence |
+| `DataManager` | SQLite migration, reconciliation, staged load, and atomic snapshot save | UI decisions and booking rules |
+
+This structure allows the customer branch to grow into a customer-care module and the room branch to grow into a room/maintenance module without expanding `HotelManager` into a service container for all lower-level behavior.
+
+## Main data flows
+
+### Application startup
 
 ```text
-Customer ──┐
-           ├── Booking ──► Invoice
-Room ──────┘
+main.cpp
+  │
+  ├── resolve database path → data/hotel_data.db
+  ├── DataManager::loadAll(hotelManager, path)
+  │     ├── open SQLite and create/migrate tables
+  │     ├── create query-supporting indexes
+  │     ├── reconcile exact legacy customer duplicates safely
+  │     ├── restore Customer, Room, Booking, RoomMaintenance, and Invoice
+  │     │   into a temporary HotelManager
+  │     └── replace the live HotelManager only after all rows are valid
+  ├── MainWindow(&hotelManager)
+  └── Qt event loop
 ```
 
-- One customer can own many bookings.
-- One room can occur in many bookings across different dates.
-- An invoice belongs to one completed booking.
-- Referential integrity is also enforced in SQLite through foreign keys.
+`loadAll()` never skips an invalid row. A failed load leaves the active in-memory manager unchanged, preventing a later full save from silently deleting data that was not loaded.
 
-## Booking lifecycle
+### Create a reservation from Room Status
 
 ```text
-                  ┌──────────── cancel before check-in ────────────► Cancelled
-                  │
-Upcoming ──► Active ── explicit checkout + invoice ──► Completed
-```
-
-`BookingState` contains `UPCOMING`, `ACTIVE`, `COMPLETED`, and `CANCELLED`.
-
-| State | Source of truth |
-|---|---|
-| `UPCOMING` | Check-in date is after today and the booking is not cancelled or checked out. |
-| `ACTIVE` | Check-in date has arrived and the booking is not cancelled or checked out. A late checkout stays active. |
-| `COMPLETED` | Persisted `Booking::checkedOut` is true. |
-| `CANCELLED` | Persisted `Booking::cancelled` is true; this has highest priority. |
-
-The important distinction is that planned checkout date is not completion. `BookingService::completeBooking()` records the explicit staff action, stores the actual checkout date, and sets `checkedOut = true`. Only then does the reservation leave the operational list and enter Booking History.
-
-### Booking constraints
-
-- New and edited reservations require `checkOutDate > checkInDate`.
-- Restored legacy same-day completed stays are accepted with `checkOutDate == checkInDate`.
-- Cancelled and deleted bookings do not block ordinary date-overlap checks.
-- An active stay blocks a new reservation that covers today until checkout is performed.
-- Cancellation is allowed only for an upcoming booking.
-
-## Checkout and billing transaction
-
-The Reservations page coordinates a checkout as one in-memory operation followed by one persistence operation:
-
-```text
-completeBooking()
-  ├── validates active booking and actual checkout date
-  ├── updates actual checkout date
-  └── marks checkedOut
-
-createInvoice()
-  └── validates completed booking, tax, nights, and payment date
-
+RoomStatusPageWidget
+  ├── user selects a room
+  ├── emits bookingRequested(roomNumber)
+  ▼
+MainWindow
+  ├── opens Reservations page (which has no standalone creation action)
+  └── calls startNewReservationForRoom(roomNumber)
+  ▼
+ReservationDialog
+  ├── preselects the room
+  ├── uses RoomAvailabilityService for final date-range validation
+  └── calls HotelManager → BookingManager → BookingService
+  ▼
 DataManager::commitChanges()
-  ├── saveAll() inside SQLite transaction
-  └── restoreLastSavedState() if save fails
+  ├── save complete snapshot in one SQLite transaction
+  └── restore previous snapshot if the save fails
 ```
 
-This prevents a persisted checkout without its invoice, or an invoice attached to an uncompleted booking.
+`bookingChanged` refreshes Dashboard and Room Status after a successful reservation mutation. The selected room is only a UI convenience; final availability is always recalculated by the booking service.
+
+### Checkout and invoice
+
+```text
+ReservationsPageWidget
+  ├── BookingManager::completeBooking()
+  │     └── BookingService validates active state and actual checkout date
+  ├── BookingManager::createInvoice()
+  │     └── InvoiceService validates completed booking, payment date, one invoice per booking,
+  │         and captures immutable guest/room/date/price data
+  └── DataManager::commitChanges()
+```
+
+Checkout sets `Booking::checkedOut`. The booking becomes `Completed` only from that persisted fact, then moves out of operational reservations and into Dashboard Booking History. Invoice totals and completed-stay report identity fields use the persisted invoice snapshot, not mutable Customer or Room data. The UI performs one persistence commit for the checkout-plus-invoice pair.
+
+### Customer creation and conflict handling
+
+```text
+CustomerDialog → CustomerPageWidget → HotelManager
+  → CustomerManager → CustomerService
+      ├── validate ID and normalized international phone
+      ├── reject a duplicate phone number during both creation and editing
+      ├── reject a duplicate customer ID
+      ├── return the conflicting customer ID for UI highlighting
+      └── commit SQLite changes after successful mutation
+```
+
+Names are intentionally not unique. The system treats duplicate phone and customer ID values as account conflicts, while allowing different customers to share a name.
+
+### Availability and maintenance
+
+`RoomAvailabilityService` performs one scan over maintenance intervals and bookings, builds an unavailable-room set, and returns rooms that are usable for the requested date range. Reservation and Room Status use this same result, preventing the two pages from applying different availability rules.
+
+`RoomMaintenance` is a half-open interval `[startDate, endDate)`. Both booking creation/update and maintenance scheduling reject overlaps with unfinished work or stays. Completed, cancelled, and deleted bookings do not reserve future availability.
+
+## Booking state model
+
+| State | Source of truth | Operational behavior |
+|---|---|---|
+| `UPCOMING` | Check-in is after today; not cancelled or checked out | May be edited or cancelled |
+| `ACTIVE` | Check-in has arrived; not cancelled or checked out | Blocks present-day occupancy until checkout |
+| `COMPLETED` | Persisted `checkedOut == true` | Listed in history; not editable or cancellable |
+| `CANCELLED` | Persisted `cancelled == true` | Does not block availability |
+
+An overdue departure remains `ACTIVE` until staff checks it out. Planned checkout is not used to infer completion during normal operation.
 
 ## Persistence design
 
-### Schema
+### Schema and indexes
 
-| Table | Role |
+| Table | Purpose |
 |---|---|
-| `Customer` | Guest ID, name, phone number, archive state |
-| `Room` | Room number, base price, type-specific fees, permanent availability/archive state |
-| `RoomMaintenance` | Persisted room number, half-open maintenance interval, and optional work note |
-| `Booking` | Customer/room foreign keys, dates, `cancelled`, `deleted`, `checkedOut` |
-| `Invoice` | Booking foreign key, tax rate, nights, payment date |
+| `Customer` | Customer ID, name, phone number, archive state |
+| `Room` | Room number, price, room type, fees, permanent availability/archive state |
+| `RoomMaintenance` | Room number, maintenance ID, interval, optional note |
+| `Booking` | Customer/room keys, dates, cancelled/deleted/checked-out flags |
+| `Invoice` | Booking key, tax, nights, payment date, and immutable customer/room/date/price snapshot |
 
-`DataManager::initDatabase()` creates missing tables and migrates legacy columns. The `checkedOut` migration marks already historical rows (past checkout date) and bookings with an existing invoice as completed one time. Future completion always comes from the explicit checkout action.
+SQLite foreign keys preserve customer/room/booking relationships. A connection-level 5-second busy timeout reduces transient lock failures. Query indexes cover booking room/date lookup, booking customer lookup, and maintenance room/date lookup; a unique partial index enforces non-empty customer phone numbers. `DataVersion` carries a monotonically increasing revision, so a stale full snapshot from another application instance is rejected rather than overwriting newer data.
 
-### Load safety
+### Migration and duplicate reconciliation
 
-`loadAll()` restores records into a temporary `HotelManager`. A bad customer, room, booking, or invoice causes load failure; it is not skipped. The live manager remains unchanged until the complete snapshot succeeds. This protects valid database records from being omitted in memory and later erased by a full save.
+`DataManager::initDatabase()` adds the explicit `Booking.checkedOut` column when needed. The one-time migration marks a row completed only when an existing invoice proves checkout; a passed planned checkout date is never treated as proof. Legacy invoices receive a one-time snapshot from their linked customer, room, and booking records before immutable invoice loading is enforced.
 
-### Save safety
+On initialization, the data manager also scans for exact normalized **customer name + phone** duplicates. If duplicates exist, it:
 
-`saveAll()` serializes the complete manager snapshot inside one SQLite transaction. It validates booking and invoice object references before committing. On any statement failure, the transaction rolls back. `commitChanges()` restores the last saved state if saving fails.
+1. checkpoints SQLite and copies the database to a timestamped `.customer-dedup-*.bak` file;
+2. keeps the active, earliest row as canonical;
+3. repoints its historical bookings; and
+4. removes only the unambiguous duplicate row inside a transaction.
 
-## Input validation
+Incomplete rows are intentionally left unchanged. Same-phone/different-name rows stop initialization without a destructive write, because they are ambiguous and must be reviewed manually. Only after that check does SQLite enable the unique customer-phone index.
 
-`CountryInputRules.h` centralizes the customer ID and phone rules used by both Customer Management and Reservation dialogs.
+### Save and recovery
 
-- Supported countries: Vietnam, United States, Malaysia, United Kingdom, Japan, Singapore, South Korea, Thailand, Australia, Germany.
-- Each rule has an ID regular expression, input hint, calling code, and local phone length.
-- Phone normalization removes spaces, punctuation, and leading local zeroes before composing the stored international number.
-- Controller validation rechecks supported ID and phone formats before persistence.
+```text
+DataManager::commitChanges(manager)
+  ├── saveAll(manager)
+  │     ├── compare DataVersion against the revision loaded into memory
+  │     ├── begin transaction
+  │     ├── replace the persisted snapshot
+  │     ├── advance DataVersion
+  │     └── commit or rollback
+  └── on failure: loadAll(manager, last saved path)
+```
 
-## View layer
+The application currently saves the complete manager snapshot rather than individual row deltas. This keeps the current model/database synchronization and rollback behavior simple and atomic; a future high-scale version can replace this with repository-level incremental writes without changing view contracts.
 
-| Component | Responsibility |
-|---|---|
-| `MainWindow` | Navigation shell and page composition |
-| `DashboardWidget` | KPIs, charts, selected-range Booking History, and PDF export |
-| `ReservationsPageWidget` | Operational reservations, checkout, cancellation, and invoice dialog |
-| `CustomerPageWidget` | Customer create/edit/archive workflows |
-| `RoomPageWidget` | Room create/edit/archive workflows |
-| `RoomStatusPageWidget` | Occupancy and maintenance status |
-| `CustomerDialog`, `ReservationDialog` | Country-aware customer/contact entry |
+## Reporting and PDF export
 
-Completed stays are intentionally absent from `ReservationsPageWidget`; `DashboardWidget` displays them as paginated Booking History, seven records per page.
+`ReportService` builds a `DashboardReportData` value from `HotelManager` without mutating it. The report contains selected-period labels, KPIs, room counts, occupancy, top rooms, open bookings, cancellations, and completed stays. Completed stays prefer immutable invoice snapshots; other statuses use the current linked model. It sorts data before `DashboardWidget` renders it.
 
-### PDF report
+`DashboardWidget` owns presentation and PDF HTML generation only. PDF export uses A4 landscape pages and print-safe wrapper blocks so each heading stays with its related table; Top Rooms and Completed Booking History begin on new pages.
 
-Dashboard PDF export uses `QPdfWriter` and `QTextDocument` in A4 landscape. It includes a selected reporting period, summary metrics, room portfolio, top rooms, open bookings, cancellations, and completed stays. The HTML uses wrapper tables and page-break classes to keep headings with their related content; Top Rooms and Completed Booking History begin on fresh pages.
-
-`ReportService` builds the sorted reporting snapshot used by the PDF renderer. `DashboardWidget` supplies only the selected range and renders that snapshot to HTML/PDF, avoiding duplicate domain filtering inside the view.
-
-## Layer boundaries
+## Dependency rules
 
 | Dependency | Allowed | Reason |
 |---|---:|---|
-| Views → `HotelManager` facade | Yes | Trigger operations without coupling current widgets to service classes. |
-| Views → `DataManager` | Yes | Request persistence after a successful UI action. |
-| `BookingManager` → `HotelManager` / models | Yes | Own the immediate reservation services and expose booking, checkout, and invoice operations. |
-| `CustomerManager` → `HotelManager` / models | Yes | Own CustomerService and expose customer workflows. |
-| `RoomManager` → `HotelManager` / models | Yes | Own RoomService and expose room workflows. |
-| `ReportService` → `HotelManager` / models | Yes | Build read-only metrics and selected-period report entries. |
-| `HotelManager` → models | Yes | Own and look up domain objects; retain simple read queries. |
+| Views → `HotelManager` facade | Yes | Existing widgets can call stable UI-facing operations. |
+| Views → `DataManager` | Yes | Views request persistence only after a successful business mutation. |
+| `HotelManager` → direct managers | Yes | Composition of immediate hotel operation branches. |
+| Manager → direct services | Yes | One-level ownership boundary. |
+| `ReportService` → `HotelManager` / models | Yes | Read-only aggregation. |
 | `DataManager` → `HotelManager` / models | Yes | Restore and serialize domain state. |
-| Models → views | No | Domain entities do not depend on UI. |
-| Models → `DataManager` | No | Domain entities are persistence-agnostic. |
+| Models → views or `DataManager` | No | Domain objects remain independent of UI and persistence. |
+| Services → views | No | Business rules do not depend on dialogs or widgets. |
 
-## Design patterns and OOP principles
+## OOP and design patterns
 
-- **Encapsulation**: model fields are private and changed through methods.
-- **Inheritance and polymorphism**: room subclasses implement room-specific pricing and metadata.
-- **Abstraction**: `Room` is an abstract interface for every room type.
-- **Factory**: `RoomFactory` centralizes room construction.
-- **Singleton**: `DataManager` provides one shared database connection and persistence service.
-- **Facade and application services**: `HotelManager` centralizes collections and backwards-compatible entry points; each direct child manager owns only its immediate service layer, while `ReportService` remains a sibling read-only reporting branch.
-
-## Operational notes
-
-- `Room::isAvailable` is retained for legacy permanent availability. Operational maintenance uses `RoomMaintenance` intervals (`[startDate, endDate)`) so future stays outside the closure remain valid. Both booking creation and maintenance scheduling reject overlapping intervals.
-- The database is local runtime state and is ignored by Git.
-- `CountryInputRules.h` is a source header and must be included when committing the project changes.
+- **Encapsulation**: entities expose controlled methods rather than public mutable fields.
+- **Inheritance and polymorphism**: concrete room types implement type-specific behavior through `Room`.
+- **Factory**: `RoomFactory` centralizes concrete room construction.
+- **Facade**: `HotelManager` preserves a stable boundary for current UI code while delegating workflows.
+- **Application services**: focused services implement booking, invoice, customer, room, maintenance, and availability workflows.
+- **Singleton**: `DataManager` provides one shared SQLite persistence component.
+- **DTO/report snapshot**: `DashboardReportData` separates report aggregation from rendering.

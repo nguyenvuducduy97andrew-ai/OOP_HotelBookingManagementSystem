@@ -64,6 +64,39 @@ bool CustomerService::registerCustomer(const std::string& id, const std::string&
     return m_hotelManager.registerCustomerCore(id, name, phone, errorMessage);
 }
 
+bool CustomerService::updateCustomer(const std::string& customerId, const std::string& name, const std::string& phone,
+                                     std::string& errorMessage, std::string* conflictingCustomerId)
+{
+    if (conflictingCustomerId) {
+        conflictingCustomerId->clear();
+    }
+
+    if (!m_hotelManager.findCustomerById(customerId)) {
+        errorMessage = "Customer not found.";
+        return false;
+    }
+
+    const QString inputName = normalizedName(name);
+    for (const auto& existing : m_hotelManager.getCustomers()) {
+        if (!existing || existing->getCustomerId() == customerId || existing->getPhoneNumber() != phone) {
+            continue;
+        }
+
+        if (conflictingCustomerId) {
+            *conflictingCustomerId = existing->getCustomerId();
+        }
+        // Modified: Apply the same phone/name collision rule to customer edits as to customer creation.
+        if (normalizedName(existing->getName()).compare(inputName, Qt::CaseInsensitive) == 0) {
+            errorMessage = "This customer already exists.";
+        } else {
+            errorMessage = "This phone number is already used by another customer. Please use a different number.";
+        }
+        return false;
+    }
+
+    return m_hotelManager.updateCustomerCore(customerId, name, phone, errorMessage);
+}
+
 bool CustomerService::resolveForBooking(const std::string& id, const std::string& name, const std::string& phone, std::string& errorMessage) { return m_hotelManager.resolveCustomerForBookingCore(id, name, phone, errorMessage); }
 bool CustomerService::archiveCustomer(const std::string& customerId, std::string& errorMessage) { return m_hotelManager.archiveCustomerCore(customerId, errorMessage); }
 bool CustomerService::restoreCustomer(const std::string& customerId, std::string& errorMessage) { return m_hotelManager.restoreCustomerCore(customerId, errorMessage); }

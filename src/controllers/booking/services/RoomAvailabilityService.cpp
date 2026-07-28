@@ -6,6 +6,7 @@
 
 #include <QDate>
 #include <QString>
+#include <unordered_set>
 
 RoomAvailabilityService::RoomAvailabilityService(const HotelManager& hotelManager)
     : m_hotelManager(hotelManager)
@@ -32,6 +33,10 @@ bool RoomAvailabilityService::isRoomFreeForDates(
             continue;
         }
 
+        if (m_hotelManager.getBookingState(*booking) == BookingState::COMPLETED) {
+            continue;
+        }
+
         if (!excludedBookingId.empty() && booking->getBookingId() == excludedBookingId) {
             continue;
         }
@@ -41,7 +46,7 @@ bool RoomAvailabilityService::isRoomFreeForDates(
             continue;
         }
 
-        // Modified and optimized performance: centralize active-stay conflict detection so every booking flow applies the same availability rule.
+        // Modified: Centralize active-stay conflict detection so every booking flow applies the same availability rule.
         if (m_hotelManager.getBookingState(*booking) == BookingState::ACTIVE
             && requestedCheckIn <= today && today < requestedCheckOut) {
             errorMessage = "Room " + roomNumber + " still has an active stay that must be checked out first.";
@@ -59,4 +64,62 @@ bool RoomAvailabilityService::isRoomFreeForDates(
     }
 
     return true;
+}
+
+std::vector<std::shared_ptr<Room>> RoomAvailabilityService::getAvailableRoomsForDates(
+    const std::string& checkInDate,
+    const std::string& checkOutDate,
+    std::string& errorMessage,
+    const std::string& excludedBookingId) const
+{
+    const QDate requestedCheckIn = QDate::fromString(QString::fromStdString(checkInDate), Qt::ISODate);
+    const QDate requestedCheckOut = QDate::fromString(QString::fromStdString(checkOutDate), Qt::ISODate);
+    if (!requestedCheckIn.isValid() || !requestedCheckOut.isValid() || requestedCheckOut <= requestedCheckIn) {
+        errorMessage = "Dates must use a valid ISO date range.";
+        return {};
+    }
+
+    std::unordered_set<std::string> unavailableRoomNumbers;
+    for (const RoomMaintenance& maintenance : m_hotelManager.getRoomMaintenances()) {
+        if (checkInDate < maintenance.getEndDate() && maintenance.getStartDate() < checkOutDate) {
+            unavailableRoomNumbers.insert(maintenance.getRoomNumber());
+        }
+    }
+
+    const QDate today = QDate::currentDate();
+    for (const auto& booking : m_hotelManager.getBookings()) {
+        if (!booking || booking->isCancelled() || booking->isDeleted() ||
+            (!excludedBookingId.empty() && booking->getBookingId() == excludedBookingId)) {
+            continue;
+        }
+
+        if (m_hotelManager.getBookingState(*booking) == BookingState::COMPLETED) {
+            continue;
+        }
+
+        const auto bookedRoom = booking->getRoom();
+        if (!bookedRoom) {
+            continue;
+        }
+
+        const bool overlaps = checkInDate < booking->getCheckOutDate()
+            && booking->getCheckInDate() < checkOutDate;
+        const bool blocksToday = m_hotelManager.getBookingState(*booking) == BookingState::ACTIVE
+            && requestedCheckIn <= today && today < requestedCheckOut;
+        if (overlaps || blocksToday) {
+            unavailableRoomNumbers.insert(bookedRoom->getRoomNumber());
+        }
+    }
+
+    std::vector<std::shared_ptr<Room>> availableRooms;
+    availableRooms.reserve(m_hotelManager.getRooms().size());
+    for (const auto& room : m_hotelManager.getRooms()) {
+        if (room && room->getIsAvailable() && !room->isArchived()
+            && unavailableRoomNumbers.find(room->getRoomNumber()) == unavailableRoomNumbers.end()) {
+            availableRooms.push_back(room);
+        }
+    }
+
+    // Modified: Build booking and maintenance exclusions once, replacing the previous room-by-booking nested scan.
+    return availableRooms;
 }

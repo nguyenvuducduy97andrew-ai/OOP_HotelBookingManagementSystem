@@ -6,14 +6,29 @@
 #include <QSqlError>
 #include <QDebug>
 #include <QDate>
+#include <QDateTime>
+#include <QFile>
+#include <QHash>
 #include <QString>
 #include <utility>
+#include <vector>
 
 // Creates or returns the one shared DataManager instance.
 // Reference helps ensuring only one DataManager instance exist
 DataManager& DataManager::getInstance() {
     static DataManager instance;
     return instance;
+}
+
+bool DataManager::readDatabaseRevision(qint64& revision) const
+{
+    QSqlQuery query(m_db);
+    if (!query.exec("SELECT revision FROM DataVersion WHERE id = 1") || !query.next()) {
+        qDebug() << "Error reading database revision:" << query.lastError().text();
+        return false;
+    }
+    revision = query.value(0).toLongLong();
+    return true;
 }
 
 bool DataManager::initDatabase(const std::string& dataPath) {
@@ -39,7 +54,22 @@ bool DataManager::initDatabase(const std::string& dataPath) {
     QSqlQuery query;
     QSqlQuery schemaQuery;
 
-    query.exec("PRAGMA foreign_keys = ON;");
+    // Modified: Verify foreign-key enforcement and wait briefly for transient SQLite locks instead of continuing unsafely.
+    if (!query.exec("PRAGMA foreign_keys = ON;") || !query.exec("PRAGMA busy_timeout = 5000;")) {
+        qDebug() << "Error configuring SQLite connection:" << query.lastError().text();
+        return false;
+    }
+    if (!query.exec("PRAGMA foreign_keys;") || !query.next() || query.value(0).toInt() != 1) {
+        qDebug() << "SQLite foreign-key enforcement could not be enabled:" << query.lastError().text();
+        return false;
+    }
+
+    // Modified: Maintain a revision row so a stale in-memory snapshot cannot overwrite another application's save.
+    if (!query.exec("CREATE TABLE IF NOT EXISTS DataVersion (id INTEGER PRIMARY KEY CHECK(id = 1), revision INTEGER NOT NULL)") ||
+        !query.exec("INSERT OR IGNORE INTO DataVersion (id, revision) VALUES (1, 0)")) {
+        qDebug() << "Error creating database revision metadata:" << query.lastError().text();
+        return false;
+    }
 
     QString createCustomer =
         "CREATE TABLE IF NOT EXISTS Customer ("
@@ -188,7 +218,7 @@ bool DataManager::initDatabase(const std::string& dataPath) {
         return false;
     }
 
-    // Modified: Reconstructed schema to save atomic properties (taxRate, nights) instead of static calculated totalAmount
+    // Modified: Persist immutable billing snapshots so later room and customer edits cannot alter historical invoices.
     QString createInvoice =
         "CREATE TABLE IF NOT EXISTS Invoice ("
         "   invoiceId TEXT PRIMARY KEY,"
@@ -196,6 +226,14 @@ bool DataManager::initDatabase(const std::string& dataPath) {
         "   taxRate REAL NOT NULL,"
         "   nights INTEGER NOT NULL,"
         "   paymentDate TEXT NOT NULL,"
+        "   unitPrice REAL NOT NULL DEFAULT 0,"
+        "   customerNameSnapshot TEXT NOT NULL DEFAULT '',"
+        "   customerIdSnapshot TEXT NOT NULL DEFAULT '',"
+        "   customerPhoneSnapshot TEXT NOT NULL DEFAULT '',"
+        "   roomNumberSnapshot TEXT NOT NULL DEFAULT '',"
+        "   roomTypeSnapshot TEXT NOT NULL DEFAULT '',"
+        "   checkInDateSnapshot TEXT NOT NULL DEFAULT '',"
+        "   checkOutDateSnapshot TEXT NOT NULL DEFAULT '',"
         "   FOREIGN KEY (bookingId) REFERENCES Booking(bookingId) ON DELETE CASCADE ON UPDATE CASCADE"
         ");";
     if (!query.exec(createInvoice)) {
@@ -203,18 +241,88 @@ bool DataManager::initDatabase(const std::string& dataPath) {
         return false;
     }
 
+    const auto ensureInvoiceColumn = [&schemaQuery](const QString& columnName, const QString& definition) {
+        if (!schemaQuery.exec("PRAGMA table_info(Invoice)")) {
+            qDebug() << "Error inspecting Invoice schema:" << schemaQuery.lastError().text();
+            return false;
+        }
+        while (schemaQuery.next()) {
+            if (schemaQuery.value(1).toString() == columnName) {
+                return true;
+            }
+        }
+        if (!schemaQuery.exec("ALTER TABLE Invoice ADD COLUMN " + definition)) {
+            qDebug() << "Error adding Invoice snapshot column:" << schemaQuery.lastError().text();
+            return false;
+        }
+        return true;
+    };
+    const std::vector<std::pair<QString, QString>> invoiceColumns = {
+        {"unitPrice", "unitPrice REAL NOT NULL DEFAULT 0"},
+        {"customerNameSnapshot", "customerNameSnapshot TEXT NOT NULL DEFAULT ''"},
+        {"customerIdSnapshot", "customerIdSnapshot TEXT NOT NULL DEFAULT ''"},
+        {"customerPhoneSnapshot", "customerPhoneSnapshot TEXT NOT NULL DEFAULT ''"},
+        {"roomNumberSnapshot", "roomNumberSnapshot TEXT NOT NULL DEFAULT ''"},
+        {"roomTypeSnapshot", "roomTypeSnapshot TEXT NOT NULL DEFAULT ''"},
+        {"checkInDateSnapshot", "checkInDateSnapshot TEXT NOT NULL DEFAULT ''"},
+        {"checkOutDateSnapshot", "checkOutDateSnapshot TEXT NOT NULL DEFAULT ''"}
+    };
+    for (const auto& [columnName, definition] : invoiceColumns) {
+        if (!ensureInvoiceColumn(columnName, definition)) {
+            return false;
+        }
+    }
+
+    QSqlQuery snapshotMigration(m_db);
+    // Modified: Backfill legacy invoices once from their linked records before enforcing immutable invoice loading.
+    if (!snapshotMigration.exec(
+            "UPDATE Invoice SET "
+            "unitPrice = COALESCE((SELECT r.basePrice + CASE r.roomType WHEN 'Deluxe' THEN COALESCE(r.miniBarFee, 0) WHEN 'Suite' THEN COALESCE(r.premiumServiceFee, 0) ELSE 0 END FROM Booking b JOIN Room r ON r.roomNumber = b.roomNumber WHERE b.bookingId = Invoice.bookingId), unitPrice), "
+            "customerNameSnapshot = COALESCE((SELECT c.name FROM Booking b JOIN Customer c ON c.customerId = b.customerId WHERE b.bookingId = Invoice.bookingId), customerNameSnapshot), "
+            "customerIdSnapshot = COALESCE((SELECT b.customerId FROM Booking b WHERE b.bookingId = Invoice.bookingId), customerIdSnapshot), "
+            "customerPhoneSnapshot = COALESCE((SELECT c.phoneNumber FROM Booking b JOIN Customer c ON c.customerId = b.customerId WHERE b.bookingId = Invoice.bookingId), customerPhoneSnapshot), "
+            "roomNumberSnapshot = COALESCE((SELECT b.roomNumber FROM Booking b WHERE b.bookingId = Invoice.bookingId), roomNumberSnapshot), "
+            "roomTypeSnapshot = COALESCE((SELECT r.roomType FROM Booking b JOIN Room r ON r.roomNumber = b.roomNumber WHERE b.bookingId = Invoice.bookingId), roomTypeSnapshot), "
+            "checkInDateSnapshot = COALESCE((SELECT b.checkInDate FROM Booking b WHERE b.bookingId = Invoice.bookingId), checkInDateSnapshot), "
+            "checkOutDateSnapshot = COALESCE((SELECT b.checkOutDate FROM Booking b WHERE b.bookingId = Invoice.bookingId), checkOutDateSnapshot) "
+            "WHERE unitPrice <= 0 OR customerNameSnapshot = '' OR customerIdSnapshot = '' OR customerPhoneSnapshot = '' OR roomNumberSnapshot = '' OR roomTypeSnapshot = '' OR checkInDateSnapshot = '' OR checkOutDateSnapshot = ''")) {
+        qDebug() << "Error backfilling Invoice snapshots:" << snapshotMigration.lastError().text();
+        return false;
+    }
+
     if (checkedOutColumnAdded) {
-        // Modified and optimized performance: preserve legacy completed stays once while moving future completion decisions to the explicit checkout flag.
+        // Modified: Mark legacy bookings completed only when an invoice proves checkout occurred.
         QSqlQuery migrateCompletedBookings;
         migrateCompletedBookings.prepare(
             "UPDATE Booking SET checkedOut = 1 "
             "WHERE cancelled = 0 AND deleted = 0 "
-            "AND (checkOutDate <= ? OR bookingId IN (SELECT bookingId FROM Invoice))");
-        migrateCompletedBookings.addBindValue(QDate::currentDate().toString(Qt::ISODate));
+            "AND bookingId IN (SELECT bookingId FROM Invoice)");
         if (!migrateCompletedBookings.exec()) {
             qDebug() << "Error migrating completed booking state: " << migrateCompletedBookings.lastError().text();
             return false;
         }
+    }
+
+    const QStringList indexStatements = {
+        "CREATE INDEX IF NOT EXISTS idx_booking_room_dates ON Booking(roomNumber, checkInDate, checkOutDate)",
+        "CREATE INDEX IF NOT EXISTS idx_booking_customer ON Booking(customerId)",
+        "CREATE INDEX IF NOT EXISTS idx_maintenance_room_dates ON RoomMaintenance(roomNumber, startDate, endDate)"
+    };
+    for (const QString& statement : indexStatements) {
+        if (!query.exec(statement)) {
+            qDebug() << "Error creating performance index:" << query.lastError().text();
+            return false;
+        }
+    }
+
+    if (!reconcileCustomerDuplicates()) {
+        return false;
+    }
+    // Modified: Enforce the customer phone uniqueness rule in SQLite after safe legacy reconciliation.
+    if (!query.exec("DROP INDEX IF EXISTS idx_customer_phone") ||
+        !query.exec("CREATE UNIQUE INDEX IF NOT EXISTS uq_customer_phone ON Customer(phoneNumber) WHERE phoneNumber IS NOT NULL AND phoneNumber <> ''")) {
+        qDebug() << "Error enforcing unique customer phone numbers:" << query.lastError().text();
+        return false;
     }
 
     qDebug() << "The SQLite database is all set and ready!";
@@ -227,7 +335,7 @@ bool DataManager::loadAll(HotelManager& manager, const std::string& dataPath) {
         return false;
     }
 
-    // Modified and optimized performance: stage the complete database load before replacing live state, preventing invalid rows from being silently dropped and later saved away.
+    // Modified: Stage the complete database load before replacing live state to prevent invalid rows from being silently dropped and later saved away.
     HotelManager loadedManager;
 
     // Modified: Removed legacy counter initializer since entity counters are managed dynamically
@@ -293,10 +401,10 @@ bool DataManager::loadAll(HotelManager& manager, const std::string& dataPath) {
         return false;
     }
 
-    // Fixed-modified: Rebuild the booking counter in the data layer instead of querying from the model.
+    // Modified: Rebuild the booking counter in the data layer instead of querying from the model.
     int maxBookingNumber = 1000;
 
-    // Modified and optimized performance: load the explicit checkout flag so completed history is not inferred from dates.
+    // Modified: Load the explicit checkout flag so completed history is not inferred from dates.
     if (query.exec("SELECT bookingId, customerId, roomNumber, checkInDate, checkOutDate, cancelled, deleted, checkedOut FROM Booking")) {
         while (query.next()) {
             std::string bookingId = query.value(0).toString().toStdString();
@@ -348,15 +456,26 @@ bool DataManager::loadAll(HotelManager& manager, const std::string& dataPath) {
 
     // Reconstruct invoices directly back into the core system memory.
     // Legacy rows with a cancelled flag are ignored by deleting them during migration.
-    if (query.exec("SELECT invoiceId, bookingId, taxRate, nights, paymentDate FROM Invoice")) {
+    if (query.exec("SELECT invoiceId, bookingId, taxRate, nights, paymentDate, unitPrice, customerNameSnapshot, customerIdSnapshot, customerPhoneSnapshot, roomNumberSnapshot, roomTypeSnapshot, checkInDateSnapshot, checkOutDateSnapshot FROM Invoice")) {
         while (query.next()) {
             std::string invId = query.value(0).toString().toStdString();
             std::string bookId = query.value(1).toString().toStdString();
             double tax = query.value(2).toDouble();
             int nightsCount = query.value(3).toInt();
             std::string payDate = query.value(4).toString().toStdString();
+            double unitPrice = query.value(5).toDouble();
+            std::string customerNameSnapshot = query.value(6).toString().toStdString();
+            std::string customerIdSnapshot = query.value(7).toString().toStdString();
+            std::string customerPhoneSnapshot = query.value(8).toString().toStdString();
+            std::string roomNumberSnapshot = query.value(9).toString().toStdString();
+            std::string roomTypeSnapshot = query.value(10).toString().toStdString();
+            std::string checkInDateSnapshot = query.value(11).toString().toStdString();
+            std::string checkOutDateSnapshot = query.value(12).toString().toStdString();
 
-            if (!loadedManager.restoreInvoiceFromDatabase(invId, bookId, tax, nightsCount, payDate, errorMsg)) {
+            if (!loadedManager.restoreInvoiceFromDatabase(invId, bookId, tax, nightsCount, payDate, unitPrice,
+                                                          customerNameSnapshot, customerIdSnapshot, customerPhoneSnapshot,
+                                                          roomNumberSnapshot, roomTypeSnapshot, checkInDateSnapshot,
+                                                          checkOutDateSnapshot, errorMsg)) {
                 qDebug() << "Failed to restore invoice during load:" << QString::fromStdString(errorMsg);
                 return false;
             }
@@ -366,9 +485,163 @@ bool DataManager::loadAll(HotelManager& manager, const std::string& dataPath) {
         return false;
     }
 
-    // Modified and optimized performance: publish only a fully validated snapshot and update the booking ID counter after a successful load.
+    // Modified: Publish only a fully validated snapshot and update the booking ID counter after a successful load.
+    qint64 loadedRevision = -1;
+    if (!readDatabaseRevision(loadedRevision)) {
+        return false;
+    }
     manager = std::move(loadedManager);
     Booking::initCounterFromDatabase(maxBookingNumber);
+    m_loadedRevision = loadedRevision;
+    return true;
+}
+
+bool DataManager::reconcileCustomerDuplicates()
+{
+    struct CanonicalCustomer {
+        qint64 rowId;
+        QString customerId;
+    };
+
+    QSqlQuery selectQuery(m_db);
+    if (!selectQuery.exec("SELECT rowid, customerId, name, phoneNumber FROM Customer ORDER BY archived ASC, rowid ASC")) {
+        qDebug() << "Failed to scan customers for duplicate reconciliation:" << selectQuery.lastError().text();
+        return false;
+    }
+
+    struct CustomerRow {
+        qint64 rowId;
+        QString customerId;
+        QString normalizedName;
+        QString normalizedPhone;
+    };
+
+    std::vector<CustomerRow> customerRows;
+    while (selectQuery.next()) {
+        CustomerRow row {
+            selectQuery.value(0).toLongLong(),
+            selectQuery.value(1).toString().trimmed(),
+            selectQuery.value(2).toString().simplified().toCaseFolded(),
+            selectQuery.value(3).toString().simplified()
+        };
+        row.normalizedPhone.remove(' ');
+        customerRows.push_back(std::move(row));
+    }
+    selectQuery.finish();
+
+    QHash<QString, QString> nameByPhone;
+    for (const CustomerRow& row : customerRows) {
+        if (row.normalizedPhone.isEmpty() || row.normalizedName.isEmpty()) {
+            continue;
+        }
+        const auto knownName = nameByPhone.constFind(row.normalizedPhone);
+        if (knownName != nameByPhone.cend() && *knownName != row.normalizedName) {
+            // Modified: Stop on ambiguous shared-phone records instead of deleting data that cannot be identified safely.
+            qDebug() << "Ambiguous duplicate customer phone requires manual review:" << row.normalizedPhone;
+            return false;
+        }
+        nameByPhone.insert(row.normalizedPhone, row.normalizedName);
+    }
+
+    QHash<QString, qint64> knownCustomerRows;
+    bool duplicatesDetected = false;
+    for (const CustomerRow& row : customerRows) {
+        if (row.customerId.isEmpty() || row.normalizedName.isEmpty() || row.normalizedPhone.isEmpty()) {
+            continue;
+        }
+
+        const QString identityKey = row.normalizedName + QChar(0x1F) + row.normalizedPhone;
+        if (knownCustomerRows.contains(identityKey)) {
+            duplicatesDetected = true;
+            break;
+        }
+        knownCustomerRows.insert(identityKey, row.rowId);
+    }
+
+    if (!duplicatesDetected) {
+        return true;
+    }
+
+    // Modified: Create a durable database backup before reconciliation deletes duplicate customer rows.
+    QSqlQuery checkpointQuery(m_db);
+    if (!checkpointQuery.exec("PRAGMA wal_checkpoint(FULL)")) {
+        qDebug() << "Failed to checkpoint database before customer duplicate backup:"
+                 << checkpointQuery.lastError().text();
+        return false;
+    }
+
+    const QString databasePath = m_db.databaseName();
+    const QString backupPath = databasePath + ".customer-dedup-"
+        + QDateTime::currentDateTimeUtc().toString("yyyyMMdd-HHmmsszzz") + ".bak";
+    if (databasePath.isEmpty() || !QFile::exists(databasePath) || !QFile::copy(databasePath, backupPath)) {
+        qDebug() << "Failed to create customer duplicate reconciliation backup:" << backupPath;
+        return false;
+    }
+    qDebug() << "Created customer duplicate reconciliation backup:" << backupPath;
+
+    if (!m_db.transaction()) {
+        qDebug() << "Failed to begin customer duplicate reconciliation:" << m_db.lastError().text();
+        return false;
+    }
+
+    QHash<QString, CanonicalCustomer> canonicalCustomers;
+    int mergedCount = 0;
+    for (const CustomerRow& row : customerRows) {
+        // Modified: Keep incomplete historical rows separate because their identity cannot be verified safely.
+        if (row.customerId.isEmpty() || row.normalizedName.isEmpty() || row.normalizedPhone.isEmpty()) {
+            continue;
+        }
+
+        const QString identityKey = row.normalizedName + QChar(0x1F) + row.normalizedPhone;
+        const auto canonical = canonicalCustomers.constFind(identityKey);
+        if (canonical == canonicalCustomers.cend()) {
+            canonicalCustomers.insert(identityKey, {row.rowId, row.customerId});
+            continue;
+        }
+
+        // Modified: Merge only an exact normalized name-and-phone match, then repoint historical bookings before removing the duplicate row.
+        if (row.customerId != canonical->customerId) {
+            QSqlQuery repointBookings(m_db);
+            repointBookings.prepare("UPDATE Booking SET customerId = ? WHERE customerId = ?");
+            repointBookings.addBindValue(canonical->customerId);
+            repointBookings.addBindValue(row.customerId);
+            if (!repointBookings.exec()) {
+                m_db.rollback();
+                qDebug() << "Failed to repoint duplicate customer bookings:" << repointBookings.lastError().text();
+                return false;
+            }
+        }
+
+        QSqlQuery deleteCustomer(m_db);
+        deleteCustomer.prepare("DELETE FROM Customer WHERE rowid = ?");
+        deleteCustomer.addBindValue(row.rowId);
+        if (!deleteCustomer.exec()) {
+            m_db.rollback();
+            qDebug() << "Failed to delete duplicate customer:" << deleteCustomer.lastError().text();
+            return false;
+        }
+
+        ++mergedCount;
+    }
+
+    if (mergedCount > 0) {
+        // Modified: Publish duplicate reconciliation as a database revision so other running instances cannot save stale snapshots.
+        QSqlQuery revisionQuery(m_db);
+        if (!revisionQuery.exec("UPDATE DataVersion SET revision = revision + 1 WHERE id = 1")) {
+            m_db.rollback();
+            qDebug() << "Failed to advance revision after duplicate reconciliation:" << revisionQuery.lastError().text();
+            return false;
+        }
+    }
+    if (!m_db.commit()) {
+        m_db.rollback();
+        qDebug() << "Failed to commit customer duplicate reconciliation:" << m_db.lastError().text();
+        return false;
+    }
+
+    if (mergedCount > 0) {
+        qDebug() << "Reconciled duplicate customer records:" << mergedCount;
+    }
     return true;
 }
 
@@ -391,8 +664,22 @@ bool DataManager::saveAll(HotelManager& manager, const std::string& dataPath) {
     } // Start a transaction to ensure atomicity of the save operation
     QSqlQuery query;
 
+    qint64 currentRevision = -1;
+    if (!query.exec("SELECT revision FROM DataVersion WHERE id = 1") || !query.next()) {
+        m_db.rollback();
+        qDebug() << "Failed to read database revision before save:" << query.lastError().text();
+        return false;
+    }
+    currentRevision = query.value(0).toLongLong();
+    // Modified: Reject a stale full snapshot before it can overwrite changes saved by another application instance.
+    if (m_loadedRevision >= 0 && m_loadedRevision != currentRevision) {
+        m_db.rollback();
+        qDebug() << "Database changed since this application last loaded it; refusing stale snapshot save.";
+        return false;
+    }
+
     // 1. Wipe old database entries completely before overwriting fresh model data records
-    // Added: Clear out dependency table first
+    // Modified: Clear dependent records before replacing the database snapshot.
     if (!query.exec("DELETE FROM Invoice")) {
         m_db.rollback(); // Rollback transaction if anything happened that fails to maintain database integrity
         qDebug() << "Can't delete from Invoice: " << query.lastError().text();
@@ -469,7 +756,7 @@ bool DataManager::saveAll(HotelManager& manager, const std::string& dataPath) {
         }
     }
 
-    // Modified and optimized performance: persist dated maintenance intervals separately from permanent room availability.
+    // Modified: Persist dated maintenance intervals separately from permanent room availability.
     query.prepare("INSERT INTO RoomMaintenance (maintenanceId, roomNumber, startDate, endDate, note) VALUES (?, ?, ?, ?, ?)");
     for (const RoomMaintenance& maintenance : manager.getRoomMaintenances()) {
         query.addBindValue(QString::fromStdString(maintenance.getMaintenanceId()));
@@ -484,7 +771,7 @@ bool DataManager::saveAll(HotelManager& manager, const std::string& dataPath) {
         }
     }
 
-    // Modified and optimized performance: persist checkout state with every atomic booking snapshot.
+    // Modified: Persist checkout state with every atomic booking snapshot.
     query.prepare("INSERT INTO Booking (bookingId, customerId, roomNumber, checkInDate, checkOutDate, cancelled, deleted, checkedOut) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
     for (const auto& booking : manager.getBookings()) {
         if (!booking) {
@@ -518,11 +805,16 @@ bool DataManager::saveAll(HotelManager& manager, const std::string& dataPath) {
         }
     }
 
-    // Added: 5. Persist Invoice records dynamically calculated up from view layer properties
-    query.prepare("INSERT INTO Invoice (invoiceId, bookingId, taxRate, nights, paymentDate) VALUES (?, ?, ?, ?, ?)");
+    // Modified: Persist immutable invoice snapshots with every financial record.
+    query.prepare("INSERT INTO Invoice (invoiceId, bookingId, taxRate, nights, paymentDate, unitPrice, customerNameSnapshot, customerIdSnapshot, customerPhoneSnapshot, roomNumberSnapshot, roomTypeSnapshot, checkInDateSnapshot, checkOutDateSnapshot) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
     for (const auto& invoice : manager.getInvoices()) {
         if (!invoice) {
             continue;
+        }
+        if (!invoice->isValid()) {
+            m_db.rollback();
+            qDebug() << "Invalid Invoice object graph: immutable billing snapshot is incomplete.";
+            return false;
         }
 
         query.addBindValue(QString::fromStdString(invoice->getInvoiceId()));
@@ -530,11 +822,24 @@ bool DataManager::saveAll(HotelManager& manager, const std::string& dataPath) {
         query.addBindValue(invoice->getTaxRate());
         query.addBindValue(invoice->getNights());
         query.addBindValue(QString::fromStdString(invoice->getPaymentDate()));
+        query.addBindValue(invoice->getUnitPrice());
+        query.addBindValue(QString::fromStdString(invoice->getCustomerNameSnapshot()));
+        query.addBindValue(QString::fromStdString(invoice->getCustomerIdSnapshot()));
+        query.addBindValue(QString::fromStdString(invoice->getCustomerPhoneSnapshot()));
+        query.addBindValue(QString::fromStdString(invoice->getRoomNumberSnapshot()));
+        query.addBindValue(QString::fromStdString(invoice->getRoomTypeSnapshot()));
+        query.addBindValue(QString::fromStdString(invoice->getCheckInDateSnapshot()));
+        query.addBindValue(QString::fromStdString(invoice->getCheckOutDateSnapshot()));
         if (!query.exec()) {
             m_db.rollback();
             qDebug() << "Error saving Invoice: " << query.lastError().text();
             return false;
         }
+    }
+    if (!query.exec("UPDATE DataVersion SET revision = revision + 1 WHERE id = 1")) {
+        m_db.rollback();
+        qDebug() << "Failed to advance database revision:" << query.lastError().text();
+        return false;
     }
     if (!m_db.commit())
     {
@@ -542,6 +847,7 @@ bool DataManager::saveAll(HotelManager& manager, const std::string& dataPath) {
         qDebug() << "Failed to commit transaction: " << m_db.lastError().text();
         return false;
     }
+    m_loadedRevision = currentRevision + 1;
     return true;
 }
 
@@ -557,7 +863,7 @@ bool DataManager::restoreLastSavedState(HotelManager& manager)
 
 bool DataManager::commitChanges(HotelManager& manager)
 {
-    // Modified and optimized performance: keep the in-memory model synchronized with the last successful SQLite transaction.
+    // Modified: Keep the in-memory model synchronized with the last successful SQLite transaction.
     if (saveAll(manager)) {
         return true;
     }

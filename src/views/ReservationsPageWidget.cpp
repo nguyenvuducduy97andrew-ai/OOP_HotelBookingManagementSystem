@@ -214,12 +214,8 @@ void ReservationsPageWidget::setupUI() {
     auto* pageTitle = new QLabel("Reservation Management", this);
     pageTitle->setObjectName("pageTitle");
 
-    m_addBookingBtn = new QPushButton("New Reservation", this);
-    m_addBookingBtn->setObjectName("btnAddBooking");
-
     headerRow->addWidget(pageTitle);
     headerRow->addStretch();
-    headerRow->addWidget(m_addBookingBtn);
     mainLayout->addLayout(headerRow);
 
     // Legend row (explains the action icons).
@@ -284,7 +280,6 @@ void ReservationsPageWidget::setupUI() {
     // Connects
     connect(m_searchEdit, &QLineEdit::textChanged, this, &ReservationsPageWidget::onSearchChanged);
     connect(m_statusCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &ReservationsPageWidget::onFilterStatusChanged);
-    connect(m_addBookingBtn, &QPushButton::clicked, this, &ReservationsPageWidget::onAddBookingClicked);
 }
 
 void ReservationsPageWidget::onSearchChanged(const QString& text) {
@@ -297,12 +292,8 @@ void ReservationsPageWidget::onFilterStatusChanged(int index) {
     refreshData();
 }
 
-void ReservationsPageWidget::onAddBookingClicked() {
-    openReservationDialog();
-}
-
 void ReservationsPageWidget::startNewReservationForRoom(const QString& roomNumber) {
-    // Modified and optimized performance: accept a Room Status selection through a typed navigation boundary instead of duplicating booking logic.
+    // Modified: Accept a Room Status selection through a typed navigation boundary instead of duplicating booking logic.
     openReservationDialog(roomNumber);
 }
 
@@ -324,6 +315,7 @@ void ReservationsPageWidget::openReservationDialog(const QString& preselectedRoo
         std::string errMsg;
         if (!m_manager->resolveCustomerForBooking(custId, name, phone, errMsg)) {
             QMessageBox::critical(this, "Customer verification error", QString::fromStdString(errMsg));
+            if (!preselectedRoomNumber.isEmpty()) emit roomStatusBookingCancelled();
             return;
         }
 
@@ -338,9 +330,10 @@ void ReservationsPageWidget::openReservationDialog(const QString& preselectedRoo
             CustomSuccessDialog("Reservation completed successfully.", this).exec();
         } else {
             QMessageBox::critical(this, "Booking error", QString::fromStdString(errMsg));
+            if (!preselectedRoomNumber.isEmpty()) emit roomStatusBookingCancelled();
         }
     } else if (!preselectedRoomNumber.isEmpty()) {
-        // Modified and optimized performance: preserve the Room Status origin so a cancel/back action returns to the selected-room workflow.
+        // Modified: Preserve the Room Status origin so a cancel or back action returns to the selected-room workflow.
         emit roomStatusBookingCancelled();
     }
 }
@@ -354,7 +347,7 @@ void ReservationsPageWidget::refreshData() {
         if (!booking || booking->isDeleted()) continue;
 
         BookingState state = m_manager->getBookingState(*booking);
-        // Modified and optimized performance: completed bookings move to Dashboard History and are removed from the operational table.
+        // Modified: Move completed bookings to Dashboard History and remove them from the operational table.
         if (state == BookingState::COMPLETED) continue;
 
         // Apply Status Filter
@@ -498,6 +491,7 @@ void ReservationsPageWidget::onTableActionClicked() {
                     return;
                 }
                 refreshData();
+                emit bookingChanged();
                 CustomSuccessDialog("Reservation has been canceled.", this).exec();
             } else {
                 QMessageBox::critical(this, "Cancel reservation error", QString::fromStdString(errMsg));
@@ -535,6 +529,7 @@ void ReservationsPageWidget::onTableActionClicked() {
             }
 
             refreshData();
+            emit bookingChanged();
             CustomSuccessDialog("Reservation information updated successfully.", this).exec();
         }
     } else if (actionType == "checkout") {
@@ -554,7 +549,7 @@ void ReservationsPageWidget::onTableActionClicked() {
             int nights = checkIn.daysTo(today);
             if (nights <= 0) nights = 1; // Minimum charge 1 night
 
-            // Modified and optimized performance: stage checkout and invoice together before one atomic persistence commit.
+            // Modified: Stage checkout and invoice together before one atomic persistence commit.
             std::string invoiceId = m_manager->nextInvoiceId();
             double taxRate = 0.1; // 10% VAT
 
@@ -565,10 +560,9 @@ void ReservationsPageWidget::onTableActionClicked() {
                 return;
             }
 
-            // Modified and optimized performance: commit checkout and invoice as one database snapshot or restore the prior state.
+            // Modified: Commit checkout and invoice as one database snapshot or restore the prior state.
             if (!DataManager::getInstance().commitChanges(*m_manager)) {
                 refreshData();
-                emit bookingCompleted();
                 QMessageBox::critical(this, "Check-out Save Failed", "Check-out and invoice were not saved. The previous database state has been restored.");
                 return;
             }
@@ -576,6 +570,7 @@ void ReservationsPageWidget::onTableActionClicked() {
             auto invoice = m_manager->findInvoiceById(invoiceId);
             refreshData();
             emit bookingCompleted();
+            emit bookingChanged();
 
             if (invoice) {
                 InvoiceDialog invoiceDialog(QString::fromStdString(invoice->generateInvoiceDetails()), this);

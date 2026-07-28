@@ -24,7 +24,6 @@ signals:
 private slots:
     void onSearchChanged(const QString& text);
     void onFilterStatusChanged(int index);
-    void onAddBookingClicked();
     void onTableActionClicked();
 
 private:
@@ -37,6 +36,5 @@ private:
 
     QLineEdit* m_searchEdit;
     QComboBox* m_statusCombo;
-    QPushButton* m_addBookingBtn;
     QTableWidget* m_tableWidget;
 };

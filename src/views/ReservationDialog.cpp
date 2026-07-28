@@ -3,6 +3,7 @@
 #include "StandardRoom.h"
 #include "DeluxeRoom.h"
 #include "SuiteRoom.h"
+#include "RoomAvailabilityService.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QFormLayout>
@@ -105,7 +106,7 @@ void ReservationDialog::setupUI() {
     auto* formLayout = new QFormLayout();
     formLayout->setSpacing(12);
 
-    // Modified and optimized performance: keep reservation ID validation consistent with Customer Management.
+    // Modified: Keep reservation ID validation consistent with Customer Management.
     auto* idRow = new QHBoxLayout();
     idRow->setSpacing(8);
     m_customerIdCountry = new QComboBox(this);
@@ -138,7 +139,8 @@ void ReservationDialog::setupUI() {
     m_checkInDateEdit = new QDateEdit(today, this);
     m_checkInDateEdit->setCalendarPopup(true);
     m_checkInDateEdit->setDisplayFormat("yyyy-MM-dd");
-    m_checkInDateEdit->setMinimumDate(today.addDays(-30)); // Allow past checking for demo but recommend modern
+    // Modified: Match the service rule by preventing newly created reservations from using historical check-in dates.
+    m_checkInDateEdit->setMinimumDate(today);
     formLayout->addRow("Check-in Date:", m_checkInDateEdit);
 
     m_checkOutDateEdit = new QDateEdit(today.addDays(1), this);
@@ -186,7 +188,7 @@ void ReservationDialog::updatePhonePlaceholder() {
 }
 
 void ReservationDialog::normalizePhoneInput() {
-    // Modified and optimized performance: store a clean local number before adding the selected dialing code.
+    // Modified: Store a clean local number before adding the selected dialing code.
     const QString normalized = normalizeLocalPhoneNumber(m_customerPhoneLocalEdit->text());
     if (normalized != m_customerPhoneLocalEdit->text()) {
         m_customerPhoneLocalEdit->setText(normalized);
@@ -204,44 +206,15 @@ void ReservationDialog::updateAvailableRooms() {
         return;
     }
 
-    for (const auto& room : m_manager->getRooms()) {
-        if (!room || !room->getIsAvailable()) continue; // Skip permanently unavailable rooms.
-        std::string maintenanceError;
-        if (m_manager->hasRoomMaintenanceConflict(
-                room->getRoomNumber(),
-                m_checkInDateEdit->date().toString(Qt::ISODate).toStdString(),
-                m_checkOutDateEdit->date().toString(Qt::ISODate).toStdString(),
-                maintenanceError)) {
-            continue;
-        }
-
-        std::string roomNum = room->getRoomNumber();
-
-        // Check if overlaps with any active bookings
-        bool isFree = true;
-        for (const auto& booking : m_manager->getBookings()) {
-            if (!booking || booking->isCancelled() || booking->isDeleted()) continue;
-            if (booking->getBookingId() == m_editingBookingId) continue;
-            auto roomPtr = booking->getRoom();
-            if (!roomPtr || roomPtr->getRoomNumber() != roomNum) continue;
-
-            // Overlap check
-            if (checkInStr.toStdString() < booking->getCheckOutDate() &&
-                booking->getCheckInDate() < checkOutStr.toStdString()) {
-                isFree = false;
-                break;
-            }
-        }
-
-        if (isFree) {
-            // Fixed-modified: Format room labels from the virtual type name.
-            std::string label = roomNum;
-            // Add subclass type suffix
-            // e.g. "101 (Standard)", "301 (Suite)"
-            label += " (" + room->getRoomTypeName() + ")";
-
-            m_roomCombo->addItem(QString::fromStdString(label), QString::fromStdString(roomNum));
-        }
+    std::string availabilityError;
+    RoomAvailabilityService availability(*m_manager);
+    const auto availableRooms = availability.getAvailableRoomsForDates(
+        checkInStr.toStdString(), checkOutStr.toStdString(), availabilityError, m_editingBookingId);
+    for (const auto& room : availableRooms) {
+        // Modified: Render the centrally computed availability list instead of recalculating booking conflicts per room.
+        const std::string roomNum = room->getRoomNumber();
+        const std::string label = roomNum + " (" + room->getRoomTypeName() + ")";
+        m_roomCombo->addItem(QString::fromStdString(label), QString::fromStdString(roomNum));
     }
 }
 
@@ -359,8 +332,15 @@ void ReservationDialog::setEditBooking(const std::string& bookingId) {
     QDate checkIn = QDate::fromString(QString::fromStdString(booking->getCheckInDate()), "yyyy-MM-dd");
     QDate checkOut = QDate::fromString(QString::fromStdString(booking->getCheckOutDate()), "yyyy-MM-dd");
 
+    if (checkIn < QDate::currentDate()) {
+        m_checkInDateEdit->setMinimumDate(checkIn);
+    }
     m_checkInDateEdit->setDate(checkIn);
     m_checkOutDateEdit->setDate(checkOut);
+    if (m_manager->getBookingState(*booking) == BookingState::ACTIVE) {
+        // Modified: Active stays retain their original arrival date; checkout remains the explicit completion action.
+        m_checkInDateEdit->setEnabled(false);
+    }
 
     updateAvailableRooms();
 

@@ -60,6 +60,8 @@ private:
 
     bool registerRoomCore(RoomType kind, const std::string& roomNumber, double baseRate, std::string& errorMessage);
     bool registerCustomerCore(const std::string& id, const std::string& name, const std::string& phone, std::string& errorMessage);
+    // Modified: Centralize validation for mutable customer fields while keeping the customer ID immutable.
+    bool updateCustomerCore(const std::string& customerId, const std::string& name, const std::string& phone, std::string& errorMessage);
     bool resolveCustomerForBookingCore(const std::string& id, const std::string& name, const std::string& phone, std::string& errorMessage);
     bool setRoomAvailabilityCore(const std::string& roomNumber, bool available, std::string& errorMessage);
     bool scheduleRoomMaintenanceCore(const std::string& roomNumber, const std::string& startDate,
@@ -132,6 +134,15 @@ public:
 
     bool registerCustomer(
         const std::string& id,
+        const std::string& name,
+        const std::string& phone,
+        std::string& errorMessage,
+        std::string* conflictingCustomerId = nullptr
+        );
+
+    // Modified: Delegate customer edits to CustomerService so views cannot bypass collision checks.
+    bool updateCustomer(
+        const std::string& customerId,
         const std::string& name,
         const std::string& phone,
         std::string& errorMessage,
@@ -219,6 +230,14 @@ public:
         double taxRate,
         int nights,
         const std::string& paymentDate,
+        double unitPrice,
+        const std::string& customerNameSnapshot,
+        const std::string& customerIdSnapshot,
+        const std::string& customerPhoneSnapshot,
+        const std::string& roomNumberSnapshot,
+        const std::string& roomTypeSnapshot,
+        const std::string& checkInDateSnapshot,
+        const std::string& checkOutDateSnapshot,
         std::string& errorMessage
     );
     bool restoreRoomMaintenanceFromDatabase(const std::string& maintenanceId, const std::string& roomNumber,

@@ -84,6 +84,13 @@ bool BookingService::createBooking(
         return false;
     }
 
+    const QDate checkIn = QDate::fromString(QString::fromStdString(checkInDate), Qt::ISODate);
+    // Modified: New reservations may only start today or later; historical stays must be restored through persisted data.
+    if (checkIn < QDate::currentDate()) {
+        errorMessage = "New bookings cannot use a past check-in date.";
+        return false;
+    }
+
     auto booking = std::make_shared<Booking>();
     booking->setBookingId(Booking::nextBookingId());
     booking->setCustomer(m_hotelManager.findCustomerById(customerId));
@@ -118,12 +125,31 @@ bool BookingService::updateBooking(
         errorMessage = "Cannot edit a cancelled booking.";
         return false;
     }
-    if (m_hotelManager.getBookingState(*booking) == BookingState::COMPLETED) {
+    const BookingState currentState = m_hotelManager.getBookingState(*booking);
+    if (currentState == BookingState::COMPLETED) {
         errorMessage = "Cannot edit a completed booking.";
         return false;
     }
     if (!validateBookingDates(checkInDate, checkOutDate, errorMessage)) {
         return false;
+    }
+
+    const QDate proposedCheckIn = QDate::fromString(QString::fromStdString(checkInDate), Qt::ISODate);
+    const QDate proposedCheckOut = QDate::fromString(QString::fromStdString(checkOutDate), Qt::ISODate);
+    if (currentState == BookingState::UPCOMING && proposedCheckIn < QDate::currentDate()) {
+        errorMessage = "Upcoming bookings cannot be moved to a past check-in date.";
+        return false;
+    }
+    // Modified: Keep an active stay's arrival date immutable and prevent backdated departure edits.
+    if (currentState == BookingState::ACTIVE) {
+        if (checkInDate != booking->getCheckInDate()) {
+            errorMessage = "Cannot change the check-in date after the guest has checked in.";
+            return false;
+        }
+        if (proposedCheckOut < QDate::currentDate()) {
+            errorMessage = "Cannot set an active booking's check-out date in the past.";
+            return false;
+        }
     }
 
     const auto customer = m_hotelManager.findCustomerById(customerId);
@@ -193,9 +219,13 @@ bool BookingService::completeBooking(
         return false;
     }
 
-    // Modified and optimized performance: keep checkout validation and state mutation in the booking use-case instead of the shared data manager.
+    // Modified: Keep checkout validation and state mutation in the booking use case instead of the shared data manager.
     if (actualCheckout < checkIn) {
         errorMessage = "Checkout date cannot be before check-in date.";
+        return false;
+    }
+    if (actualCheckout > QDate::currentDate()) {
+        errorMessage = "Checkout date cannot be in the future.";
         return false;
     }
 

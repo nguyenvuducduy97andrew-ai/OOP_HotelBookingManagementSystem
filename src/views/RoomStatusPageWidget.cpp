@@ -1,8 +1,11 @@
 #include "RoomStatusPageWidget.h"
 #include "ui_RoomStatusPageWidget.h"
 #include "Customer.h"
+#include "RoomAvailabilityService.h"
 #include <QGridLayout>
 #include <QDate>
+#include <unordered_map>
+#include <unordered_set>
 
 RoomStatusPageWidget::RoomStatusPageWidget(HotelManager* manager, QWidget *parent)
     : QWidget(parent), ui(new Ui::RoomStatusPageWidget), m_manager(manager) {
@@ -99,28 +102,32 @@ void RoomStatusPageWidget::refreshData() {
     const int columns = 4;
     int index = 0;
 
+    std::unordered_map<std::string, std::shared_ptr<Booking>> activeBookingsByRoom;
+    for (const auto& booking : m_manager->getBookings()) {
+        if (!booking || booking->isCancelled() || booking->isDeleted()
+            || m_manager->getBookingState(*booking) != BookingState::ACTIVE) {
+            continue;
+        }
+
+        const auto bookedRoom = booking->getRoom();
+        if (bookedRoom) {
+            activeBookingsByRoom.emplace(bookedRoom->getRoomNumber(), booking);
+        }
+    }
+
     for (const auto& room : m_manager->getRooms()) {
         if (!room || room->isArchived()) continue;
 
         RoomCard* card = new RoomCard(ui->scrollAreaWidgetContents);
         card->setRoomNumber(QString::fromStdString(room->getRoomNumber()));
 
-        // Fixed-modified: Render room cards from the virtual room type name.
+        // Modified: Render room cards from the virtual room type name.
         QString roomType = QString::fromStdString(room->getRoomTypeName());
         card->setRoomType(roomType);
 
-        bool isOccupied = false;
-        std::shared_ptr<Booking> activeBooking = nullptr;
-        for (const auto& booking : m_manager->getBookings()) {
-            if (booking && !booking->isCancelled() && !booking->isDeleted() && booking->getRoom() &&
-                booking->getRoom()->getRoomNumber() == room->getRoomNumber()) {
-                if (m_manager->getBookingState(*booking) == BookingState::ACTIVE) {
-                    isOccupied = true;
-                    activeBooking = booking;
-                    break;
-                }
-            }
-        }
+        const auto activeBookingIt = activeBookingsByRoom.find(room->getRoomNumber());
+        const bool isOccupied = activeBookingIt != activeBookingsByRoom.end();
+        const std::shared_ptr<Booking> activeBooking = isOccupied ? activeBookingIt->second : nullptr;
 
         const std::string today = QDate::currentDate().toString(Qt::ISODate).toStdString();
         const bool isUnderMaintenance = !room->getIsAvailable()
@@ -146,7 +153,7 @@ void RoomStatusPageWidget::refreshData() {
         m_roomCards.append(card);
 
         connect(card, &RoomCard::cardClicked, this, [this, room]() {
-            // Modified and optimized performance: Room Status selects the room while Reservation owns booking validation and persistence.
+            // Modified: Let Room Status select the room while Reservation owns booking validation and persistence.
             emit bookingRequested(QString::fromStdString(room->getRoomNumber()));
         });
 
@@ -156,6 +163,7 @@ void RoomStatusPageWidget::refreshData() {
         index++;
     }
 
+    // Modified: Index active bookings once so rendering room cards no longer scans every booking for every room.
     applyFilters();
 }
 
@@ -187,6 +195,20 @@ void RoomStatusPageWidget::applyFilters() {
     int reqAdults = ui->lblAdultCount->text().toInt();
     int reqChildren = ui->lblChildrenCount->text().toInt();
 
+    std::unordered_set<std::string> availableRoomNumbers;
+    if (m_isCheckAvailMode) {
+        std::string availabilityError;
+        RoomAvailabilityService availability(*m_manager);
+        const auto availableRooms = availability.getAvailableRoomsForDates(
+            reqIn.toString(Qt::ISODate).toStdString(),
+            reqOut.toString(Qt::ISODate).toStdString(), availabilityError);
+        for (const auto& room : availableRooms) {
+            if (room) {
+                availableRoomNumbers.insert(room->getRoomNumber());
+            }
+        }
+    }
+
     int visibleIndex = 0;
     int columns = 4;
 
@@ -203,26 +225,8 @@ void RoomStatusPageWidget::applyFilters() {
         }
 
         if (m_isCheckAvailMode) {
-            if (card->getStatus() == "MTN") {
-                matchAvail = false;
-            } else {
-                for (const auto& booking : m_manager->getBookings()) {
-                    if (booking && !booking->isCancelled() && !booking->isDeleted() && booking->getRoom() &&
-                        booking->getRoom()->getRoomNumber() == card->getRoomNumber().toStdString()) {
-                        
-                        QDate bIn = QDate::fromString(QString::fromStdString(booking->getCheckInDate()), Qt::ISODate);
-                        QDate bOut = QDate::fromString(QString::fromStdString(booking->getCheckOutDate()), Qt::ISODate);
-                        
-                        if (bIn.isValid() && bOut.isValid()) {
-                            // Check for date overlap: not(reqOut <= bIn or reqIn >= bOut)
-                            if (!(reqOut <= bIn || reqIn >= bOut)) {
-                                matchAvail = false;
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
+            // Modified: Use the shared booking-and-maintenance availability result so Room Status cannot disagree with Reservation.
+            matchAvail = availableRoomNumbers.find(card->getRoomNumber().toStdString()) != availableRoomNumbers.end();
 
             if (matchAvail) {
                 int maxAdults = 2, maxChildren = 1;

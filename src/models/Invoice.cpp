@@ -35,6 +35,7 @@ Invoice::Invoice() {
     this->taxRate = 0.0;
     this->nights = 0; // Added: Initializing the new nights member variable
     this->paymentDate = ""; // Modified: Using empty string instead of QDate::currentDate()
+    this->unitPrice = 0.0;
 }
 
 std::string Invoice::getInvoiceId() const {
@@ -95,31 +96,45 @@ void Invoice::setPaymentDate(const std::string& paymentDate) {
     this->paymentDate = paymentDate;
 }
 
+double Invoice::getUnitPrice() const { return unitPrice; }
+void Invoice::setUnitPrice(double value) { unitPrice = value; }
+std::string Invoice::getCustomerNameSnapshot() const { return customerNameSnapshot; }
+void Invoice::setCustomerNameSnapshot(const std::string& value) { customerNameSnapshot = value; }
+std::string Invoice::getCustomerIdSnapshot() const { return customerIdSnapshot; }
+void Invoice::setCustomerIdSnapshot(const std::string& value) { customerIdSnapshot = value; }
+std::string Invoice::getCustomerPhoneSnapshot() const { return customerPhoneSnapshot; }
+void Invoice::setCustomerPhoneSnapshot(const std::string& value) { customerPhoneSnapshot = value; }
+std::string Invoice::getRoomNumberSnapshot() const { return roomNumberSnapshot; }
+void Invoice::setRoomNumberSnapshot(const std::string& value) { roomNumberSnapshot = value; }
+std::string Invoice::getRoomTypeSnapshot() const { return roomTypeSnapshot; }
+void Invoice::setRoomTypeSnapshot(const std::string& value) { roomTypeSnapshot = value; }
+std::string Invoice::getCheckInDateSnapshot() const { return checkInDateSnapshot; }
+void Invoice::setCheckInDateSnapshot(const std::string& value) { checkInDateSnapshot = value; }
+std::string Invoice::getCheckOutDateSnapshot() const { return checkOutDateSnapshot; }
+void Invoice::setCheckOutDateSnapshot(const std::string& value) { checkOutDateSnapshot = value; }
+
 // Modified: Validates booking existence, invoice data integrity, and duration validity
 bool Invoice::isValid() const {
-    // Fixed-modified: Require a linked booking, positive stay length, and a real ISO payment date.
+    // Modified: Require a linked booking, complete immutable snapshots, and valid billing values.
     const auto lockedBooking = booking.lock();
 
     return !invoiceId.empty() &&
            lockedBooking != nullptr &&
            nights > 0 &&
-           isIsoDateString(paymentDate);
+           taxRate >= 0.0 && taxRate <= 1.0 &&
+           unitPrice > 0.0 &&
+           !customerNameSnapshot.empty() && !customerIdSnapshot.empty() && !customerPhoneSnapshot.empty() &&
+           !roomNumberSnapshot.empty() && !roomTypeSnapshot.empty() &&
+           isIsoDateString(paymentDate) && isIsoDateString(checkInDateSnapshot) &&
+           isIsoDateString(checkOutDateSnapshot);
 }
 
-// Modified: Computes subtotal on-the-fly using the locally stored 'nights' variable
+// Modified: Calculate subtotal from the stored stay length and immutable unit price.
 double Invoice::calculateSubtotal() const {
-    auto lockedBooking = booking.lock();
-    if (lockedBooking == nullptr)
-        return 0.0;
-
-    auto lockedRoom = lockedBooking->getRoom();
-    if (lockedRoom == nullptr)
-        return 0.0;
-
-    return nights * lockedRoom->calculateTargetPrice();
+    return nights * unitPrice;
 }
 
-// Added: Computes final total including tax rate dynamically
+// Modified: Calculate the final total from the immutable subtotal and stored tax rate.
 double Invoice::calculateTotal() const {
     return calculateSubtotal() * (1.0 + taxRate);
 }
@@ -134,40 +149,15 @@ std::string Invoice::generateInvoiceDetails() const {
     details << "<b>Payment Date:</b> " << paymentDate << "<br>"; // Expected format: YYYY-MM-DD
     details << "--------------------------------------------------<br>";
 
-    // Lock the weak_ptr to get a shared_ptr
-    auto lockedBooking = booking.lock();
-
-    // Error handling for missing or expired booking
-    if (lockedBooking == nullptr) {
-        details << "<font color='red'><b>Error: No booking data associated or booking has expired!</b></font><br>";
-        if (!bookingId.empty()) {
-            details << "<b>Booking ID:</b> " << bookingId << "<br>";
-        }
-        details << "=========================================<br>";
-        return details.str();
-    }
-
-    // Customer information
-    auto lockedCustomer = lockedBooking->getCustomer();
-    if (lockedCustomer != nullptr) {
-        details << "<b>Customer Name:</b> " << lockedCustomer->getName() << "<br>";
-    }
-    else {
-        details << "<b>Customer Name:</b> Unknown (or expired)<br>";
-    }
-
-    // Room information
-    auto lockedRoom = lockedBooking->getRoom();
-    if (lockedRoom != nullptr) {
-        details << "<b>Room Number:</b> " << lockedRoom->getRoomNumber() << "<br>";
-        details << "<b>Base Price per Night:</b> " << formatMoney(lockedRoom->getBasePrice()) << " VND<br>";
-    } else {
-        details << "<b>Room Info:</b> Not Assigned (or expired)<br>";
-    }
-
-    // Modified: Booking schedule output formatted via direct string read
-    details << "<b>Check-in Date:</b> " << lockedBooking->getCheckInDate() << "<br>";
-    details << "<b>Check-out Date:</b> " << lockedBooking->getCheckOutDate() << "<br>";
+    // Modified: Render the persisted snapshot so later customer or room edits cannot change a historical invoice.
+    details << "<b>Booking ID:</b> " << bookingId << "<br>";
+    details << "<b>Customer Name:</b> " << customerNameSnapshot << "<br>";
+    details << "<b>Customer ID:</b> " << customerIdSnapshot << "<br>";
+    details << "<b>Phone:</b> " << customerPhoneSnapshot << "<br>";
+    details << "<b>Room:</b> " << roomNumberSnapshot << " (" << roomTypeSnapshot << ")<br>";
+    details << "<b>Price per Night:</b> " << formatMoney(unitPrice) << " VND<br>";
+    details << "<b>Check-in Date:</b> " << checkInDateSnapshot << "<br>";
+    details << "<b>Check-out Date:</b> " << checkOutDateSnapshot << "<br>";
     details << "<b>Duration:</b> " << nights << " night(s)<br>";
 
     // Billing breakdown
@@ -184,4 +174,27 @@ std::string Invoice::generateInvoiceDetails() const {
     details << "=========================================<br>";
 
     return details.str();
+}
+
+void Invoice::captureBookingSnapshot(const std::shared_ptr<Booking>& sourceBooking) {
+    setBooking(sourceBooking);
+    if (!sourceBooking) {
+        return;
+    }
+
+    // Modified: Capture immutable guest, room, date, and pricing data when an invoice is created.
+    checkInDateSnapshot = sourceBooking->getCheckInDate();
+    checkOutDateSnapshot = sourceBooking->getCheckOutDate();
+    const auto customer = sourceBooking->getCustomer();
+    if (customer) {
+        customerNameSnapshot = customer->getName();
+        customerIdSnapshot = customer->getCustomerId();
+        customerPhoneSnapshot = customer->getPhoneNumber();
+    }
+    const auto room = sourceBooking->getRoom();
+    if (room) {
+        roomNumberSnapshot = room->getRoomNumber();
+        roomTypeSnapshot = room->getRoomTypeName();
+        unitPrice = room->calculateTargetPrice();
+    }
 }

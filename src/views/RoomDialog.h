@@ -5,8 +5,11 @@
 #include <QComboBox>
 #include <QDateEdit>
 #include <QLabel>
+#include <QPushButton>
 #include <QTextEdit>
+#include <vector>
 #include "RoomFactory.h"
+#include "RoomMaintenance.h"
 
 class RoomDialog : public QDialog {
     Q_OBJECT
@@ -24,10 +27,13 @@ public:
     QString getMaintenanceStartDate() const;
     QString getMaintenanceEndDate() const;
     QString getMaintenanceNote() const;
+    void setExistingMaintenanceSchedules(const std::vector<RoomMaintenance>& schedules);
+    QString getMaintenanceIdToCancel() const;
 
 private slots:
     void onTypeChanged(int index);
     void onStatusChanged(int index);
+    void markSelectedMaintenanceForCancellation();
     void onAccept();
 
 private:
@@ -43,6 +49,10 @@ private:
     QDateEdit* m_maintenanceStartDateEdit;
     QDateEdit* m_maintenanceEndDateEdit;
     QTextEdit* m_maintenanceNoteEdit;
+    QLabel* m_existingMaintenanceLabel;
+    QComboBox* m_existingMaintenanceCombo;
+    QPushButton* m_cancelMaintenanceBtn;
+    QString m_maintenanceIdToCancel;
     QLabel* m_extraFeeLabel;
     QDoubleSpinBox* m_extraFeeSpin;
 
