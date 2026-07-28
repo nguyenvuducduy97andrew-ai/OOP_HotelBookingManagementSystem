@@ -3,7 +3,9 @@
 #include <QLineEdit>
 #include <QDoubleSpinBox>
 #include <QComboBox>
+#include <QDateEdit>
 #include <QLabel>
+#include <QTextEdit>
 #include "RoomFactory.h"
 
 class RoomDialog : public QDialog {
@@ -18,9 +20,14 @@ public:
     RoomType getRoomType() const;
     double getExtraFee() const;
     bool getIsAvailable() const;
+    bool shouldScheduleMaintenance() const;
+    QString getMaintenanceStartDate() const;
+    QString getMaintenanceEndDate() const;
+    QString getMaintenanceNote() const;
 
 private slots:
     void onTypeChanged(int index);
+    void onStatusChanged(int index);
     void onAccept();
 
 private:
@@ -30,6 +37,12 @@ private:
     QDoubleSpinBox* m_basePriceSpin;
     QComboBox* m_typeCombo;
     QComboBox* m_availabilityCombo;
+    QLabel* m_maintenanceStartLabel;
+    QLabel* m_maintenanceEndLabel;
+    QLabel* m_maintenanceNoteLabel;
+    QDateEdit* m_maintenanceStartDateEdit;
+    QDateEdit* m_maintenanceEndDateEdit;
+    QTextEdit* m_maintenanceNoteEdit;
     QLabel* m_extraFeeLabel;
     QDoubleSpinBox* m_extraFeeSpin;
 

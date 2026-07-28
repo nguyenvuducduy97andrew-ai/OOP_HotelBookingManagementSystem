@@ -7,10 +7,13 @@
 #include "Invoice.h"
 #include "Room.h"
 #include "RoomFactory.h"
+#include "RoomMaintenance.h"
 
 class BookingService;
 class InvoiceService;
-class ReservationService;
+class BookingManager;
+class CustomerService;
+class RoomService;
 
 // Fixed-modified: Move booking state ownership closer to the booking model while keeping manager queries intact.
 std::string bookingStateToString(BookingState state);
@@ -21,11 +24,14 @@ private:
     // Modified and optimized performance: allow only focused workflow services to append validated domain objects to the manager-owned collections.
     friend class BookingService;
     friend class InvoiceService;
+    friend class CustomerService;
+    friend class RoomService;
 
     std::vector<std::shared_ptr<Room>> rooms;
     std::vector<std::shared_ptr<Customer>> customers;
     std::vector<std::shared_ptr<Booking>> bookings;
     std::vector<std::shared_ptr<Invoice>> invoices;
+    std::vector<RoomMaintenance> roomMaintenances;
 
     // Validation helpers
     bool isValidRoomNumber(const std::string& roomNumber) const;
@@ -52,6 +58,21 @@ private:
     void addBooking(std::shared_ptr<Booking> booking);
     void addInvoice(std::shared_ptr<Invoice> invoice);
 
+    bool registerRoomCore(RoomType kind, const std::string& roomNumber, double baseRate, std::string& errorMessage);
+    bool registerCustomerCore(const std::string& id, const std::string& name, const std::string& phone, std::string& errorMessage);
+    bool resolveCustomerForBookingCore(const std::string& id, const std::string& name, const std::string& phone, std::string& errorMessage);
+    bool setRoomAvailabilityCore(const std::string& roomNumber, bool available, std::string& errorMessage);
+    bool scheduleRoomMaintenanceCore(const std::string& roomNumber, const std::string& startDate,
+                                     const std::string& endDate, const std::string& note,
+                                     std::string& errorMessage);
+    bool cancelRoomMaintenanceCore(const std::string& maintenanceId, std::string& errorMessage);
+    bool archiveRoomCore(const std::string& roomNumber, std::string& errorMessage);
+    bool archiveCustomerCore(const std::string& customerId, std::string& errorMessage);
+    bool restoreRoomCore(const std::string& roomNumber, std::string& errorMessage);
+    bool restoreCustomerCore(const std::string& customerId, std::string& errorMessage);
+    bool deleteRoomCore(const std::string& roomNumber, std::string& errorMessage);
+    bool deleteCustomerCore(const std::string& customerId, std::string& errorMessage);
+
 public:
     HotelManager();
 
@@ -64,6 +85,7 @@ public:
     const std::vector<std::shared_ptr<Customer>>& getCustomers() const;
     const std::vector<std::shared_ptr<Booking>>& getBookings() const;
     const std::vector<std::shared_ptr<Invoice>>& getInvoices() const;
+    const std::vector<RoomMaintenance>& getRoomMaintenances() const;
 
     // Modified: Moved internal add methods to public so DataManager can populate entities when loading database
     
@@ -89,6 +111,9 @@ public:
     std::vector<std::shared_ptr<Booking>> getTodayCheckOuts() const;
     BookingState getBookingState(const Booking &booking) const;
     std::vector<std::shared_ptr<Room>> getRoomsByOccupancy(bool occupied) const;
+    bool isRoomUnderMaintenance(const std::string& roomNumber, const std::string& date) const;
+    bool hasRoomMaintenanceConflict(const std::string& roomNumber, const std::string& startDate,
+                                    const std::string& endDate, std::string& errorMessage) const;
 
     // Added: Filter bookings by their specific operational status for tabbed interface sub-pages
     std::vector<std::shared_ptr<Booking>> getBookingsByStatus(BookingState state) const;
@@ -109,7 +134,8 @@ public:
         const std::string& id,
         const std::string& name,
         const std::string& phone,
-        std::string& errorMessage
+        std::string& errorMessage,
+        std::string* conflictingCustomerId = nullptr
         );
 
     bool resolveCustomerForBooking(
@@ -152,12 +178,16 @@ public:
         std::string& errorMessage
         );
 
-    // Maintenance/inspection state only; guest occupancy is derived from bookings.
+    // Legacy permanent availability switch. New maintenance should use a dated interval below.
     bool setRoomAvailability(
         const std::string& roomNumber,
         bool available,
         std::string& errorMessage
         );
+    bool scheduleRoomMaintenance(const std::string& roomNumber, const std::string& startDate,
+                                 const std::string& endDate, const std::string& note,
+                                 std::string& errorMessage);
+    bool cancelRoomMaintenance(const std::string& maintenanceId, std::string& errorMessage);
 
     bool archiveRoom(const std::string& roomNumber, std::string& errorMessage);
     bool archiveCustomer(const std::string& customerId, std::string& errorMessage);
@@ -191,6 +221,9 @@ public:
         const std::string& paymentDate,
         std::string& errorMessage
     );
+    bool restoreRoomMaintenanceFromDatabase(const std::string& maintenanceId, const std::string& roomNumber,
+                                            const std::string& startDate, const std::string& endDate,
+                                            const std::string& note, std::string& errorMessage);
     // Added: Soft-cancels a reservation by changing its status and releasing the assigned room back to inventory
     bool cancelBooking(const std::string& bookingId, std::string& errorMessage);
 

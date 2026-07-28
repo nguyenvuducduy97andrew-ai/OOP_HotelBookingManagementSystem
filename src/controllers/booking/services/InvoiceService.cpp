@@ -1,7 +1,7 @@
 #include "InvoiceService.h"
 
 #include "Booking.h"
-#include "HotelManager.h"
+#include "../../hotel/HotelManager.h"
 #include "Invoice.h"
 
 #include <QDate>

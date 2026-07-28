@@ -403,7 +403,9 @@ QWidget* RoomPageWidget::createRoomCard(const std::shared_ptr<Room>& room) {
     const bool isOccupied = isRoomOccupied(room->getRoomNumber());
 
     auto* statusBadge = new QLabel(card);
-    if (!room->getIsAvailable()) {
+    const bool isUnderMaintenance = !room->getIsAvailable()
+        || m_manager->isRoomUnderMaintenance(room->getRoomNumber(), QDate::currentDate().toString(Qt::ISODate).toStdString());
+    if (isUnderMaintenance) {
         statusBadge->setText("Maintenance");
         statusBadge->setStyleSheet("background-color: #FEF2F2; color: #EF4444; border-radius: 4px; padding: 2px 6px; font-size: 10px; font-weight: 700;");
     } else if (isOccupied) {
@@ -414,7 +416,7 @@ QWidget* RoomPageWidget::createRoomCard(const std::shared_ptr<Room>& room) {
         statusBadge->setStyleSheet("background-color: #ECFDF5; color: #05CD99; border-radius: 4px; padding: 2px 6px; font-size: 10px; font-weight: 700;");
     }
 
-    auto* priceLabel = new QLabel(formatMoney(room->getBasePrice()) + "đ", card);
+    auto* priceLabel = new QLabel(formatMoney(room->getBasePrice()) + " VND", card);
     priceLabel->setStyleSheet("font-size: 13px; font-weight: 800; color: #005BFE;");
 
     rightCol->addWidget(statusBadge);
@@ -513,7 +515,9 @@ void RoomPageWidget::updateDetailPanel(const std::shared_ptr<Room>& room) {
         }
     }
 
-    if (!room->getIsAvailable()) {
+    const bool isUnderMaintenance = !room->getIsAvailable()
+        || m_manager->isRoomUnderMaintenance(room->getRoomNumber(), QDate::currentDate().toString(Qt::ISODate).toStdString());
+    if (isUnderMaintenance) {
         m_detailStatusLabel->setText("Maintenance");
         m_detailStatusLabel->setObjectName("detailBadgeMaint");
         m_detailDescLabel->setText("This room is currently under scheduled maintenance. Please do not assign guests at this time.");
@@ -542,7 +546,7 @@ void RoomPageWidget::updateDetailPanel(const std::shared_ptr<Room>& room) {
         m_detailSizeLabel->setText("📏 35m²");
         m_detailBedLabel->setText("🛏 King Bed");
         m_detailGuestLabel->setText("👤 2 Guests");
-        m_detailExtraFeeLabel->setText(QString("💰 Mini Bar Fee: %1đ").arg(formatMoney(room->getExtraFeeAmount())));
+        m_detailExtraFeeLabel->setText(QString("💰 Mini Bar Fee: %1 VND").arg(formatMoney(room->getExtraFeeAmount())));
         m_detailExtraFeeLabel->setVisible(true);
         m_detailImageLabel->setText("✨ Deluxe Room Image Placeholder");
         m_detailImageLabel->setStyleSheet("background-color: #E0F2FE; border-radius: 14px; font-weight: bold; color: #0284C7;");
@@ -550,7 +554,7 @@ void RoomPageWidget::updateDetailPanel(const std::shared_ptr<Room>& room) {
         m_detailSizeLabel->setText("📏 55m²");
         m_detailBedLabel->setText("🛏 Super King Bed");
         m_detailGuestLabel->setText("👤 4 Guests");
-        m_detailExtraFeeLabel->setText(QString("👑 Premium Service Fee: %1đ").arg(formatMoney(room->getExtraFeeAmount())));
+        m_detailExtraFeeLabel->setText(QString("👑 Premium Service Fee: %1 VND").arg(formatMoney(room->getExtraFeeAmount())));
         m_detailExtraFeeLabel->setVisible(true);
         m_detailImageLabel->setText("👑 Suite Room Image Placeholder");
         m_detailImageLabel->setStyleSheet("background-color: #FEF3C7; border-radius: 14px; font-weight: bold; color: #D97706;");
@@ -605,6 +609,16 @@ void RoomPageWidget::onAddRoomClicked() {
             if (room) {
                 room->setExtraFeeAmount(extraFee);
             }
+            if (dialog.shouldScheduleMaintenance() &&
+                !m_manager->scheduleRoomMaintenance(roomNum,
+                    dialog.getMaintenanceStartDate().toStdString(),
+                    dialog.getMaintenanceEndDate().toStdString(),
+                    dialog.getMaintenanceNote().toStdString(), errMsg)) {
+                std::string discardError;
+                m_manager->deleteRoom(roomNum, discardError);
+                QMessageBox::warning(this, "Maintenance schedule conflict", QString::fromStdString(errMsg));
+                return;
+            }
             // Modified and optimized performance: commit room creation immediately and recover the last saved state on failure.
             if (!DataManager::getInstance().commitChanges(*m_manager)) {
                 refreshData();
@@ -641,10 +655,24 @@ void RoomPageWidget::onEditRoomClicked() {
     if (dialog.exec() == QDialog::Accepted) {
         double newPrice = dialog.getBasePrice();
         double newExtraFee = dialog.getExtraFee();
-        bool newIsAvailable = dialog.getIsAvailable();
+        const bool scheduleMaintenance = dialog.shouldScheduleMaintenance();
 
+        std::string errorMessage;
+        if (scheduleMaintenance && !m_manager->scheduleRoomMaintenance(roomNum,
+                dialog.getMaintenanceStartDate().toStdString(),
+                dialog.getMaintenanceEndDate().toStdString(),
+                dialog.getMaintenanceNote().toStdString(), errorMessage)) {
+            QMessageBox::warning(this, "Maintenance schedule conflict", QString::fromStdString(errorMessage));
+            return;
+        }
+        if (!scheduleMaintenance && !room->getIsAvailable() &&
+            !m_manager->setRoomAvailability(roomNum, true, errorMessage)) {
+            QMessageBox::warning(this, "Room status unavailable", QString::fromStdString(errorMessage));
+            return;
+        }
+
+        // Modified and optimized performance: schedule maintenance by date range so future bookings remain valid outside the closure interval.
         room->setBasePrice(newPrice);
-        room->setIsAvailable(newIsAvailable);
         if (type == RoomType::Deluxe) {
             auto dlx = std::dynamic_pointer_cast<DeluxeRoom>(room);
             if (dlx) dlx->setMiniBarFee(newExtraFee);

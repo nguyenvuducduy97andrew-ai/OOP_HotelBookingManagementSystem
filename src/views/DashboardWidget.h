@@ -30,20 +30,20 @@ private:
     Ui::DashboardWidget *ui;
     HotelManager* m_manager;
 private slots:
-    // Hàm này sẽ được gọi mỗi khi timer hết thời gian
+    // Called whenever the timer interval elapses.
     void updateDateTime();
     void exportReport();
     void onBookingHistoryLinkClicked(const QUrl& url);
 
 private:
-    // Khai báo timer tại đây
+    // Timer declaration.
     QTimer *dateTimeTimer;
 
-    // ---- Phần mới thêm cho nội dung dashboard ----
-    void populateData();     // đổ dữ liệu vào StatCard / MiniCard / RoomListItem
-    void buildTrendChart();  // tạo QChartView và nhét vào trendChartHost
-    void buildBarChart();    // tạo QChartView và nhét vào barChartHost
-    void applyStyle();       // style theme sáng cho phần thân dashboard
+    // ---- Dashboard content helpers ----
+    void populateData();     // Populate StatCard, MiniCard, and RoomListItem widgets.
+    void buildTrendChart();  // Create a QChartView inside trendChartHost.
+    void buildBarChart();    // Create a QChartView inside barChartHost.
+    void applyStyle();       // Apply the light theme to the dashboard body.
     void refreshBookingHistoryView();
     QString buildBookingHistoryHtml() const;
     QString buildReportHtml() const;

@@ -10,6 +10,7 @@
 #include <QMessageBox>
 #include <QStyledItemDelegate>
 #include <QTableWidget>
+#include <QFont>
 #include <QPainter>
 #include <QMouseEvent>
 #include <QEvent>
@@ -300,8 +301,12 @@ void CustomerPageWidget::onAddCustomerClicked() {
     std::string name = dialog.getCustomerName().toStdString();
     std::string phone = dialog.getCustomerPhone().toStdString();
     std::string errorMessage;
+    std::string conflictingCustomerId;
 
-    if (!m_manager->registerCustomer(id, name, phone, errorMessage)) {
+    if (!m_manager->registerCustomer(id, name, phone, errorMessage, &conflictingCustomerId)) {
+        if (!conflictingCustomerId.empty()) {
+            highlightConflictingCustomer(QString::fromStdString(conflictingCustomerId));
+        }
         QMessageBox::critical(this, "Add Customer Failed", QString::fromStdString(errorMessage));
         return;
     }
@@ -427,6 +432,51 @@ void CustomerPageWidget::updateActionButtons() {
 
 void CustomerPageWidget::refreshData() {
     refreshDataInternal();
+}
+
+void CustomerPageWidget::highlightConflictingCustomer(const QString& customerId)
+{
+    if (!m_manager || customerId.isEmpty()) {
+        return;
+    }
+
+    const auto customer = m_manager->findCustomerById(customerId.toStdString());
+    if (!customer) {
+        return;
+    }
+
+    // Modified and optimized performance: reveal the exact existing customer that blocks a duplicate phone or identity value.
+    m_searchEdit->clear();
+    m_selectedStatusFilter = customer->isArchived() ? "Archived" : "Active";
+    m_filterActiveBtn->setProperty("active", !customer->isArchived());
+    m_filterArchivedBtn->setProperty("active", customer->isArchived());
+    m_filterActiveBtn->style()->unpolish(m_filterActiveBtn);
+    m_filterActiveBtn->style()->polish(m_filterActiveBtn);
+    m_filterArchivedBtn->style()->unpolish(m_filterArchivedBtn);
+    m_filterArchivedBtn->style()->polish(m_filterArchivedBtn);
+    refreshDataInternal();
+
+    for (int row = 0; row < m_tableWidget->rowCount(); ++row) {
+        const auto* idItem = m_tableWidget->item(row, 0);
+        if (!idItem || idItem->text() != customerId) {
+            continue;
+        }
+
+        for (int column = 0; column < m_tableWidget->columnCount(); ++column) {
+            if (auto* item = m_tableWidget->item(row, column)) {
+                item->setBackground(QColor("#FFF3CD"));
+                item->setForeground(QColor("#7A4B00"));
+                QFont font = item->font();
+                font.setBold(true);
+                item->setFont(font);
+            }
+        }
+        m_tableWidget->selectRow(row);
+        m_tableWidget->setCurrentCell(row, 0);
+        m_tableWidget->scrollToItem(m_tableWidget->item(row, 0), QAbstractItemView::PositionAtCenter);
+        m_tableWidget->setFocus();
+        return;
+    }
 }
 
 void CustomerPageWidget::refreshDataInternal() {

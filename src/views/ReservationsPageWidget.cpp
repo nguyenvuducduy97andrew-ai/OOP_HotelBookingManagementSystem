@@ -222,7 +222,7 @@ void ReservationsPageWidget::setupUI() {
     headerRow->addWidget(m_addBookingBtn);
     mainLayout->addLayout(headerRow);
 
-    // Legend Row (Chú thích các biểu tượng thao tác)
+    // Legend row (explains the action icons).
     auto* legendRow = new QHBoxLayout();
     legendRow->setSpacing(12);
     legendRow->setAlignment(Qt::AlignLeft);
@@ -298,7 +298,21 @@ void ReservationsPageWidget::onFilterStatusChanged(int index) {
 }
 
 void ReservationsPageWidget::onAddBookingClicked() {
+    openReservationDialog();
+}
+
+void ReservationsPageWidget::startNewReservationForRoom(const QString& roomNumber) {
+    // Modified and optimized performance: accept a Room Status selection through a typed navigation boundary instead of duplicating booking logic.
+    openReservationDialog(roomNumber);
+}
+
+void ReservationsPageWidget::openReservationDialog(const QString& preselectedRoomNumber) {
     ReservationDialog dialog(m_manager, this);
+    if (!preselectedRoomNumber.isEmpty() && !dialog.selectRoom(preselectedRoomNumber.toStdString())) {
+        QMessageBox::warning(this, "Room unavailable", "The selected room is no longer available for the default reservation dates.");
+        emit roomStatusBookingCancelled();
+        return;
+    }
     if (dialog.exec() == QDialog::Accepted) {
         std::string custId = dialog.getCustomerId().toStdString();
         std::string name = dialog.getCustomerName().toStdString();
@@ -320,10 +334,14 @@ void ReservationsPageWidget::onAddBookingClicked() {
                 return;
             }
             refreshData();
+            emit bookingChanged();
             CustomSuccessDialog("Reservation completed successfully.", this).exec();
         } else {
             QMessageBox::critical(this, "Booking error", QString::fromStdString(errMsg));
         }
+    } else if (!preselectedRoomNumber.isEmpty()) {
+        // Modified and optimized performance: preserve the Room Status origin so a cancel/back action returns to the selected-room workflow.
+        emit roomStatusBookingCancelled();
     }
 }
 

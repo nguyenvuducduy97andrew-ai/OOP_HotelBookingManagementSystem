@@ -2,7 +2,7 @@
 
 #include "Booking.h"
 #include "Customer.h"
-#include "HotelManager.h"
+#include "../../hotel/HotelManager.h"
 #include "Room.h"
 #include "RoomAvailabilityService.h"
 
@@ -61,7 +61,7 @@ bool BookingService::validateBookingInput(
         return false;
     }
     if (!room->getIsAvailable()) {
-        errorMessage = "Room is currently unavailable for booking.";
+        errorMessage = "Room is permanently unavailable for booking.";
         return false;
     }
     if (room->isArchived()) {
@@ -142,7 +142,7 @@ bool BookingService::updateBooking(
         return false;
     }
     if (!room->getIsAvailable()) {
-        errorMessage = "Room is currently unavailable for booking.";
+        errorMessage = "Room is permanently unavailable for booking.";
         return false;
     }
     if (room->isArchived()) {

@@ -15,19 +15,19 @@
   </property>
   <property name="styleSheet">
    <string notr="true">
-/* Nền dialog */
+/* Dialog background */
 QDialog#BookingDialog {
     background-color: #F1F5F9;
 }
 
-/* Card trắng bo góc */
+/* Rounded white card */
 QFrame#cardFrame {
     background-color: #FFFFFF;
     border-radius: 16px;
     border: 1px solid #E2E8F0;
 }
 
-/* Tiêu đề form */
+/* Form title */
 QLabel#lblTitle {
     font-size: 24px;
     font-weight: bold;
@@ -40,7 +40,7 @@ QLabel#lblTitle {
 }
 
 QLabel#lblSubtitle {
-    font-size: 13px; /* Đã tăng size lúc trước bằng C++ */
+    font-size: 13px; /* Increased previously in C++. */
     font-weight: normal;
     color: #94A3B8;
     background: transparent;
@@ -49,14 +49,14 @@ QLabel#lblSubtitle {
     padding: 0px;
 }
 
-/* Đường kẻ ngang */
+/* Horizontal separator */
 QFrame#headerLine {
     background-color: #E2E8F0;
     max-height: 1px;
     border: none;
 }
 
-/* Label cho các field */
+/* Field labels */
 QLabel#lblFullname, QLabel#lblIdNumber, QLabel#lblPhoneNumber, QLabel#lblDateIn, QLabel#lblDateOut {
     font-size: 13px;
     font-weight: 600;
@@ -66,7 +66,7 @@ QLabel#lblFullname, QLabel#lblIdNumber, QLabel#lblPhoneNumber, QLabel#lblDateIn,
     padding-left: 2px;
 }
 
-/* Ô nhập liệu */
+/* Input fields */
 QLineEdit, QDateTimeEdit {
     background-color: #F8FAFC;
     border: 1.5px solid #E2E8F0;
@@ -86,13 +86,13 @@ QLineEdit:hover, QDateTimeEdit:hover {
     border: 1.5px solid #CBD5E1;
 }
 
-/* Ẩn nút spinner của DateTimeEdit */
+/* Hide DateTimeEdit spinner buttons */
 QDateTimeEdit::up-button, QDateTimeEdit::down-button {
     width: 0px;
     border: none;
 }
 
-/* Nút Cancel */
+/* Cancel button */
 QPushButton#btnCancel {
     background-color: #F1F5F9;
     color: #64748B;
@@ -114,7 +114,7 @@ QPushButton#btnCancel:pressed {
     background-color: #CBD5E1;
 }
 
-/* Nút Confirm */
+/* Confirm button */
 QPushButton#btnConfirm {
     background-color: #005BFE;
     color: #FFFFFF;

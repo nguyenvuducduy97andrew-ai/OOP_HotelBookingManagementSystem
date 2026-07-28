@@ -1,7 +1,7 @@
 #include "RoomAvailabilityService.h"
 
 #include "Booking.h"
-#include "HotelManager.h"
+#include "../../hotel/HotelManager.h"
 #include "Room.h"
 
 #include <QDate>
@@ -22,6 +22,10 @@ bool RoomAvailabilityService::isRoomFreeForDates(
     const QDate requestedCheckIn = QDate::fromString(QString::fromStdString(checkInDate), Qt::ISODate);
     const QDate requestedCheckOut = QDate::fromString(QString::fromStdString(checkOutDate), Qt::ISODate);
     const QDate today = QDate::currentDate();
+
+    if (m_hotelManager.hasRoomMaintenanceConflict(roomNumber, checkInDate, checkOutDate, errorMessage)) {
+        return false;
+    }
 
     for (const auto& booking : m_hotelManager.getBookings()) {
         if (!booking || booking->isCancelled() || booking->isDeleted()) {

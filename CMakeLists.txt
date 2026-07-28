@@ -12,7 +12,7 @@ file(MAKE_DIRECTORY "${CMAKE_SOURCE_DIR}/data")
 find_package(Qt6 REQUIRED COMPONENTS Core Sql Widgets Charts)
 
 # Modified and optimized performance: reconfigure automatically when a new controller or view source file is added.
-file(GLOB SOURCE_FILES CONFIGURE_DEPENDS
+file(GLOB_RECURSE SOURCE_FILES CONFIGURE_DEPENDS
     "src/*.cpp" "src/*.h"
     "src/models/*.cpp" "src/models/*.h"
     "src/controllers/*.cpp" "src/controllers/*.h"
@@ -26,6 +26,14 @@ add_executable(HotelBookingManagement ${SOURCE_FILES} ${VIEW_HEADERS})
 target_include_directories(HotelBookingManagement PRIVATE
     src/models
     src/controllers
+    src/controllers/hotel
+    src/controllers/booking
+    src/controllers/booking/services
+    src/controllers/customer
+    src/controllers/customer/services
+    src/controllers/room
+    src/controllers/room/services
+    src/controllers/report
     src/database
     src/views
 )

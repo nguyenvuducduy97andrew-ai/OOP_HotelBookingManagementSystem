@@ -1,12 +1,13 @@
 #include "HotelManager.h"
-#include "BookingService.h"
-#include "InvoiceService.h"
-#include "ReservationService.h"
+#include "../booking/BookingManager.h"
+#include "../customer/CustomerManager.h"
+#include "../room/RoomManager.h"
 #include <QDate>
 #include <QList>
 #include <QRegularExpression>
 #include <QString>
 #include <QStringList>
+#include <QUuid>
 #include <algorithm>
 #include <cctype>
 #include <utility>
@@ -142,6 +143,7 @@ void HotelManager::clearAll()
     customers.clear();
     bookings.clear();
     invoices.clear();
+    roomMaintenances.clear();
 }
 
 // =========================
@@ -166,6 +168,11 @@ const std::vector<std::shared_ptr<Booking>> &HotelManager::getBookings() const
 const std::vector<std::shared_ptr<Invoice>> &HotelManager::getInvoices() const
 {
     return invoices;
+}
+
+const std::vector<RoomMaintenance>& HotelManager::getRoomMaintenances() const
+{
+    return roomMaintenances;
 }
 
 // =========================
@@ -561,7 +568,7 @@ std::string HotelManager::nextInvoiceId() const
 // Use-case methods
 // =========================
 
-bool HotelManager::registerRoom(
+bool HotelManager::registerRoomCore(
     RoomType kind,
     const std::string &roomNumber,
     double baseRate,
@@ -583,7 +590,7 @@ bool HotelManager::registerRoom(
     return true;
 }
 
-bool HotelManager::registerCustomer(
+bool HotelManager::registerCustomerCore(
     const std::string &id,
     const std::string &name,
     const std::string &phone,
@@ -603,7 +610,7 @@ bool HotelManager::registerCustomer(
     return true;
 }
 
-bool HotelManager::resolveCustomerForBooking(
+bool HotelManager::resolveCustomerForBookingCore(
     const std::string &id,
     const std::string &name,
     const std::string &phone,
@@ -634,6 +641,53 @@ bool HotelManager::resolveCustomerForBooking(
     return true;
 }
 
+bool HotelManager::isRoomUnderMaintenance(const std::string& roomNumber, const std::string& date) const
+{
+    return std::any_of(roomMaintenances.cbegin(), roomMaintenances.cend(),
+        [&roomNumber, &date](const RoomMaintenance& maintenance) {
+            return maintenance.getRoomNumber() == roomNumber
+                && maintenance.getStartDate() <= date
+                && date < maintenance.getEndDate();
+        });
+}
+
+bool HotelManager::hasRoomMaintenanceConflict(const std::string& roomNumber,
+                                              const std::string& startDate,
+                                              const std::string& endDate,
+                                              std::string& errorMessage) const
+{
+    for (const RoomMaintenance& maintenance : roomMaintenances) {
+        if (maintenance.getRoomNumber() != roomNumber) {
+            continue;
+        }
+
+        // Modified and optimized performance: use the same half-open interval rule as bookings, allowing a check-in on the maintenance end date.
+        if (startDate < maintenance.getEndDate() && maintenance.getStartDate() < endDate) {
+            errorMessage = "Room " + roomNumber + " is under maintenance from "
+                + maintenance.getStartDate() + " to " + maintenance.getEndDate() + ".";
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool HotelManager::registerRoom(RoomType kind, const std::string& roomNumber, double baseRate, std::string& errorMessage)
+{
+    // Modified and optimized performance: keep the hotel facade one level above the room workflow manager.
+    return RoomManager(*this).registerRoom(kind, roomNumber, baseRate, errorMessage);
+}
+
+bool HotelManager::registerCustomer(const std::string& id, const std::string& name, const std::string& phone, std::string& errorMessage, std::string* conflictingCustomerId)
+{
+    return CustomerManager(*this).registerCustomer(id, name, phone, errorMessage, conflictingCustomerId);
+}
+
+bool HotelManager::resolveCustomerForBooking(const std::string& id, const std::string& name, const std::string& phone, std::string& errorMessage)
+{
+    return CustomerManager(*this).resolveForBooking(id, name, phone, errorMessage);
+}
+
 bool HotelManager::createBooking(
     const std::string &customerId,
     const std::string &roomNumber,
@@ -642,7 +696,7 @@ bool HotelManager::createBooking(
     std::string &errorMessage)
 {
     // Modified and optimized performance: delegate booking creation to the focused service while preserving the existing UI-facing API.
-    return ReservationService(*this).createBooking(customerId, roomNumber, checkIn, checkOut, errorMessage);
+    return BookingManager(*this).createBooking(customerId, roomNumber, checkIn, checkOut, errorMessage);
 }
 
 bool HotelManager::updateBooking(
@@ -653,7 +707,7 @@ bool HotelManager::updateBooking(
     const std::string &checkOutDate,
     std::string &errorMessage)
 {
-    return ReservationService(*this).updateBooking(
+    return BookingManager(*this).updateBooking(
         bookingId, customerId, roomNumber, checkInDate, checkOutDate, errorMessage);
 }
 
@@ -662,7 +716,7 @@ bool HotelManager::completeBooking(
     const std::string &actualCheckoutDate,
     std::string &errorMessage)
 {
-    return ReservationService(*this).completeBooking(bookingId, actualCheckoutDate, errorMessage);
+    return BookingManager(*this).completeBooking(bookingId, actualCheckoutDate, errorMessage);
 }
 
 bool HotelManager::createInvoice( // In practice, checkout first, then create invoice for completed booking
@@ -674,10 +728,10 @@ bool HotelManager::createInvoice( // In practice, checkout first, then create in
     std::string &errorMessage)
 {
     // Modified and optimized performance: keep invoice validation and creation isolated from the in-memory hotel store.
-    return ReservationService(*this).createInvoice(invoiceId, bookingId, taxRate, nights, paymentDate, errorMessage);
+    return BookingManager(*this).createInvoice(invoiceId, bookingId, taxRate, nights, paymentDate, errorMessage);
 }
 
-bool HotelManager::setRoomAvailability(
+bool HotelManager::setRoomAvailabilityCore(
     const std::string &roomNumber,
     bool available,
     std::string &errorMessage)
@@ -699,9 +753,11 @@ bool HotelManager::setRoomAvailability(
             if (!booking->getRoom() || booking->getRoom()->getRoomNumber() != roomNumber)
                 continue;
 
-            if (getBookingState(*booking) == BookingState::ACTIVE)
+            const BookingState state = getBookingState(*booking);
+            // Modified and optimized performance: block maintenance whenever the room has an unfinished booking, including future arrivals.
+            if (state == BookingState::UPCOMING || state == BookingState::ACTIVE)
             {
-                errorMessage = "Cannot mark room unavailable while a guest is checked in";
+                errorMessage = "Cannot place this room under maintenance while it has an active or upcoming booking.";
                 return false;
             }
         }
@@ -712,7 +768,7 @@ bool HotelManager::setRoomAvailability(
 }
 
 // Added: Archive a room or customer to hide them from active listings without deleting historical data
-bool HotelManager::archiveRoom(const std::string &roomNumber, std::string &errorMessage)
+bool HotelManager::archiveRoomCore(const std::string &roomNumber, std::string &errorMessage)
 {
     auto room = findRoomByNumber(roomNumber);
     if (!room)
@@ -741,7 +797,7 @@ bool HotelManager::archiveRoom(const std::string &roomNumber, std::string &error
     return true;
 }
 
-bool HotelManager::archiveCustomer(const std::string &customerId, std::string &errorMessage)
+bool HotelManager::archiveCustomerCore(const std::string &customerId, std::string &errorMessage)
 {
     auto customer = findCustomerById(customerId);
     if (!customer)
@@ -771,7 +827,7 @@ bool HotelManager::archiveCustomer(const std::string &customerId, std::string &e
 }
 
 // Added: Unarchive a room or customer to restore them to active listings
-bool HotelManager::restoreRoom(const std::string &roomNumber, std::string &errorMessage)
+bool HotelManager::restoreRoomCore(const std::string &roomNumber, std::string &errorMessage)
 {
     auto room = findRoomByNumber(roomNumber);
     if (!room)
@@ -784,7 +840,7 @@ bool HotelManager::restoreRoom(const std::string &roomNumber, std::string &error
     return true;
 }
 
-bool HotelManager::restoreCustomer(const std::string &customerId, std::string &errorMessage)
+bool HotelManager::restoreCustomerCore(const std::string &customerId, std::string &errorMessage)
 {
     auto customer = findCustomerById(customerId);
     if (!customer)
@@ -795,6 +851,107 @@ bool HotelManager::restoreCustomer(const std::string &customerId, std::string &e
 
     customer->setArchived(false);
     return true;
+}
+
+bool HotelManager::scheduleRoomMaintenanceCore(const std::string& roomNumber,
+                                               const std::string& startDate,
+                                               const std::string& endDate,
+                                               const std::string& note,
+                                               std::string& errorMessage)
+{
+    const auto room = findRoomByNumber(roomNumber);
+    if (!room) {
+        errorMessage = "Room not found.";
+        return false;
+    }
+    if (room->isArchived()) {
+        errorMessage = "Cannot schedule maintenance for an archived room.";
+        return false;
+    }
+
+    const QDate start = QDate::fromString(QString::fromStdString(startDate), Qt::ISODate);
+    const QDate end = QDate::fromString(QString::fromStdString(endDate), Qt::ISODate);
+    if (!start.isValid() || !end.isValid() || end <= start) {
+        errorMessage = "Maintenance end date must be after the start date.";
+        return false;
+    }
+
+    if (hasRoomMaintenanceConflict(roomNumber, startDate, endDate, errorMessage)) {
+        return false;
+    }
+
+    for (const auto& booking : bookings) {
+        if (!booking || booking->isCancelled() || booking->isDeleted() ||
+            !booking->getRoom() || booking->getRoom()->getRoomNumber() != roomNumber ||
+            getBookingState(*booking) == BookingState::COMPLETED) {
+            continue;
+        }
+
+        if (startDate < booking->getCheckOutDate() && booking->getCheckInDate() < endDate) {
+            errorMessage = "Maintenance conflicts with booking " + booking->getBookingId()
+                + " (" + booking->getCheckInDate() + " to " + booking->getCheckOutDate()
+                + "). Reassign, reschedule, or cancel that booking first.";
+            return false;
+        }
+    }
+
+    // Modified and optimized performance: represent maintenance as a persisted date interval instead of a room-wide boolean lock.
+    const std::string maintenanceId = "MTN-" + QUuid::createUuid().toString(QUuid::WithoutBraces).toStdString();
+    roomMaintenances.emplace_back(maintenanceId, roomNumber, startDate, endDate, note);
+    return true;
+}
+
+bool HotelManager::cancelRoomMaintenanceCore(const std::string& maintenanceId, std::string& errorMessage)
+{
+    const auto matchingMaintenance = std::find_if(roomMaintenances.cbegin(), roomMaintenances.cend(),
+        [&maintenanceId](const RoomMaintenance& maintenance) {
+            return maintenance.getMaintenanceId() == maintenanceId;
+        });
+    if (matchingMaintenance == roomMaintenances.cend()) {
+        errorMessage = "Maintenance schedule not found.";
+        return false;
+    }
+
+    // Modified and optimized performance: remove one maintenance interval without changing the room's permanent availability setting.
+    roomMaintenances.erase(matchingMaintenance);
+    return true;
+}
+
+bool HotelManager::setRoomAvailability(const std::string& roomNumber, bool available, std::string& errorMessage)
+{
+    return RoomManager(*this).setAvailability(roomNumber, available, errorMessage);
+}
+
+bool HotelManager::scheduleRoomMaintenance(const std::string& roomNumber, const std::string& startDate,
+                                           const std::string& endDate, const std::string& note,
+                                           std::string& errorMessage)
+{
+    return RoomManager(*this).scheduleMaintenance(roomNumber, startDate, endDate, note, errorMessage);
+}
+
+bool HotelManager::cancelRoomMaintenance(const std::string& maintenanceId, std::string& errorMessage)
+{
+    return RoomManager(*this).cancelMaintenance(maintenanceId, errorMessage);
+}
+
+bool HotelManager::archiveRoom(const std::string& roomNumber, std::string& errorMessage)
+{
+    return RoomManager(*this).archiveRoom(roomNumber, errorMessage);
+}
+
+bool HotelManager::restoreRoom(const std::string& roomNumber, std::string& errorMessage)
+{
+    return RoomManager(*this).restoreRoom(roomNumber, errorMessage);
+}
+
+bool HotelManager::archiveCustomer(const std::string& customerId, std::string& errorMessage)
+{
+    return CustomerManager(*this).archiveCustomer(customerId, errorMessage);
+}
+
+bool HotelManager::restoreCustomer(const std::string& customerId, std::string& errorMessage)
+{
+    return CustomerManager(*this).restoreCustomer(customerId, errorMessage);
 }
 
 //Data Manager integration methods for persistence
@@ -977,16 +1134,62 @@ bool HotelManager::restoreInvoiceFromDatabase(
     addInvoice(invoice);
     return true;
 }
+
+bool HotelManager::restoreRoomMaintenanceFromDatabase(const std::string& maintenanceId,
+                                                      const std::string& roomNumber,
+                                                      const std::string& startDate,
+                                                      const std::string& endDate,
+                                                      const std::string& note,
+                                                      std::string& errorMessage)
+{
+    if (maintenanceId.empty()) {
+        errorMessage = "Persisted maintenance ID is empty.";
+        return false;
+    }
+    if (!findRoomByNumber(roomNumber)) {
+        errorMessage = "Persisted maintenance references a missing room.";
+        return false;
+    }
+
+    const QDate start = QDate::fromString(QString::fromStdString(startDate), Qt::ISODate);
+    const QDate end = QDate::fromString(QString::fromStdString(endDate), Qt::ISODate);
+    if (!start.isValid() || !end.isValid() || end <= start) {
+        errorMessage = "Persisted maintenance dates are invalid.";
+        return false;
+    }
+
+    if (std::any_of(roomMaintenances.cbegin(), roomMaintenances.cend(),
+                    [&maintenanceId](const RoomMaintenance& maintenance) {
+                        return maintenance.getMaintenanceId() == maintenanceId;
+                    })) {
+        errorMessage = "Duplicate persisted maintenance ID: " + maintenanceId;
+        return false;
+    }
+
+    roomMaintenances.emplace_back(maintenanceId, roomNumber, startDate, endDate, note);
+    return true;
+}
+
 bool HotelManager::cancelBooking(const std::string &bookingId, std::string &errorMessage)
 {
-    return ReservationService(*this).cancelBooking(bookingId, errorMessage);
+    return BookingManager(*this).cancelBooking(bookingId, errorMessage);
 }
 
 // =========================
 // Delete methods
 // =========================
 // Added: Hard-deletes a room, customer, or invoice only if no active references exist
-bool HotelManager::deleteRoom(const std::string &roomNumber, std::string &errorMessage)
+bool HotelManager::deleteRoom(const std::string& roomNumber, std::string& errorMessage)
+{
+    return RoomManager(*this).deleteRoom(roomNumber, errorMessage);
+}
+
+bool HotelManager::deleteCustomer(const std::string& customerId, std::string& errorMessage)
+{
+    return CustomerManager(*this).deleteCustomer(customerId, errorMessage);
+}
+
+bool HotelManager::deleteRoomCore(const std::string &roomNumber, std::string &errorMessage)
 {
     auto room = findRoomByNumber(roomNumber);
     if (!room)
@@ -1011,7 +1214,7 @@ bool HotelManager::deleteRoom(const std::string &roomNumber, std::string &errorM
     return true;
 }
 
-bool HotelManager::deleteCustomer(const std::string &customerId, std::string &errorMessage)
+bool HotelManager::deleteCustomerCore(const std::string &customerId, std::string &errorMessage)
 {
     auto customer = findCustomerById(customerId);
     if (!customer)

@@ -55,19 +55,19 @@ DashboardWidget::DashboardWidget(HotelManager *manager, QWidget *parent)
 {
     ui->setupUi(this);
 
-    // 1. Khởi tạo timer
+    // 1. Initialize the timer.
     dateTimeTimer = new QTimer(this);
 
-    // 2. Kết nối tín hiệu tới hàm thành viên (cách này sạch và dễ bảo trì)
+    // 2. Connect the signal to a member function for a maintainable update flow.
     connect(dateTimeTimer, &QTimer::timeout, this, &DashboardWidget::updateDateTime);
 
-    // 3. Khởi chạy
+    // 3. Start the timer.
     dateTimeTimer->start(1000);
 
-    // Gọi ngay một lần để hiển thị tức thì
+    // Run once immediately so data is visible without waiting for the first tick.
     updateDateTime();
 
-    // 4. Kết nối tín hiệu combobox lọc thời gian
+    // 4. Connect the time-range filter combo box.
     // Modified and optimized performance: reset history pagination only when its selected time range changes.
     connect(ui->cmbDateRange, &QComboBox::currentIndexChanged, this, [this](int) {
         m_historyPage = 0;
@@ -95,7 +95,7 @@ DashboardWidget::DashboardWidget(HotelManager *manager, QWidget *parent)
         ui->bodyScrollArea->verticalScrollBar()->setSingleStep(18);
     }
 
-    // ---- Phần mới: dựng nội dung dashboard ----
+    // ---- Build dashboard content ----
     populateData();
     buildTrendChart();
     buildBarChart();
@@ -237,8 +237,8 @@ void DashboardWidget::populateData()
     ui->miniCard3->setData("✔", QColor("#F0EBFF"), "Completed", QString::number(completedCount));
     ui->miniCard4->setData("✖", QColor("#FDE8E6"), "Cancelled", QString::number(cancelledCount));
 
-    // ---- danh sách phòng nổi bật ----
-    // 1. Cập nhật tiêu đề theo thời gian lọc
+    // ---- Featured room list ----
+    // 1. Update the title for the selected time range.
     int rangeIndex = ui->cmbDateRange->currentIndex();
     QString rangeText = "this month";
     if (rangeIndex == 0) rangeText = "today";
@@ -248,7 +248,7 @@ void DashboardWidget::populateData()
 
     ui->roomListTitleLabel->setText("Popular Rooms - " + rangeText);
 
-    // 2. Tính số lượng đặt phòng cho từng phòng trong khoảng thời gian đã chọn
+    // 2. Calculate the booking count for each room in the selected period.
     std::map<std::string, int> roomBookingCounts;
     for (const auto& r : m_manager->getRooms()) {
         if (!r || r->isArchived()) continue;
@@ -262,17 +262,17 @@ void DashboardWidget::populateData()
         if (!checkIn.isValid()) continue;
         
         bool match = false;
-        if (rangeIndex == 0) { // Hôm nay
+        if (rangeIndex == 0) { // Today
             match = (checkIn == statsToday);
-        } else if (rangeIndex == 1) { // Tuần này
+        } else if (rangeIndex == 1) { // This week
             int checkInYear = 0;
             int checkInWeek = checkIn.weekNumber(&checkInYear);
             int todayYear = 0;
             int todayWeek = statsToday.weekNumber(&todayYear);
             match = (checkInWeek == todayWeek && checkInYear == todayYear);
-        } else if (rangeIndex == 2) { // Tháng này
+        } else if (rangeIndex == 2) { // This month
             match = (checkIn.month() == statsToday.month() && checkIn.year() == statsToday.year());
-        } else if (rangeIndex == 3) { // Năm nay
+        } else if (rangeIndex == 3) { // This year
             match = (checkIn.year() == statsToday.year());
         }
         
@@ -284,7 +284,7 @@ void DashboardWidget::populateData()
         }
     }
 
-    // 3. Sắp xếp các phòng theo số lượt đặt giảm dần
+    // 3. Sort rooms by booking count in descending order.
     struct RoomStats {
         std::shared_ptr<Room> room;
         int bookingCount;
@@ -297,12 +297,12 @@ void DashboardWidget::populateData()
 
     std::sort(roomStatsList.begin(), roomStatsList.end(), [](const RoomStats& a, const RoomStats& b) {
         if (a.bookingCount != b.bookingCount) {
-            return a.bookingCount > b.bookingCount; // Nhiều nhất lên trước
+            return a.bookingCount > b.bookingCount; // Highest count first.
         }
-        return a.room->getRoomNumber() < b.room->getRoomNumber(); // Trùng thì xếp theo số phòng tăng dần
+        return a.room->getRoomNumber() < b.room->getRoomNumber(); // Use room number as the tie-breaker.
     });
 
-    // 4. Hiển thị top 3 phòng nổi bật
+    // 4. Display the top three featured rooms.
     int numToShow = std::min(3, (int)roomStatsList.size());
     ui->roomItem1->setVisible(numToShow >= 1);
     ui->roomItem2->setVisible(numToShow >= 2);
@@ -320,14 +320,14 @@ void DashboardWidget::populateData()
             .arg(typeLabel);
             
         QString subtitle;
-        QColor badgeColor = QColor("#05CD99"); // Màu xanh lá mặc định
+        QColor badgeColor = QColor("#05CD99"); // Default green.
         
         if (i == 0) {
             subtitle = "Most booked";
         } else if (i == 1) {
             if (numToShow == 2) {
                 subtitle = "Least booked";
-                badgeColor = QColor("#EE5D50"); // Đỏ
+                badgeColor = QColor("#EE5D50"); // Red
             } else {
                 subtitle = "Second most booked";
             }
@@ -335,10 +335,10 @@ void DashboardWidget::populateData()
             bool isLeast = (roomStatsList.size() == 3) || (count == roomStatsList.back().bookingCount);
             if (isLeast) {
                 subtitle = "Least booked";
-                badgeColor = QColor("#EE5D50"); // Đỏ
+                badgeColor = QColor("#EE5D50"); // Red
             } else {
                 subtitle = "Third most booked";
-                badgeColor = QColor("#005BFE"); // Xanh dương
+                badgeColor = QColor("#005BFE"); // Blue
             }
         }
         
@@ -474,7 +474,7 @@ void DashboardWidget::buildBarChart()
         }
     }
 
-    auto *set = new QBarSet("Số lượng");
+    auto *set = new QBarSet("Count");
     set->append({(double)standardBookings, (double)deluxeBookings, (double)suiteBookings});
     set->setColor(QColor("#005BFE"));
     set->setBorderColor(Qt::transparent);

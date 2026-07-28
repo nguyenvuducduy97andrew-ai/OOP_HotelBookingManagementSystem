@@ -13,10 +13,13 @@ public:
     explicit ReservationsPageWidget(HotelManager* manager, QWidget *parent = nullptr);
 
     void refreshData();
+    void startNewReservationForRoom(const QString& roomNumber);
 
 signals:
     // Modified and optimized performance: notify dependent dashboard data only after checkout persistence completes.
     void bookingCompleted();
+    void bookingChanged();
+    void roomStatusBookingCancelled();
 
 private slots:
     void onSearchChanged(const QString& text);
@@ -26,6 +29,7 @@ private slots:
 
 private:
     void setupUI();
+    void openReservationDialog(const QString& preselectedRoomNumber = QString());
 
     HotelManager* m_manager;
     QString m_searchQuery;

@@ -1,39 +1,39 @@
-#include "ReservationService.h"
+#include "BookingManager.h"
 
-#include "HotelManager.h"
+#include "../hotel/HotelManager.h"
 
-ReservationService::ReservationService(HotelManager& hotelManager)
+BookingManager::BookingManager(HotelManager& hotelManager)
     : m_bookingWorkflow(hotelManager)
     , m_invoiceWorkflow(hotelManager)
 {
 }
 
-bool ReservationService::createBooking(const std::string& customerId, const std::string& roomNumber,
+bool BookingManager::createBooking(const std::string& customerId, const std::string& roomNumber,
                                        const std::string& checkInDate, const std::string& checkOutDate,
                                        std::string& errorMessage)
 {
     return m_bookingWorkflow.createBooking(customerId, roomNumber, checkInDate, checkOutDate, errorMessage);
 }
 
-bool ReservationService::updateBooking(const std::string& bookingId, const std::string& customerId,
+bool BookingManager::updateBooking(const std::string& bookingId, const std::string& customerId,
                                        const std::string& roomNumber, const std::string& checkInDate,
                                        const std::string& checkOutDate, std::string& errorMessage)
 {
     return m_bookingWorkflow.updateBooking(bookingId, customerId, roomNumber, checkInDate, checkOutDate, errorMessage);
 }
 
-bool ReservationService::cancelBooking(const std::string& bookingId, std::string& errorMessage)
+bool BookingManager::cancelBooking(const std::string& bookingId, std::string& errorMessage)
 {
     return m_bookingWorkflow.cancelBooking(bookingId, errorMessage);
 }
 
-bool ReservationService::completeBooking(const std::string& bookingId, const std::string& checkoutDate,
+bool BookingManager::completeBooking(const std::string& bookingId, const std::string& checkoutDate,
                                          std::string& errorMessage)
 {
     return m_bookingWorkflow.completeBooking(bookingId, checkoutDate, errorMessage);
 }
 
-bool ReservationService::createInvoice(const std::string& invoiceId, const std::string& bookingId,
+bool BookingManager::createInvoice(const std::string& invoiceId, const std::string& bookingId,
                                        double taxRate, int nights, const std::string& paymentDate,
                                        std::string& errorMessage)
 {

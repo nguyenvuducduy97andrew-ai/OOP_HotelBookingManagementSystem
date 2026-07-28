@@ -7,9 +7,9 @@
 class QLabel;
 
 // ---------------------------------------------------------------
-// StatCard: 4 thẻ to trên cùng ("Tổng số phòng", "Tỷ lệ lấp đầy" ...)
-// Constructor không tham số để dùng được với Promoted Widgets.
-// Gọi setData(...) sau khi setupUi() để đổ nội dung.
+// StatCard: the four large cards at the top ("Total rooms", "Occupancy rate", etc.).
+// The default constructor supports promoted widgets.
+// Call setData(...) after setupUi() to populate the content.
 // ---------------------------------------------------------------
 class StatCard : public QFrame
 {
@@ -29,7 +29,7 @@ private:
 };
 
 // ---------------------------------------------------------------
-// MiniCard: 4 thẻ nhỏ ("Sắp tới", "Đang ở", "Hoàn tất", "Đã hủy")
+// MiniCard: the four compact cards ("Upcoming", "In house", "Completed", "Cancelled").
 // ---------------------------------------------------------------
 class MiniCard : public QFrame
 {
@@ -49,7 +49,7 @@ private:
 };
 
 // ---------------------------------------------------------------
-// RoomListItem: một dòng trong "Phòng nổi bật tháng này"
+// RoomListItem: one row in "Featured rooms this month".
 // ---------------------------------------------------------------
 class RoomListItem : public QFrame
 {

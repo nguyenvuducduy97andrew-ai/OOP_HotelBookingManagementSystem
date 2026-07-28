@@ -29,6 +29,7 @@ Upcoming ── check-in date reached ──► Active ── explicit checkout 
 - `Upcoming` and `Active` are determined from the check-in date and current date.
 - A completed booking is removed from the operational Reservations page and shown in Dashboard → Booking History.
 - A room with an active guest cannot be reserved for a stay that covers today until the guest checks out.
+- Maintenance is scheduled as a date interval, not a permanent room flag. A maintenance interval cannot overlap an active or upcoming booking, and booking validation rejects stays that overlap maintenance.
 - A reservation being created or edited must have a checkout date after its check-in date. Restored historical same-day stays remain valid.
 
 ### Checkout and billing
@@ -51,7 +52,7 @@ The customer and reservation dialogs share `src/views/CountryInputRules.h`.
 ## Persistence
 
 - Database file: `data/hotel_data.db`.
-- SQLite schema: `Customer`, `Room`, `Booking`, and `Invoice`.
+- SQLite schema: `Customer`, `Room`, `Booking`, `Invoice`, and `RoomMaintenance`.
 - `Booking.checkedOut` is migrated automatically for legacy data. Historical records whose checkout date has passed, or that already have an invoice, are preserved as completed during the one-time migration.
 - Loading is staged in a temporary `HotelManager`. If any persisted customer, room, booking, or invoice is invalid, loading fails without replacing the currently active in-memory state.
 - Saving uses one SQLite transaction. `saveAll()` rejects broken object graphs and rolls back on failure.
@@ -76,7 +77,12 @@ PDF sections use print-safe grouping so a section heading is kept with its conte
 src/
 ├── main.cpp
 ├── models/        Domain entities and room hierarchy
-├── controllers/   HotelManager data store/facade plus Reservation and reporting services
+├── controllers/
+│   ├── hotel/     HotelManager composition root and compatibility facade
+│   ├── booking/   BookingManager and its booking/invoice/availability services
+│   ├── customer/  CustomerManager and CustomerService
+│   ├── room/      RoomManager and RoomService
+│   └── report/    Read-only report aggregation
 ├── database/      DataManager SQLite load/save and migrations
 └── views/         Qt widgets, dialogs, dashboard, and .ui files
 ```
@@ -104,12 +110,14 @@ Run the executable produced in the build directory. On first launch with an empt
 
 | Class | Responsibility |
 |---|---|
-| `Room`, `StandardRoom`, `DeluxeRoom`, `SuiteRoom` | Polymorphic room hierarchy and pricing |
+| `Room`, `StandardRoom`, `DeluxeRoom`, `SuiteRoom`, `RoomMaintenance` | Polymorphic room hierarchy, pricing, and dated maintenance intervals |
 | `Customer` | Guest identity and contact information |
 | `Booking` | Reservation, cancellation flag, and explicit checkout flag |
 | `Invoice` | Post-checkout billing information |
 | `HotelManager` | In-memory entity collections, lookup/query facade, and compatibility API for views |
-| `ReservationService` | Booking lifecycle, availability, checkout, and checkout-invoice workflow |
+| `BookingManager` | Owns the immediate booking/invoice workflows for reservations and checkout |
+| `CustomerManager` | Owns CustomerService for customer registration, matching, archive, and deletion flows |
+| `RoomManager` | Owns RoomService for room registration, dated maintenance scheduling, archive, and deletion flows |
 | `ReportService` | Builds a sorted Dashboard/PDF reporting snapshot from manager-owned domain data |
 | `DataManager` | SQLite schema, migration, staged load, and transactional save |
 | `RoomFactory` | Room object creation |

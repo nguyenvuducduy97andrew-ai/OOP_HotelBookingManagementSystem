@@ -44,7 +44,7 @@ void BookingDialog::setEditMode(bool isEdit) {
         ui->btnConfirm->setText("Edit");
         ui->btnConfirm->setStyleSheet(
             "QPushButton {"
-            "    background-color: #E53935;" // Đỏ
+            "    background-color: #E53935;" // Red
             "    color: #FFFFFF;"
             "    border-radius: 6px;"
             "}"
@@ -54,11 +54,11 @@ void BookingDialog::setEditMode(bool isEdit) {
     } else {
         this->setWindowTitle("Check-in Form");
         ui->btnConfirm->setText("Confirm");
-        // Reset về CSS mặc định trong file UI bằng cách gán chuỗi rỗng
+        // Restore the default CSS from the UI file by assigning an empty string.
         ui->btnConfirm->setStyleSheet(""); 
     }
     
-    // Reset lại dòng chữ phụ mỗi khi mở form
+    // Reset the helper text whenever the form opens.
     ui->lblSubtitle->setText("Please fill in the guest information below");
     ui->lblSubtitle->setStyleSheet("color: #64748B; font-size: 13px;");
 }

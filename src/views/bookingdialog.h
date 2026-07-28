@@ -28,7 +28,7 @@ private slots:
     void onConfirmClicked();
 
 private:
-    void shake(); // Khôi phục lại dòng này
+    void shake(); // Retained for validation feedback.
     Ui::BookingDialog *ui;
 };
 

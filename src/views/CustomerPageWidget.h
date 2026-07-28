@@ -26,6 +26,7 @@ private:
     void setupUI();
     void setupStyle();
     void refreshDataInternal();
+    void highlightConflictingCustomer(const QString& customerId);
 
     HotelManager* m_manager;
     QLineEdit* m_searchEdit;

@@ -160,7 +160,7 @@ std::string Invoice::generateInvoiceDetails() const {
     auto lockedRoom = lockedBooking->getRoom();
     if (lockedRoom != nullptr) {
         details << "<b>Room Number:</b> " << lockedRoom->getRoomNumber() << "<br>";
-        details << "<b>Base Price per Night:</b> " << formatMoney(lockedRoom->getBasePrice()) << " đ<br>";
+        details << "<b>Base Price per Night:</b> " << formatMoney(lockedRoom->getBasePrice()) << " VND<br>";
     } else {
         details << "<b>Room Info:</b> Not Assigned (or expired)<br>";
     }
@@ -176,11 +176,11 @@ std::string Invoice::generateInvoiceDetails() const {
     double totalAmount = calculateTotal(); // Dynamic calculation
 
     details << "--------------------------------------------------<br>";
-    details << "<b>Subtotal:</b> " << formatMoney(subtotal) << " đ<br>";
+    details << "<b>Subtotal:</b> " << formatMoney(subtotal) << " VND<br>";
     details << "<b>Tax Rate:</b> " << std::fixed << std::setprecision(1) << (taxRate * 100) << "%<br>";
-    details << "<b>Tax Amount:</b> " << formatMoney(taxAmount) << " đ<br>";
+    details << "<b>Tax Amount:</b> " << formatMoney(taxAmount) << " VND<br>";
     details << "--------------------------------------------------<br>";
-    details << "<h2>TOTAL AMOUNT: " << formatMoney(totalAmount) << " đ</h2>";
+    details << "<h2>TOTAL AMOUNT: " << formatMoney(totalAmount) << " VND</h2>";
     details << "=========================================<br>";
 
     return details.str();

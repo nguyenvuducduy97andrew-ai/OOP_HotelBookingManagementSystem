@@ -86,6 +86,20 @@ bool DataManager::initDatabase(const std::string& dataPath) {
         return false;
     }
 
+    QString createRoomMaintenance =
+        "CREATE TABLE IF NOT EXISTS RoomMaintenance ("
+        "   maintenanceId TEXT PRIMARY KEY,"
+        "   roomNumber TEXT NOT NULL,"
+        "   startDate TEXT NOT NULL,"
+        "   endDate TEXT NOT NULL,"
+        "   note TEXT,"
+        "   FOREIGN KEY (roomNumber) REFERENCES Room(roomNumber) ON DELETE CASCADE ON UPDATE CASCADE"
+        ");";
+    if (!query.exec(createRoomMaintenance)) {
+        qDebug() << "Error creating RoomMaintenance table:" << query.lastError().text();
+        return false;
+    }
+
     if (schemaQuery.exec("PRAGMA table_info(Room)")) {
         bool hasArchived = false;
         while (schemaQuery.next()) {
@@ -313,6 +327,25 @@ bool DataManager::loadAll(HotelManager& manager, const std::string& dataPath) {
         return false;
     }
 
+    if (query.exec("SELECT maintenanceId, roomNumber, startDate, endDate, note FROM RoomMaintenance")) {
+        while (query.next()) {
+            const std::string maintenanceId = query.value(0).toString().toStdString();
+            const std::string roomNumber = query.value(1).toString().toStdString();
+            const std::string startDate = query.value(2).toString().toStdString();
+            const std::string endDate = query.value(3).toString().toStdString();
+            const std::string note = query.value(4).toString().toStdString();
+
+            if (!loadedManager.restoreRoomMaintenanceFromDatabase(
+                    maintenanceId, roomNumber, startDate, endDate, note, errorMsg)) {
+                qDebug() << "Failed to restore room maintenance during load:" << QString::fromStdString(errorMsg);
+                return false;
+            }
+        }
+    } else {
+        qDebug() << "Error reading RoomMaintenance table:" << query.lastError().text();
+        return false;
+    }
+
     // Reconstruct invoices directly back into the core system memory.
     // Legacy rows with a cancelled flag are ignored by deleting them during migration.
     if (query.exec("SELECT invoiceId, bookingId, taxRate, nights, paymentDate FROM Invoice")) {
@@ -370,6 +403,11 @@ bool DataManager::saveAll(HotelManager& manager, const std::string& dataPath) {
         qDebug() << "Can't delete from Booking: " << query.lastError().text();
         return false;
     } 
+    if (!query.exec("DELETE FROM RoomMaintenance")) {
+        m_db.rollback();
+        qDebug() << "Can't delete from RoomMaintenance:" << query.lastError().text();
+        return false;
+    }
     if (!query.exec("DELETE FROM Room")) {
         m_db.rollback(); 
         qDebug() << "Can't delete from Room: " << query.lastError().text();
@@ -428,6 +466,21 @@ bool DataManager::saveAll(HotelManager& manager, const std::string& dataPath) {
                 qDebug() << "Error saving Room: " << query.lastError().text();
                 return false;
             }
+        }
+    }
+
+    // Modified and optimized performance: persist dated maintenance intervals separately from permanent room availability.
+    query.prepare("INSERT INTO RoomMaintenance (maintenanceId, roomNumber, startDate, endDate, note) VALUES (?, ?, ?, ?, ?)");
+    for (const RoomMaintenance& maintenance : manager.getRoomMaintenances()) {
+        query.addBindValue(QString::fromStdString(maintenance.getMaintenanceId()));
+        query.addBindValue(QString::fromStdString(maintenance.getRoomNumber()));
+        query.addBindValue(QString::fromStdString(maintenance.getStartDate()));
+        query.addBindValue(QString::fromStdString(maintenance.getEndDate()));
+        query.addBindValue(QString::fromStdString(maintenance.getNote()));
+        if (!query.exec()) {
+            m_db.rollback();
+            qDebug() << "Error saving RoomMaintenance:" << query.lastError().text();
+            return false;
         }
     }
 

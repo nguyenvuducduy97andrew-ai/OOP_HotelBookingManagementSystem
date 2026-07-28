@@ -26,9 +26,9 @@
    <string>MainWindow</string>
   </property>
   <property name="styleSheet">
-   <string notr="true">/* ================= 1. CẤU TRÚC NỀN (Đã fix lỗi góc bo) ================= */
+   <string notr="true">/* ================= 1. BASE STRUCTURE (rounded-corner fix) ================= */
 QWidget#centralwidget {
-    background-color: #E5E7EB; /* Xám bọc ngoài */
+    background-color: #E5E7EB; /* Outer gray background */
 }
 
 QFrame#mainAppContainer {
@@ -36,7 +36,7 @@ QFrame#mainAppContainer {
     border-radius: 24px;
 }
 
-/* Kẻ viền mờ và ép góc bo tròn cho mép trái của Menu để không lòi góc nhọn */
+/* Add a subtle border and rounded left menu corners to avoid sharp edges. */
 QFrame#sidebarFrame {
     border-right: 2px solid #F1F5F9;
     border-top-left-radius: 24px;
@@ -47,7 +47,7 @@ QFrame#headerFrame {
     border-bottom: 2px solid #F1F5F9;
 }
 
-/* Đảm bảo phần ruột trong suốt để ăn theo nền trắng của mainAppContainer */
+/* Keep the inner area transparent so it inherits mainAppContainer's white background. */
 QFrame#mainContainFrame, QStackedWidget {
         background-color: #FFFFFF;
     border-radius: 24px;
@@ -56,7 +56,7 @@ QFrame#mainContainFrame, QStackedWidget {
 
 QPushButton[sidebarBtn=&quot;true&quot;] {
     background-color: transparent;
-    color: #A3AED0; /* Màu chữ xám khi Inactive */
+    color: #A3AED0; /* Gray text while inactive */
     border: none;
     text-align: left;
     padding-left: 20px;
@@ -66,30 +66,30 @@ QPushButton[sidebarBtn=&quot;true&quot;] {
     border-radius: 10px;
 }
 
-/* Hiệu ứng khi rê chuột vào */
+/* Hover state */
 QPushButton[sidebarBtn=&quot;true&quot;]:hover {
     background-color: #F4F7FE;
     color: #005BFE;
 }
 
-/* Style khi nút được kích hoạt (Active) */
+/* Active button style */
 QPushButton[sidebarBtn=&quot;true&quot;][active=&quot;true&quot;] {
-    background-color: #005BFE; /* Màu xanh chủ đạo */
-    color: #FFFFFF; /* Chữ trắng */
+    background-color: #005BFE; /* Primary blue */
+    color: #FFFFFF; /* White text */
 }
 
 
-/* ================= 3. HEADER BÊN PHẢI (Tiêu đề) ================= */
-/* Chữ Hello Jack */
+/* ================= 3. RIGHT HEADER (title) ================= */
+/* "Hello Jack" label */
 QLabel#lblWelcome {
     color: #2B3674;
     font-size: 26px;
-    font-weight: 900; /* In đậm cực mạnh */
-    padding-left: 25px; /* Thụt lề cho bằng với thẻ phòng ở dưới */
+    font-weight: 900; /* Extra-bold */
+    padding-left: 25px; /* Align with the room cards below */
     padding-top: 15px;
 }
 
-/* Chữ Ngày tháng */
+/* Date label */
 QLabel#lblDate {
     color: #A3AED0;
     font-size: 14px;
@@ -98,7 +98,7 @@ QLabel#lblDate {
     padding-bottom: 0px;
 }
 
-/* ================= 4. STYLE CHO HỘP THOẠI THÔNG BÁO (QMessageBox) ================= */
+/* ================= 4. MESSAGE BOX STYLE (QMessageBox) ================= */
 QMessageBox {
     background-color: #FFFFFF;
 }

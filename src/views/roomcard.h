@@ -30,10 +30,10 @@ public:
     void setTempAvailMode(bool enabled);
     bool isTempAvailMode() const;
 
-    // Lấy trạng thái hiện tại
+    // Return the current status.
     std::string getStatus() const;
     
-    // Getters cho thông tin khách
+    // Getters for guest information.
     QString getRoomType() const;
     QString getRoomNumber() const;
     QString getGuestName() const;
@@ -47,7 +47,7 @@ private:
     std::string m_status;
     bool m_isTempAvail = false;
     
-    // Lưu thông tin tạm
+    // Store temporary information.
     QString m_roomNumber;
     QString m_roomType;
     QString m_guestName;

@@ -4,17 +4,17 @@
 
 class DeluxeRoom : public Room {
 private:
-    double miniBarFee; // Đổi từ Deluxe_Fee thành miniBarFee theo đúng sơ đồ lớp
+    double miniBarFee; // Renamed from Deluxe_Fee to match the class diagram.
 
 public:
-    // Hàm khởi tạo constructor đồng bộ tên tham số
+    // Constructor parameter names are aligned with the model.
     DeluxeRoom(std::string num, double basePrice, double fee);
 
-    // GET/SET cho miniBarFee (đổi từ Get_Deluxe_Fee / Set_Deluxe_Fee)
+    // Accessors for miniBarFee (renamed from Get/Set_Deluxe_Fee).
     double getMiniBarFee() const;
     void setMiniBarFee(double fee);
 
-    // Override function calculateTargetPrice từ lớp cha Room
+    // Override calculateTargetPrice from the Room base class.
     double calculateTargetPrice() const override;
     std::string getRoomTypeName() const override;
     double getExtraFeeAmount() const override;

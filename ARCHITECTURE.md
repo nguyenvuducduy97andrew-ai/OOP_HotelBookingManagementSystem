@@ -8,11 +8,17 @@ Hotel Booking Management System is a C++17 / Qt6 desktop application with four c
 views  ── user interaction, rendering, signals/slots
   │
   ├── HotelManager ── in-memory collections, lookups, and UI-compatible facade
-  │       │
-  │       └── models ── Room, Customer, Booking, Invoice
+  │     ├── BookingManager
+  │     │     └── BookingService, InvoiceService, RoomAvailabilityService
+  │     ├── CustomerManager
+  │     │     └── CustomerService
+  │     └── RoomManager
+  │           └── RoomService
   │
-  ├── ReservationService ─────── booking, availability, checkout, and invoice workflow
-  └── ReportService ──────────── Dashboard/PDF reporting snapshot aggregation
+  ├── ReportService ── read-only Dashboard/PDF aggregation from HotelManager
+  │
+  ├── models ── Room, RoomMaintenance, Customer, Booking, Invoice
+  └── DataManager ── SQLite load, migration, and atomic persistence
   │
   └── DataManager ── SQLite load, migration, and atomic persistence
 ```
@@ -31,7 +37,15 @@ The view layer owns presentation only. `HotelManager` owns the in-memory model c
 └── src/
     ├── main.cpp                  # Startup, database-path resolution, app shutdown save
     ├── models/                   # Domain objects and Room hierarchy
-    ├── controllers/              # HotelManager store/facade and focused business services
+    ├── controllers/
+    │   ├── hotel/                # HotelManager store/facade
+    │   ├── booking/              # BookingManager
+    │   │   └── services/         # Booking, Invoice, and availability workflows
+    │   ├── customer/             # CustomerManager and CustomerService
+    │   │   └── services/
+    │   ├── room/                 # RoomManager and RoomService
+    │   │   └── services/
+    │   └── report/               # ReportService
     ├── database/                 # DataManager singleton
     └── views/                    # Qt widgets, dialogs, dashboard, resources, .ui files
 ```
@@ -66,6 +80,7 @@ main.cpp
 HotelManager owns shared_ptr collections
   ├── Customer
   ├── Room
+  ├── RoomMaintenance ── room number, [start date, end date), note
   ├── Booking ── weak_ptr<Customer>, weak_ptr<Room>
   └── Invoice ── weak_ptr<Booking>
 ```
@@ -150,7 +165,8 @@ This prevents a persisted checkout without its invoice, or an invoice attached t
 | Table | Role |
 |---|---|
 | `Customer` | Guest ID, name, phone number, archive state |
-| `Room` | Room number, base price, type-specific fees, maintenance/archive state |
+| `Room` | Room number, base price, type-specific fees, permanent availability/archive state |
+| `RoomMaintenance` | Persisted room number, half-open maintenance interval, and optional work note |
 | `Booking` | Customer/room foreign keys, dates, `cancelled`, `deleted`, `checkedOut` |
 | `Invoice` | Booking foreign key, tax rate, nights, payment date |
 
@@ -199,7 +215,9 @@ Dashboard PDF export uses `QPdfWriter` and `QTextDocument` in A4 landscape. It i
 |---|---:|---|
 | Views → `HotelManager` facade | Yes | Trigger operations without coupling current widgets to service classes. |
 | Views → `DataManager` | Yes | Request persistence after a successful UI action. |
-| `ReservationService` → `HotelManager` / models | Yes | Apply booking, availability, checkout, and invoice rules without owning data. |
+| `BookingManager` → `HotelManager` / models | Yes | Own the immediate reservation services and expose booking, checkout, and invoice operations. |
+| `CustomerManager` → `HotelManager` / models | Yes | Own CustomerService and expose customer workflows. |
+| `RoomManager` → `HotelManager` / models | Yes | Own RoomService and expose room workflows. |
 | `ReportService` → `HotelManager` / models | Yes | Build read-only metrics and selected-period report entries. |
 | `HotelManager` → models | Yes | Own and look up domain objects; retain simple read queries. |
 | `DataManager` → `HotelManager` / models | Yes | Restore and serialize domain state. |
@@ -213,10 +231,10 @@ Dashboard PDF export uses `QPdfWriter` and `QTextDocument` in A4 landscape. It i
 - **Abstraction**: `Room` is an abstract interface for every room type.
 - **Factory**: `RoomFactory` centralizes room construction.
 - **Singleton**: `DataManager` provides one shared database connection and persistence service.
-- **Facade and application services**: `HotelManager` centralizes collections and backwards-compatible entry points; `ReservationService` owns the complete operational stay workflow and `ReportService` owns read-only report aggregation.
+- **Facade and application services**: `HotelManager` centralizes collections and backwards-compatible entry points; each direct child manager owns only its immediate service layer, while `ReportService` remains a sibling read-only reporting branch.
 
 ## Operational notes
 
-- `Room::isAvailable` means maintenance/inspection availability. It is separate from guest occupancy, which is derived from active bookings.
+- `Room::isAvailable` is retained for legacy permanent availability. Operational maintenance uses `RoomMaintenance` intervals (`[startDate, endDate)`) so future stays outside the closure remain valid. Both booking creation and maintenance scheduling reject overlapping intervals.
 - The database is local runtime state and is ignored by Git.
 - `CountryInputRules.h` is a source header and must be included when committing the project changes.

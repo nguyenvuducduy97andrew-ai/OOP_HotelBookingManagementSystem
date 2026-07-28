@@ -29,14 +29,14 @@ void RoomCard::mouseReleaseEvent(QMouseEvent* event) {
 }
 
 
-void RoomCard::setRoomNumber(QString roomNumber) { //fix khi add data base
+void RoomCard::setRoomNumber(QString roomNumber) { // Store the room number for card rendering.
     m_roomNumber = roomNumber;
     ui->lblRoomNumber->setText(roomNumber);
     ui->lblRoomNumber->setStyleSheet("color: white;");
     ui->lblRoomType->setStyleSheet("color: white;");
 }
 
-void RoomCard::setRoomType(QString roomType) { //fix khi add data base
+void RoomCard::setRoomType(QString roomType) { // Store the room type for card rendering.
     m_roomType = roomType;
     ui->lblRoomType->setText(roomType);
 }
@@ -50,7 +50,7 @@ QString RoomCard::getPhoneNumber() const { return m_phoneNumber; }
 QString RoomCard::getDateIn() const { return m_dateIn; }
 QString RoomCard::getDateOut() const { return m_dateOut; }
 
-void RoomCard::setAvailable() { ////fix khi add data base
+void RoomCard::setAvailable() { // Render the available state.
     m_status = "AVL";
     
     // Clear data
@@ -69,10 +69,10 @@ void RoomCard::setAvailable() { ////fix khi add data base
     ui->lblStatusIcon->setScaledContents(true);
 }
 
-void RoomCard::setOccupied(QString guestName, QString idNumber, QString phoneNumber, QString dateIn, QString dateOut) { ////fix khi add data base
+void RoomCard::setOccupied(QString guestName, QString idNumber, QString phoneNumber, QString dateIn, QString dateOut) { // Render the occupied state.
     m_status = "OCC";
     
-    // Lưu data
+    // Store data.
     m_guestName = guestName;
     m_idNumber = idNumber;
     m_phoneNumber = phoneNumber;
@@ -123,12 +123,12 @@ bool RoomCard::isTempAvailMode() const {
 }
 
 void RoomCard::setTempAvailMode(bool enabled) {
-    if (m_status != "OCC") return; // Chỉ áp dụng cho phòng Đỏ (OCC)
+    if (m_status != "OCC") return; // Applies only to occupied (red) rooms.
 
     m_isTempAvail = enabled;
     
     if (enabled) {
-        // Tạm thời biến thành màu Xanh (AVL) - Giữ nguyên layout cũ
+        // Temporarily show it as available (green) while keeping the existing layout.
         ui->lblCheckOutDate->hide();
         ui->lblCheckInDate->hide();
         ui->lineDivider->hide();
@@ -142,7 +142,7 @@ void RoomCard::setTempAvailMode(bool enabled) {
         ui->lblStatusIcon->setPixmap(QPixmap(":/avl_icon.png"));
         ui->lblStatusIcon->setScaledContents(true);
     } else {
-        // Trả lại màu Đỏ (OCC)
+        // Restore the occupied (red) state.
         ui->lblCheckOutDate->show();
         ui->lblCheckInDate->show();
         ui->lineDivider->show();

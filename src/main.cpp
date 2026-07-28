@@ -31,9 +31,9 @@ QString resolveDatabasePath()
 }
 
 int main(int argc, char *argv[]) {
-    // Khởi tạo ứng dụng Qt
+    // Initialize the Qt application.
     QApplication app(argc, argv);
-    // Tạo một đối tượng HotelManager để quản lý dữ liệu khách sạn
+    // Create the HotelManager that owns the hotel's in-memory data.
     HotelManager hotelManager;
 
     const QString databasePath = resolveDatabasePath();
@@ -44,7 +44,7 @@ int main(int argc, char *argv[]) {
         return -1;
     }
 
-    // Tự động tạo 100 phòng demo nếu chưa có dữ liệu phòng nào
+    // Automatically seed 100 demo rooms when no room data exists yet.
     if (hotelManager.getRooms().empty()) {
         std::string err;
         for (int i = 0; i < 100; ++i) {
@@ -63,10 +63,13 @@ int main(int argc, char *argv[]) {
             hotelManager.registerRoom(type, roomNum, price, err);
             
             if (i == 2) {
-                auto room = hotelManager.findRoomByNumber(roomNum);
-                if (room) room->setIsAvailable(false); // Maintenance
+                hotelManager.scheduleRoomMaintenance(
+                    roomNum,
+                    QDate::currentDate().toString(Qt::ISODate).toStdString(),
+                    QDate::currentDate().addDays(1).toString(Qt::ISODate).toStdString(),
+                    "Demo maintenance", err);
             } else if (i % 2 == 0) {
-                // Tạo khách hàng và booking giả lập để phòng thành OCC
+                // Create demo customers and bookings so rooms become occupied.
                 std::string custId = QString("%1").arg(100000000000ULL + static_cast<unsigned long long>(i), 12, 10, QChar('0')).toStdString();
                 hotelManager.registerCustomer(custId, "Nguyen Van Kai", "+84901234567", err);
                 

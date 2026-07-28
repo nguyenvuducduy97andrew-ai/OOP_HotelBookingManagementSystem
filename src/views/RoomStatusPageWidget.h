@@ -18,13 +18,17 @@ public:
 
     ~RoomStatusPageWidget();
 
+signals:
+    // Modified and optimized performance: hand off booking navigation to MainWindow instead of creating bookings from the room-status page.
+    void bookingRequested(const QString& roomNumber);
+
 private slots:
     void applyFilters();
     void setFilterType(QString type);
 
 private:
     void setupUI();
-    // Khong can createRoomStatusCard vi da dung RoomCard
+    // RoomCard already provides the room status card UI.
     // QWidget* createRoomStatusCard(const std::shared_ptr<Room>& room);
 
     Ui::RoomStatusPageWidget *ui;

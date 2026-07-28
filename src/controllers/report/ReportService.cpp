@@ -2,7 +2,7 @@
 
 #include "Booking.h"
 #include "Customer.h"
-#include "HotelManager.h"
+#include "../hotel/HotelManager.h"
 #include "Room.h"
 
 #include <algorithm>

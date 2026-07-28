@@ -11,8 +11,8 @@ private:
 public:
     Customer();
     Customer(const std::string& customerId, const std::string& name, const std::string& phoneNumber);
-    //virtual ~Customer() {} virtual dùng cho những class có kế thừa (cha-con) customer ko có -> sẽ bị thừa, ko cần thiết. 
-    // Nếu có xuất hiện một class VIP customer chẳng hạn, sẽ restore lại destructor này
+    // A virtual destructor is unnecessary without inheritance. Restore it if
+    // specialised customer types (for example, VIPCustomer) are introduced.
 
     std::string getCustomerId() const;
     void setCustomerId(const std::string& customerId);

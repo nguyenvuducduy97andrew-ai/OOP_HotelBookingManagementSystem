@@ -387,10 +387,9 @@
      </widget>
     </item>
     <item>
-     <!-- ===================== PHẦN THÂN DASHBOARD (mới thêm) =====================
-          Đặt bằng geometry tuyệt đối bên dưới HeaderFrame (giống cách HeaderFrame
-          đã được đặt), bọc trong QScrollArea để không bị tràn/cắt nếu nội dung dài
-          hơn vùng hiển thị. -->
+     <!-- ===================== DASHBOARD BODY =====================
+          Positioned with absolute geometry below HeaderFrame, then wrapped in a
+          QScrollArea so long content is not clipped or overflowed. -->
      <widget class="QScrollArea" name="bodyScrollArea">
    <property name="sizePolicy">
     <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
@@ -409,7 +408,7 @@
      <property name="bottomMargin"><number>0</number></property>
      <property name="spacing"><number>16</number></property>
 
-     <!-- Hàng 4 thẻ to -->
+     <!-- Row of four large cards -->
      <item>
       <widget class="QWidget" name="statsRowWidget" native="true">
        <property name="sizePolicy">
@@ -468,7 +467,7 @@
       </widget>
      </item>
 
-     <!-- Hàng 4 thẻ nhỏ -->
+     <!-- Row of four compact cards -->
      <item>
       <widget class="QWidget" name="miniRowWidget" native="true">
        <property name="sizePolicy">
@@ -527,7 +526,7 @@
       </widget>
      </item>
 
-     <!-- Biểu đồ xu hướng -->
+     <!-- Trend chart -->
      <item>
       <widget class="QFrame" name="trendCard">
        <property name="objectName"><string notr="true">ChartCard</string></property>
@@ -552,7 +551,7 @@
       </widget>
      </item>
 
-     <!-- Hàng dưới: bar chart + room list -->
+     <!-- Bottom row: bar chart and room list -->
      <item>
       <!-- Modified and optimized performance: keep the chart and room-list columns proportioned without invalid item stretch properties. -->
       <layout class="QHBoxLayout" name="bottomRowLayout" stretch="3,2">

@@ -205,7 +205,15 @@ void ReservationDialog::updateAvailableRooms() {
     }
 
     for (const auto& room : m_manager->getRooms()) {
-        if (!room || !room->getIsAvailable()) continue; // Skip rooms under maintenance
+        if (!room || !room->getIsAvailable()) continue; // Skip permanently unavailable rooms.
+        std::string maintenanceError;
+        if (m_manager->hasRoomMaintenanceConflict(
+                room->getRoomNumber(),
+                m_checkInDateEdit->date().toString(Qt::ISODate).toStdString(),
+                m_checkOutDateEdit->date().toString(Qt::ISODate).toStdString(),
+                maintenanceError)) {
+            continue;
+        }
 
         std::string roomNum = room->getRoomNumber();
 
@@ -361,4 +369,15 @@ void ReservationDialog::setEditBooking(const std::string& bookingId) {
     if (idx >= 0) {
         m_roomCombo->setCurrentIndex(idx);
     }
+}
+
+bool ReservationDialog::selectRoom(const std::string& roomNumber) {
+    updateAvailableRooms();
+    const int roomIndex = m_roomCombo->findData(QString::fromStdString(roomNumber));
+    if (roomIndex < 0) {
+        return false;
+    }
+
+    m_roomCombo->setCurrentIndex(roomIndex);
+    return true;
 }

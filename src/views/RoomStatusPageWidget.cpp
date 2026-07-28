@@ -1,29 +1,21 @@
 #include "RoomStatusPageWidget.h"
 #include "ui_RoomStatusPageWidget.h"
-#include "StandardRoom.h"
-#include "DeluxeRoom.h"
-#include "SuiteRoom.h"
 #include "Customer.h"
-#include "bookingdialog.h"
-#include "CustomConfirmDialog.h"
 #include <QGridLayout>
 #include <QDate>
-#include <QDate>
-#include <QMessageBox>
-#include "DataManager.h"
 
 RoomStatusPageWidget::RoomStatusPageWidget(HotelManager* manager, QWidget *parent)
     : QWidget(parent), ui(new Ui::RoomStatusPageWidget), m_manager(manager) {
     ui->setupUi(this);
     
-    // Ngăn chặn SearchBar tự động Focus
+    // Prevent the search bar from receiving focus automatically.
     this->setFocusPolicy(Qt::StrongFocus);
     this->setFocus();
 
     ui->lblAdultCount->setText("0");
     ui->lblChildrenCount->setText("0");
 
-    // Đặt ngày mặc định là hôm nay
+    // Set today's date as the default.
     ui->dateEditCheckIn->setDate(QDate::currentDate());
     ui->dateEditCheckOut->setDate(QDate::currentDate().addDays(1));
 
@@ -45,19 +37,19 @@ RoomStatusPageWidget::RoomStatusPageWidget(HotelManager* manager, QWidget *paren
         if (val > 0) ui->lblChildrenCount->setText(QString::number(val - 1));
     });
 
-    // Kết nối các nút Filter
+    // Connect the filter buttons.
     connect(ui->btnFilterAll, &QPushButton::clicked, this, [=]() { setFilterType("All"); });
     connect(ui->btnFilterStandard, &QPushButton::clicked, this, [=]() { setFilterType("Standard"); });
     connect(ui->btnFilterDeluxe, &QPushButton::clicked, this, [=]() { setFilterType("Deluxe"); });
     connect(ui->btnFilterSuite, &QPushButton::clicked, this, [=]() { setFilterType("Suite"); });
 
-    // Kết nối thanh tìm kiếm
+    // Connect the search field.
     connect(ui->txtSearchRoom, &QLineEdit::textChanged, this, &RoomStatusPageWidget::applyFilters);
 
-    // Cố định kích thước nút để không bị xê dịch layout khi chữ ngắn lại
+    // Keep button sizes fixed so the layout does not shift with shorter labels.
     ui->btnCheckAvailability->setFixedWidth(180);
 
-    // Kết nối nút Check Availability
+    // Connect the Check Availability button.
     connect(ui->btnCheckAvailability, &QPushButton::clicked, this, [=]() {
         m_isCheckAvailMode = !m_isCheckAvailMode;
         if (m_isCheckAvailMode) {
@@ -130,7 +122,10 @@ void RoomStatusPageWidget::refreshData() {
             }
         }
 
-        if (!room->getIsAvailable()) {
+        const std::string today = QDate::currentDate().toString(Qt::ISODate).toStdString();
+        const bool isUnderMaintenance = !room->getIsAvailable()
+            || m_manager->isRoomUnderMaintenance(room->getRoomNumber(), today);
+        if (isUnderMaintenance) {
             card->setMaintenance();
         } else if (isOccupied && activeBooking) {
             QString guestName = activeBooking->getCustomer() ? QString::fromStdString(activeBooking->getCustomer()->getName()) : "Unknown";
@@ -150,101 +145,9 @@ void RoomStatusPageWidget::refreshData() {
 
         m_roomCards.append(card);
 
-        // Click event to interact
-        connect(card, &RoomCard::cardClicked, this, [=]() {
-            if (card->getStatus() == "MTN") {
-                // If it is in maintenance, allow to restore it
-                CustomConfirmDialog dialog("Confirm return to service", QString("Complete maintenance for room %1 and return it to service?").arg(QString::fromStdString(room->getRoomNumber())), false, this);
-                if (dialog.exec() == QDialog::Accepted && dialog.isConfirmed()) {
-                    room->setIsAvailable(true);
-                    if (!DataManager::getInstance().commitChanges(*m_manager)) {
-                        refreshData();
-                        QMessageBox::critical(this, "Save Room Status Failed", "The maintenance update was not saved. The previous database state has been restored.");
-                        return;
-                    }
-                    refreshData();
-                }
-                return;
-            }
-
-            BookingDialog form(this);
-
-            // Nếu phòng đã có khách và không phải đang lọc chỗ trống -> Mở chế độ Edit
-            if (card->getStatus() == "OCC" && !card->isTempAvailMode()) {
-                form.setEditMode(true);
-                form.setGuestData(card->getGuestName(), card->getIdNumber(), card->getPhoneNumber(), card->getDateIn(), card->getDateOut());
-            } 
-            // Nếu phòng trống (hoặc đang mượn UI trống) -> Mở chế độ Check-in
-            else {
-                form.setEditMode(false);
-            }
-
-            // Nếu user điền hợp lệ và bấm Confirm/Edit
-            if (form.exec() == QDialog::Accepted) {
-                QString guestName = form.getGuestName();
-                QString idNumber = form.getIdNumber();
-                QString phone = form.getPhoneNumber();
-                
-                // Lấy năm trực tiếp từ widget dateEdit (chứa đầy đủ yyyy) thay vì dùng năm hiện tại
-                int yearIn = ui->dateEditCheckIn->date().year();
-                int yearOut = ui->dateEditCheckOut->date().year();
-                QDate dIn = QDate::fromString(form.getDateIn() + "/" + QString::number(yearIn), "dd/MM/yyyy");
-                QDate dOut = QDate::fromString(form.getDateOut() + "/" + QString::number(yearOut), "dd/MM/yyyy");
-                
-                std::string err;
-                
-                if (card->getStatus() == "OCC" && !card->isTempAvailMode()) {
-                    // Update existing booking
-                    if (activeBooking) {
-                        auto existingCustomer = m_manager->findCustomerById(idNumber.toStdString());
-                        if (existingCustomer) {
-                            if (existingCustomer->isArchived()) {
-                                QMessageBox::critical(this, "Customer error", "Archived customers cannot be used for bookings.");
-                                return;
-                            }
-                            existingCustomer->setName(guestName.toStdString());
-                            existingCustomer->setPhoneNumber(phone.toStdString());
-                        } else if (!m_manager->registerCustomer(idNumber.toStdString(), guestName.toStdString(), phone.toStdString(), err)) {
-                            QMessageBox::critical(this, "Customer error", QString::fromStdString(err));
-                            return;
-                        }
-
-                        if (!m_manager->updateBooking(activeBooking->getBookingId(), idNumber.toStdString(), room->getRoomNumber(), dIn.toString("yyyy-MM-dd").toStdString(), dOut.toString("yyyy-MM-dd").toStdString(), err)) {
-                            QMessageBox::critical(this, "Booking update error", QString::fromStdString(err));
-                            return;
-                        }
-                    }
-                } else {
-                    // Create new booking
-                    auto existingCustomer = m_manager->findCustomerById(idNumber.toStdString());
-                    if (existingCustomer) {
-                        if (existingCustomer->isArchived()) {
-                            QMessageBox::critical(this, "Customer error", "Archived customers cannot be used for bookings.");
-                            return;
-                        }
-                        existingCustomer->setName(guestName.toStdString());
-                        existingCustomer->setPhoneNumber(phone.toStdString());
-                    } else if (!m_manager->registerCustomer(idNumber.toStdString(), guestName.toStdString(), phone.toStdString(), err)) {
-                        QMessageBox::critical(this, "Customer error", QString::fromStdString(err));
-                        return;
-                    }
-
-                    if (!m_manager->createBooking(idNumber.toStdString(), room->getRoomNumber(), dIn.toString("yyyy-MM-dd").toStdString(), dOut.toString("yyyy-MM-dd").toStdString(), err)) {
-                        QMessageBox::critical(this, "Booking error", QString::fromStdString(err));
-                        return;
-                    }
-                }
-                
-                // Modified and optimized performance: persist maintenance status before refreshing the room grid.
-                if (!DataManager::getInstance().commitChanges(*m_manager)) {
-                    refreshData();
-                    QMessageBox::critical(this, "Save Booking Failed", "The booking changes were not saved. The previous database state has been restored.");
-                    return;
-                }
-                
-                card->setTempAvailMode(false); // Thoát khỏi trạng thái ảo
-                refreshData(); // Cập nhật lại UI từ DB
-            }
+        connect(card, &RoomCard::cardClicked, this, [this, room]() {
+            // Modified and optimized performance: Room Status selects the room while Reservation owns booking validation and persistence.
+            emit bookingRequested(QString::fromStdString(room->getRoomNumber()));
         });
 
         int row = index / columns;

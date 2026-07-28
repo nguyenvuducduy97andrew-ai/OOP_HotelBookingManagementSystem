@@ -46,6 +46,33 @@ MainWindow::MainWindow(HotelManager* manager, QWidget *parent)
     m_roomStatusPage = new RoomStatusPageWidget(m_manager, this);
     m_roomStatusPage->setObjectName("pageRoomStatus");
 
+    connect(m_reservationsPage, &ReservationsPageWidget::bookingCompleted,
+            m_roomStatusPage, &RoomStatusPageWidget::refreshData);
+
+    // Modified and optimized performance: keep navigation separate from booking persistence by routing selected rooms through MainWindow.
+    connect(m_roomStatusPage, &RoomStatusPageWidget::bookingRequested,
+            this, [this](const QString& roomNumber) {
+                ui->stackedWidget->setCurrentWidget(m_reservationsPage);
+                ui->btnReservation->setChecked(true);
+                updateButtonStyle(ui->btnReservation);
+                m_reservationsPage->refreshData();
+                m_reservationsPage->startNewReservationForRoom(roomNumber);
+            });
+
+    connect(m_reservationsPage, &ReservationsPageWidget::bookingChanged,
+            this, [this]() {
+                m_roomStatusPage->refreshData();
+                m_dashboardPage->refreshDashboard();
+            });
+
+    connect(m_reservationsPage, &ReservationsPageWidget::roomStatusBookingCancelled,
+            this, [this]() {
+                ui->stackedWidget->setCurrentWidget(m_roomStatusPage);
+                ui->btnRoomStatus->setChecked(true);
+                updateButtonStyle(ui->btnRoomStatus);
+                m_roomStatusPage->refreshData();
+            });
+
     // Add widgets to stackedWidget
     ui->stackedWidget->addWidget(m_dashboardPage);      // Index 0
     ui->stackedWidget->addWidget(m_reservationsPage);  // Index 1

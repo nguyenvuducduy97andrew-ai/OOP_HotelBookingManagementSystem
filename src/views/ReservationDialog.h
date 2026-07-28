@@ -12,6 +12,7 @@ public:
     explicit ReservationDialog(HotelManager* manager, QWidget *parent = nullptr);
 
     void setEditBooking(const std::string& bookingId);
+    bool selectRoom(const std::string& roomNumber);
 
     QString getCustomerId() const;
     QString getCustomerName() const;

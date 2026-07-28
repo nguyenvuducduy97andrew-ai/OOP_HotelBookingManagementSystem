@@ -5,6 +5,7 @@
 #include <QPushButton>
 #include <QMessageBox>
 #include <QLocale>
+#include <QDate>
 
 RoomDialog::RoomDialog(QWidget *parent)
     : QDialog(parent), m_isEditMode(false) {
@@ -109,7 +110,7 @@ void RoomDialog::setupUI() {
     m_basePriceSpin = new QDoubleSpinBox(this);
     m_basePriceSpin->setRange(0, 100000000);
     m_basePriceSpin->setSingleStep(50000);
-    m_basePriceSpin->setSuffix(" đ");
+    m_basePriceSpin->setSuffix(" VND");
     m_basePriceSpin->setDecimals(0);
     m_basePriceSpin->setLocale(moneyLocale);
     m_basePriceSpin->setGroupSeparatorShown(true);
@@ -120,14 +121,32 @@ void RoomDialog::setupUI() {
     formLayout->addRow("Room Type:", m_typeCombo);
 
     m_availabilityCombo = new QComboBox(this);
-    m_availabilityCombo->addItems({"Available", "Maintenance"});
+    m_availabilityCombo->addItems({"Available", "Schedule maintenance"});
     formLayout->addRow("Status:", m_availabilityCombo);
+
+    m_maintenanceStartLabel = new QLabel("Maintenance starts:", this);
+    m_maintenanceStartDateEdit = new QDateEdit(QDate::currentDate(), this);
+    m_maintenanceStartDateEdit->setCalendarPopup(true);
+    m_maintenanceStartDateEdit->setDisplayFormat("dd MMM yyyy");
+    formLayout->addRow(m_maintenanceStartLabel, m_maintenanceStartDateEdit);
+
+    m_maintenanceEndLabel = new QLabel("Available again on:", this);
+    m_maintenanceEndDateEdit = new QDateEdit(QDate::currentDate().addDays(1), this);
+    m_maintenanceEndDateEdit->setCalendarPopup(true);
+    m_maintenanceEndDateEdit->setDisplayFormat("dd MMM yyyy");
+    formLayout->addRow(m_maintenanceEndLabel, m_maintenanceEndDateEdit);
+
+    m_maintenanceNoteLabel = new QLabel("Maintenance note:", this);
+    m_maintenanceNoteEdit = new QTextEdit(this);
+    m_maintenanceNoteEdit->setPlaceholderText("Optional reason or work order reference");
+    m_maintenanceNoteEdit->setFixedHeight(62);
+    formLayout->addRow(m_maintenanceNoteLabel, m_maintenanceNoteEdit);
 
     m_extraFeeLabel = new QLabel(this);
     m_extraFeeSpin = new QDoubleSpinBox(this);
     m_extraFeeSpin->setRange(0, 100000000);
     m_extraFeeSpin->setSingleStep(10000);
-    m_extraFeeSpin->setSuffix(" đ");
+    m_extraFeeSpin->setSuffix(" VND");
     m_extraFeeSpin->setDecimals(0);
     m_extraFeeSpin->setLocale(moneyLocale);
     m_extraFeeSpin->setGroupSeparatorShown(true);
@@ -148,8 +167,10 @@ void RoomDialog::setupUI() {
     mainLayout->addLayout(btnLayout);
 
     connect(m_typeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &RoomDialog::onTypeChanged);
+    connect(m_availabilityCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &RoomDialog::onStatusChanged);
     connect(cancelBtn, &QPushButton::clicked, this, &QDialog::reject);
     connect(saveBtn, &QPushButton::clicked, this, &RoomDialog::onAccept);
+    onStatusChanged(m_availabilityCombo->currentIndex());
 }
 
 void RoomDialog::onTypeChanged(int index) {
@@ -177,6 +198,10 @@ void RoomDialog::onAccept() {
         QMessageBox::warning(this, "Invalid value", "Please enter a room price greater than 0.");
         return;
     }
+    if (shouldScheduleMaintenance() && m_maintenanceEndDateEdit->date() <= m_maintenanceStartDateEdit->date()) {
+        QMessageBox::warning(this, "Invalid maintenance dates", "The date the room becomes available again must be after the maintenance start date.");
+        return;
+    }
     accept();
 }
 
@@ -202,4 +227,31 @@ double RoomDialog::getExtraFee() const {
 
 bool RoomDialog::getIsAvailable() const {
     return m_availabilityCombo->currentIndex() == 0;
+}
+
+bool RoomDialog::shouldScheduleMaintenance() const {
+    return m_availabilityCombo->currentIndex() == 1;
+}
+
+QString RoomDialog::getMaintenanceStartDate() const {
+    return m_maintenanceStartDateEdit->date().toString(Qt::ISODate);
+}
+
+QString RoomDialog::getMaintenanceEndDate() const {
+    return m_maintenanceEndDateEdit->date().toString(Qt::ISODate);
+}
+
+QString RoomDialog::getMaintenanceNote() const {
+    return m_maintenanceNoteEdit->toPlainText().trimmed();
+}
+
+void RoomDialog::onStatusChanged(int index) {
+    const bool scheduleMaintenance = index == 1;
+    m_maintenanceStartLabel->setVisible(scheduleMaintenance);
+    m_maintenanceStartDateEdit->setVisible(scheduleMaintenance);
+    m_maintenanceEndLabel->setVisible(scheduleMaintenance);
+    m_maintenanceEndDateEdit->setVisible(scheduleMaintenance);
+    m_maintenanceNoteLabel->setVisible(scheduleMaintenance);
+    m_maintenanceNoteEdit->setVisible(scheduleMaintenance);
+    adjustSize();
 }
