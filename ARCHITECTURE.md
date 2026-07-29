@@ -8,22 +8,25 @@ Hotel Booking Management System is a C++17 / Qt6 desktop application. Its archit
 Qt views
   │ signals, dialogs, rendering
   ▼
-HotelManager ── owns in-memory model collections and three direct managers
-  ├── BookingManager
+HotelManager ── owns in-memory model collections and exposes the UI facade
+  ├── creates BookingManager temporarily for each booking facade call
   │     ├── BookingService
-  │     ├── InvoiceService
-  │     └── RoomAvailabilityService
-  ├── CustomerManager
+  │     └── InvoiceService
+  ├── creates CustomerManager temporarily for each customer facade call
   │     └── CustomerService
-  └── RoomManager
+  └── creates RoomManager temporarily for each room facade call
         └── RoomService
+
+BookingService ── creates RoomAvailabilityService when validating a booking
+ReservationDialog and RoomStatusPageWidget ── create RoomAvailabilityService
+                                                  for date-range display checks
 
 ReportService ── sibling, read-only aggregation over HotelManager
 DataManager   ── SQLite schema, migration, load, reconciliation, and save
 models        ── Room hierarchy, RoomMaintenance, Customer, Booking, Invoice
 ```
 
-`HotelManager` does not directly own services two levels below it. It directly owns only `BookingManager`, `CustomerManager`, and `RoomManager`; each manager owns only its immediate service layer. `ReportService` is deliberately outside that hierarchy because it has independent, read-only reporting rules rather than hotel mutation workflows.
+`HotelManager` does not have `BookingManager`, `CustomerManager`, or `RoomManager` member fields. Instead, its facade methods construct the relevant manager locally and delegate the request to it. Each temporary manager owns only its immediate service members during that call; `BookingManager` owns `BookingService` and `InvoiceService`, while `RoomAvailabilityService` is constructed on demand by `BookingService` and the two availability-aware views. `ReportService` is deliberately outside these mutation workflows because it has independent, read-only reporting rules.
 
 ## Project layout
 
@@ -38,7 +41,7 @@ models        ── Room hierarchy, RoomMaintenance, Customer, Booking, Invoice
     ├── main.cpp                      # Startup, database-path resolution, shutdown safeguard
     ├── models/                       # Domain objects and Room hierarchy
     ├── controllers/
-    │   ├── hotel/                    # HotelManager composition root and facade
+    │   ├── hotel/                    # HotelManager in-memory store and facade
     │   ├── booking/
     │   │   ├── BookingManager.*
     │   │   └── services/             # Booking, invoice, and availability workflows
@@ -79,15 +82,15 @@ Room (abstract)
 └── SuiteRoom     → base rate + premium service fee
 ```
 
-`RoomFactory` creates concrete room types. Controllers and views use the `Room` abstraction and virtual accessors instead of coupling normal workflows to room subclasses.
+`RoomFactory` creates concrete room types. Most controller and view operations use the `Room` abstraction and its virtual accessors. The room-edit workflow and database restoration also use `dynamic_pointer_cast` when they must write subtype-specific fees (`DeluxeRoom::miniBarFee` or `SuiteRoom::premiumServiceFee`).
 
 ## Business boundaries
 
 | Component | Direct responsibility | Does not own |
 |---|---|---|
-| `HotelManager` | Collections, lookups, query facade, manager composition | Booking/customer/room service objects directly |
-| `BookingManager` | Reservation, checkout, and invoice use cases | Customer or room service layers |
-| `BookingService` | Booking date/state validation and mutations | Persistence or report rendering |
+| `HotelManager` | Collections, lookups, UI-facing facade, and temporary manager creation | Retained manager or service objects |
+| `BookingManager` | Temporary delegation of reservation, checkout, and invoice use cases | `RoomAvailabilityService`, customer, or room service layers |
+| `BookingService` | Booking date/state validation and mutations; on-demand availability checks | Persistence or report rendering |
 | `InvoiceService` | Invoice validation and creation after checkout | SQLite operations |
 | `RoomAvailabilityService` | Shared booking/maintenance availability calculation | UI navigation or persistence |
 | `CustomerManager` / `CustomerService` | Customer validation, conflict detection, archive/delete workflows | Booking, room, or report workflows |
@@ -95,7 +98,7 @@ Room (abstract)
 | `ReportService` | Read-only selected-period Dashboard/PDF data snapshot | Mutation and persistence |
 | `DataManager` | SQLite migration, reconciliation, staged load, and atomic snapshot save | UI decisions and booking rules |
 
-This structure allows the customer branch to grow into a customer-care module and the room branch to grow into a room/maintenance module without expanding `HotelManager` into a service container for all lower-level behavior.
+This structure keeps `HotelManager` as an in-memory facade rather than a persistent service container. The customer and room branches can still grow into focused modules without adding lower-level service fields to `HotelManager`.
 
 ## Main data flows
 
@@ -132,7 +135,7 @@ MainWindow
 ReservationDialog
   ├── preselects the room
   ├── uses RoomAvailabilityService for final date-range validation
-  └── calls HotelManager → BookingManager → BookingService
+  └── calls HotelManager → temporary BookingManager → BookingService
   ▼
 DataManager::commitChanges()
   ├── save complete snapshot in one SQLite transaction
@@ -145,10 +148,10 @@ DataManager::commitChanges()
 
 ```text
 ReservationsPageWidget
-  ├── BookingManager::completeBooking()
-  │     └── BookingService validates active state and actual checkout date
-  ├── BookingManager::createInvoice()
-  │     └── InvoiceService validates completed booking, payment date, one invoice per booking,
+  ├── HotelManager::completeBooking()
+  │     └── temporary BookingManager → BookingService validates active state and actual checkout date
+  ├── HotelManager::createInvoice()
+  │     └── temporary BookingManager → InvoiceService validates completed booking, payment date, one invoice per booking,
   │         and captures immutable guest/room/date/price data
   └── DataManager::commitChanges()
 ```
@@ -159,7 +162,7 @@ Checkout sets `Booking::checkedOut`. The booking becomes `Completed` only from t
 
 ```text
 CustomerDialog → CustomerPageWidget → HotelManager
-  → CustomerManager → CustomerService
+  → temporary CustomerManager → CustomerService
       ├── validate ID and normalized international phone
       ├── reject a duplicate phone number during both creation and editing
       ├── reject a duplicate customer ID
@@ -230,9 +233,9 @@ The application currently saves the complete manager snapshot rather than indivi
 
 ## Reporting and PDF export
 
-`ReportService` builds a `DashboardReportData` value from `HotelManager` without mutating it. The report contains selected-period labels, KPIs, room counts, occupancy, top rooms, open bookings, cancellations, and completed stays. Completed stays prefer immutable invoice snapshots; other statuses use the current linked model. It sorts data before `DashboardWidget` renders it.
+`ReportService` builds a `DashboardReportData` value from `HotelManager` without mutating it. The PDF-export workflow uses this snapshot for selected-period labels, KPIs, room counts, occupancy, top rooms, open bookings, cancellations, and completed stays. Completed stays prefer immutable invoice snapshots; other statuses use the current linked model. It sorts data before `DashboardWidget` renders the PDF.
 
-`DashboardWidget` owns presentation and PDF HTML generation only. PDF export uses A4 landscape pages and print-safe wrapper blocks so each heading stays with its related table; Top Rooms and Completed Booking History begin on new pages.
+`DashboardWidget` owns interactive dashboard presentation, including its own live card, chart, popular-room, and booking-history aggregation over `HotelManager`. It also renders the PDF HTML, but delegates PDF report aggregation to `ReportService`. PDF export uses A4 landscape pages and print-safe wrapper blocks so each heading stays with its related table; Top Rooms and Completed Booking History begin on new pages.
 
 ## Dependency rules
 
@@ -240,8 +243,9 @@ The application currently saves the complete manager snapshot rather than indivi
 |---|---:|---|
 | Views → `HotelManager` facade | Yes | Existing widgets can call stable UI-facing operations. |
 | Views → `DataManager` | Yes | Views request persistence only after a successful business mutation. |
-| `HotelManager` → direct managers | Yes | Composition of immediate hotel operation branches. |
-| Manager → direct services | Yes | One-level ownership boundary. |
+| `HotelManager` → workflow managers | Yes | Facade methods create a local manager and delegate one workflow; no manager is retained as a member. |
+| Manager → direct services | Yes | A temporary manager owns its immediate service members. `BookingManager` owns only booking and invoice services. |
+| `BookingService` / availability-aware views → `RoomAvailabilityService` | Yes | The service is constructed on demand for booking validation and date-range display checks. |
 | `ReportService` → `HotelManager` / models | Yes | Read-only aggregation. |
 | `DataManager` → `HotelManager` / models | Yes | Restore and serialize domain state. |
 | Models → views or `DataManager` | No | Domain objects remain independent of UI and persistence. |
@@ -252,7 +256,7 @@ The application currently saves the complete manager snapshot rather than indivi
 - **Encapsulation**: entities expose controlled methods rather than public mutable fields.
 - **Inheritance and polymorphism**: concrete room types implement type-specific behavior through `Room`.
 - **Factory**: `RoomFactory` centralizes concrete room construction.
-- **Facade**: `HotelManager` preserves a stable boundary for current UI code while delegating workflows.
+- **Facade**: `HotelManager` preserves a stable boundary for current UI code while creating temporary workflow managers to delegate operations.
 - **Application services**: focused services implement booking, invoice, customer, room, maintenance, and availability workflows.
 - **Singleton**: `DataManager` provides one shared SQLite persistence component.
-- **DTO/report snapshot**: `DashboardReportData` separates report aggregation from rendering.
+- **DTO/report snapshot**: `DashboardReportData` separates PDF-report aggregation from PDF rendering.

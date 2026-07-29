@@ -6,6 +6,8 @@
 #include <QMessageBox>
 #include <QLocale>
 #include <QDate>
+#include <QColor>
+#include <QPalette>
 
 RoomDialog::RoomDialog(QWidget *parent)
     : QDialog(parent), m_isEditMode(false) {
@@ -47,7 +49,7 @@ void setupDialogStyle(QDialog* dialog) {
             color: #2B3674;
             font-weight: 600;
         }
-        QLineEdit, QComboBox, QDoubleSpinBox {
+        QLineEdit, QComboBox, QDoubleSpinBox, QDateEdit, QTextEdit {
             background-color: #F4F7FE;
             border: 1px solid #E9EDF7;
             border-radius: 8px;
@@ -55,7 +57,11 @@ void setupDialogStyle(QDialog* dialog) {
             font-size: 13px;
             color: #2B3674;
         }
-        QLineEdit:focus, QComboBox:focus, QDoubleSpinBox:focus {
+        QTextEdit {
+            selection-background-color: #005BFE;
+            selection-color: #FFFFFF;
+        }
+        QLineEdit:focus, QComboBox:focus, QDoubleSpinBox:focus, QDateEdit:focus, QTextEdit:focus {
             border: 1px solid #005BFE;
         }
         QComboBox QAbstractItemView {
@@ -64,6 +70,44 @@ void setupDialogStyle(QDialog* dialog) {
             selection-background-color: #005BFE;
             selection-color: #FFFFFF;
             border: 1px solid #E9EDF7;
+        }
+        QCalendarWidget QWidget {
+            background-color: #FFFFFF;
+            color: #2B3674;
+        }
+        QCalendarWidget QAbstractItemView:enabled {
+            color: #2B3674;
+            background-color: #FFFFFF;
+            selection-background-color: #005BFE;
+            selection-color: #FFFFFF;
+        }
+        QCalendarWidget QAbstractItemView:disabled {
+            color: #A3AED0;
+        }
+        QCalendarWidget QToolButton {
+            color: #2B3674;
+            background-color: transparent;
+        }
+        QCalendarWidget QMenu {
+            background-color: #FFFFFF;
+            color: #2B3674;
+        }
+        QPushButton#btnCancelMaintenance {
+            background-color: #FEE2E2;
+            color: #B91C1C;
+            font-weight: 600;
+            border: 1px solid #FCA5A5;
+            border-radius: 8px;
+            padding: 8px 16px;
+            font-size: 13px;
+        }
+        QPushButton#btnCancelMaintenance:hover {
+            background-color: #FECACA;
+        }
+        QPushButton#btnCancelMaintenance:disabled {
+            background-color: #F1F5F9;
+            color: #64748B;
+            border-color: #E2E8F0;
         }
         QPushButton#btnSave {
             background-color: #005BFE;
@@ -139,6 +183,10 @@ void RoomDialog::setupUI() {
     m_maintenanceNoteLabel = new QLabel("Maintenance note:", this);
     m_maintenanceNoteEdit = new QTextEdit(this);
     m_maintenanceNoteEdit->setPlaceholderText("Optional reason or work order reference");
+    QPalette maintenanceNotePalette = m_maintenanceNoteEdit->palette();
+    maintenanceNotePalette.setColor(QPalette::Text, QColor("#2B3674"));
+    maintenanceNotePalette.setColor(QPalette::PlaceholderText, QColor("#718096"));
+    m_maintenanceNoteEdit->setPalette(maintenanceNotePalette);
     m_maintenanceNoteEdit->setFixedHeight(62);
     formLayout->addRow(m_maintenanceNoteLabel, m_maintenanceNoteEdit);
 
@@ -146,7 +194,7 @@ void RoomDialog::setupUI() {
     m_existingMaintenanceCombo = new QComboBox(this);
     formLayout->addRow(m_existingMaintenanceLabel, m_existingMaintenanceCombo);
     m_cancelMaintenanceBtn = new QPushButton("Cancel selected schedule", this);
-    formLayout->addRow(QString(), m_cancelMaintenanceBtn);
+    m_cancelMaintenanceBtn->setObjectName("btnCancelMaintenance");
     m_existingMaintenanceLabel->setVisible(false);
     m_existingMaintenanceCombo->setVisible(false);
     m_cancelMaintenanceBtn->setVisible(false);
@@ -171,6 +219,7 @@ void RoomDialog::setupUI() {
     auto* saveBtn = new QPushButton("Save", this);
     saveBtn->setObjectName("btnSave");
 
+    btnLayout->addWidget(m_cancelMaintenanceBtn);
     btnLayout->addWidget(cancelBtn);
     btnLayout->addWidget(saveBtn);
     mainLayout->addLayout(btnLayout);
@@ -294,7 +343,7 @@ void RoomDialog::markSelectedMaintenanceForCancellation() {
 
     // Modified: Stage one maintenance cancellation and persist it atomically with the room edit.
     m_maintenanceIdToCancel = m_existingMaintenanceCombo->currentData().toString();
-    m_existingMaintenanceLabel->setText("Maintenance scheduled for cancellation on save:");
+    m_existingMaintenanceLabel->setText("Cancelled");
     m_existingMaintenanceCombo->setEnabled(false);
     m_cancelMaintenanceBtn->setText("Cancellation selected");
     m_cancelMaintenanceBtn->setEnabled(false);

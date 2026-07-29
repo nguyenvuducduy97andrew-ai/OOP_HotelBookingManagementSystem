@@ -95,8 +95,9 @@ The current persistence strategy favors consistency and recovery over incrementa
 src/
 ├── models/        Domain entities and the room hierarchy
 ├── controllers/
-│   ├── hotel/     HotelManager composition root and UI-compatible facade
-│   ├── booking/   BookingManager → BookingService, InvoiceService, RoomAvailabilityService
+│   ├── hotel/     HotelManager in-memory store and UI-compatible facade
+│   ├── booking/   BookingManager → BookingService, InvoiceService; availability service
+│   │               is created on demand by booking and view workflows
 │   ├── customer/  CustomerManager → CustomerService
 │   ├── room/      RoomManager → RoomService
 │   └── report/    ReportService read-only reporting branch
@@ -104,7 +105,7 @@ src/
 └── views/         Qt widgets, dialogs, navigation, dashboard, and .ui files
 ```
 
-`HotelManager` owns the in-memory entity collections and directly owns only its three immediate managers: Booking, Customer, and Room. `ReportService` is a sibling read-only branch because reporting has its own aggregation business logic. See [ARCHITECTURE.md](ARCHITECTURE.md) for ownership, dependencies, and data flow.
+`HotelManager` owns the in-memory entity collections and exposes the UI-compatible facade. Its facade methods create a `BookingManager`, `CustomerManager`, or `RoomManager` as a temporary local object for the requested workflow; it does not retain these managers as members. `ReportService` is a separately created, read-only aggregation service. See [ARCHITECTURE.md](ARCHITECTURE.md) for ownership, dependencies, and data flow.
 
 ## Build
 
@@ -145,11 +146,11 @@ If the compiler cannot build CMake's one-file test program, repair or reinstall 
 | `Customer` | Guest identity, contact details, and archive state |
 | `Booking` | Reservation dates, cancellation state, and explicit checkout state |
 | `Invoice` | Billing data for one completed booking |
-| `HotelManager` | In-memory collections, lookup/query facade, and manager composition root |
-| `BookingManager` | Immediate owner of booking and invoice services |
-| `CustomerManager` | Immediate owner of customer service |
-| `RoomManager` | Immediate owner of room service |
-| `ReportService` | Read-only Dashboard/PDF report snapshot builder |
+| `HotelManager` | In-memory collections and lookup/query facade; creates workflow managers per facade call |
+| `BookingManager` | Temporary booking-workflow delegate; owns booking and invoice services for its lifetime |
+| `CustomerManager` | Temporary customer-workflow delegate; owns customer service for its lifetime |
+| `RoomManager` | Temporary room-workflow delegate; owns room service for its lifetime |
+| `ReportService` | Read-only PDF report snapshot builder |
 | `DataManager` | SQLite schema, migrations, reconciliation, staged load, and transactional save |
 
 ## Contributors
