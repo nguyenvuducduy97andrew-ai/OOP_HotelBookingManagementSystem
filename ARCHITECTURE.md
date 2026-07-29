@@ -26,7 +26,8 @@ ReservationDialog and RoomStatusPageWidget ── create RoomAvailabilityService
 
 ReportService ── sibling, read-only aggregation over HotelManager
 DataManager   ── SQLite schema, migration, load, reconciliation, and save
-models        ── Room hierarchy, RoomMaintenance, Customer, Booking, Invoice
+models        ── Room hierarchy, RoomMaintenance, MaintenanceGuestNotice,
+                  Customer, Booking, Invoice, and StaffSession
 ```
 
 `HotelManager` does not have `BookingManager`, `CustomerManager`, or `RoomManager` member fields. Instead, its facade methods construct the relevant manager locally and delegate the request to it. Each temporary manager owns only its immediate service members during that call; `BookingManager` owns `BookingService` and `InvoiceService`, while `RoomAvailabilityService` is constructed on demand by `BookingService` and the two availability-aware views. `ReportService` is deliberately outside these mutation workflows because it has independent, read-only reporting rules.
@@ -71,7 +72,8 @@ HotelManager owns vectors of shared_ptr
   └── Invoice ── weak_ptr<Booking> plus immutable customer/room/date/price snapshot
 
 HotelManager owns vector values
-  └── RoomMaintenance ── room number, [startDate, endDate), note
+  ├── RoomMaintenance ── room number, [startDate, endDate), note, case status
+  └── MaintenanceGuestNotice ── internal simulated contact log per affected booking
 ```
 
 The manager is the sole owner of domain entities. Cross-entity links use `std::weak_ptr` so bookings and invoices do not create ownership cycles. Services are friends only where controlled construction or mutation needs access to the manager-owned collections; services do not own collections.
@@ -180,7 +182,7 @@ Names are intentionally not unique. The system treats duplicate phone and custom
 
 `RoomAvailabilityService` performs one scan over maintenance intervals and bookings, builds an unavailable-room set, and returns rooms that are usable for the requested date range. Reservation and Room Status use this same result, preventing the two pages from applying different availability rules.
 
-`RoomMaintenance` is a half-open interval `[startDate, endDate)`. Both booking creation/update and maintenance scheduling reject overlaps with unfinished work or stays. Completed, cancelled, and deleted bookings do not reserve future availability.
+`RoomMaintenance` is a half-open interval `[startDate, endDate)`. A conflict-free interval is `Confirmed` immediately. An interval that overlaps an unfinished stay becomes an `Awaiting guest response` case: it is a soft hold for new reservations and logs simulated internal notices, but it does not set the live room status to maintenance until staff resolve booking conflicts and explicitly confirm it. Completed, cancelled, and deleted bookings do not reserve future availability.
 
 ## Booking state model
 
@@ -190,6 +192,7 @@ Names are intentionally not unique. The system treats duplicate phone and custom
 | `ACTIVE` | Persisted `checkedIn == true`; not cancelled or checked out | Blocks present-day occupancy until checkout |
 | `COMPLETED` | Persisted `checkedOut == true` | Listed in history; not editable or cancellable |
 | `CANCELLED` | Persisted `cancelled == true` | Does not block availability |
+| `NO_SHOW` | Persisted cancellation fact with a `No-show:` reason | Does not block availability; remains distinct from pre-arrival cancellation |
 
 An overdue departure remains `ACTIVE` until staff checks it out. Planned dates are never used to infer check-in or completion during normal operation.
 

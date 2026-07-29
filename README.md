@@ -67,7 +67,7 @@ Checkout and invoice creation are staged together, then persisted through one `D
 - Cancelled, deleted, and completed bookings do not block future availability.
 - An active stay blocks a requested period that covers today until the guest checks out.
 - `RoomMaintenance` uses half-open intervals: `[startDate, endDate)`. A booking may begin on the maintenance end date.
-- Scheduling maintenance is rejected when it overlaps an unfinished booking; creating or editing a booking is rejected when it overlaps maintenance.
+- A conflict-free maintenance interval is confirmed immediately. An interval that overlaps an unfinished booking becomes an `Awaiting guest response` soft-hold case with simulated internal notices; it still blocks new overlapping reservations but becomes visible as live maintenance only after staff resolve conflicts and confirm it.
 - `Room::isAvailable` represents permanent availability. A dated maintenance interval is separate and does not permanently disable a room.
 
 ## Customers and country input
@@ -92,7 +92,7 @@ Bookings of the removed duplicate are reassigned to the retained customer. Incom
 ## Persistence
 
 - Runtime database: `data/hotel_data.db`.
-- Tables: `Customer`, `Room`, `RoomMaintenance`, `Booking`, and `Invoice`.
+- Tables: `Customer`, `Room`, `RoomMaintenance`, `MaintenanceGuestNotice`, `Booking`, and `Invoice`.
 - Migration adds explicit check-in/check-out facts, actual stay dates, booked rate/tax, occupancy, and cancellation-audit columns. Legacy completed rows are backfilled only when an invoice proves checkout; a date alone never activates a stay.
 - Each `Invoice` stores its own customer, room, actual-stay date, unit-price snapshot, and invoice issue date. The issue date is not a payment-status field; payment settlement requires a future folio/payment module.
 - SQLite foreign keys, a 5-second busy timeout, and indexes support integrity and common booking/date queries. Customer phone numbers are unique at the database layer. `DataVersion` detects a stale full snapshot from another running instance and prevents it from overwriting newer data.
@@ -158,6 +158,8 @@ If the compiler cannot build CMake's one-file test program, repair or reinstall 
 | `Customer` | Guest identity, contact details, and archive state |
 | `Booking` | Planned/actual stay dates, guest counts, confirmed rate/tax, and lifecycle audit facts |
 | `Invoice` | Immutable billing data for one completed booking, validated against the booking snapshot |
+| `MaintenanceGuestNotice` | Internal simulated guest-contact log for an affected maintenance booking; it is not delivery evidence |
+| `StaffSession` | In-memory authenticated username, display name, and role for the current desktop process |
 | `HotelManager` | In-memory collections and lookup/query facade; creates workflow managers per facade call |
 | `BookingManager` | Temporary booking-workflow delegate; owns booking and invoice services for its lifetime |
 | `CustomerManager` | Temporary customer-workflow delegate; owns customer service for its lifetime |
