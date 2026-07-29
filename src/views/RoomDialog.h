@@ -10,6 +10,7 @@
 #include <vector>
 #include "RoomFactory.h"
 #include "RoomMaintenance.h"
+#include "MaintenanceGuestNotice.h"
 
 class RoomDialog : public QDialog {
     Q_OBJECT
@@ -27,13 +28,16 @@ public:
     QString getMaintenanceStartDate() const;
     QString getMaintenanceEndDate() const;
     QString getMaintenanceNote() const;
-    void setExistingMaintenanceSchedules(const std::vector<RoomMaintenance>& schedules);
+    void setExistingMaintenanceSchedules(const std::vector<RoomMaintenance>& schedules,
+                                         const std::vector<MaintenanceGuestNotice>& notices);
     QString getMaintenanceIdToCancel() const;
+    QString getMaintenanceIdToConfirm() const;
 
 private slots:
     void onTypeChanged(int index);
     void onStatusChanged(int index);
     void markSelectedMaintenanceForCancellation();
+    void markSelectedMaintenanceForConfirmation();
     void onAccept();
 
 private:
@@ -52,7 +56,9 @@ private:
     QLabel* m_existingMaintenanceLabel;
     QComboBox* m_existingMaintenanceCombo;
     QPushButton* m_cancelMaintenanceBtn;
+    QPushButton* m_confirmMaintenanceBtn;
     QString m_maintenanceIdToCancel;
+    QString m_maintenanceIdToConfirm;
     QLabel* m_extraFeeLabel;
     QDoubleSpinBox* m_extraFeeSpin;
 

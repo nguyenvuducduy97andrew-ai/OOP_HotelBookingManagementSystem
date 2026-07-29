@@ -109,6 +109,16 @@ void setupDialogStyle(QDialog* dialog) {
             color: #64748B;
             border-color: #E2E8F0;
         }
+        QPushButton#btnConfirmMaintenance {
+            background-color: #ECFDF5;
+            color: #047857;
+            font-weight: 600;
+            border: 1px solid #A7F3D0;
+            border-radius: 8px;
+            padding: 8px 16px;
+            font-size: 13px;
+        }
+        QPushButton#btnConfirmMaintenance:hover { background-color: #D1FAE5; }
         QPushButton#btnSave {
             background-color: #005BFE;
             color: #FFFFFF;
@@ -198,6 +208,9 @@ void RoomDialog::setupUI() {
     m_existingMaintenanceLabel->setVisible(false);
     m_existingMaintenanceCombo->setVisible(false);
     m_cancelMaintenanceBtn->setVisible(false);
+    m_confirmMaintenanceBtn = new QPushButton("Confirm resolved case", this);
+    m_confirmMaintenanceBtn->setObjectName("btnConfirmMaintenance");
+    m_confirmMaintenanceBtn->setVisible(false);
 
     m_extraFeeLabel = new QLabel(this);
     m_extraFeeSpin = new QDoubleSpinBox(this);
@@ -220,6 +233,7 @@ void RoomDialog::setupUI() {
     saveBtn->setObjectName("btnSave");
 
     btnLayout->addWidget(m_cancelMaintenanceBtn);
+    btnLayout->addWidget(m_confirmMaintenanceBtn);
     btnLayout->addWidget(cancelBtn);
     btnLayout->addWidget(saveBtn);
     mainLayout->addLayout(btnLayout);
@@ -227,6 +241,11 @@ void RoomDialog::setupUI() {
     connect(m_typeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &RoomDialog::onTypeChanged);
     connect(m_availabilityCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &RoomDialog::onStatusChanged);
     connect(m_cancelMaintenanceBtn, &QPushButton::clicked, this, &RoomDialog::markSelectedMaintenanceForCancellation);
+    connect(m_confirmMaintenanceBtn, &QPushButton::clicked, this, &RoomDialog::markSelectedMaintenanceForConfirmation);
+    connect(m_existingMaintenanceCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int) {
+        const bool pendingGuestResponse = m_existingMaintenanceCombo->currentData(Qt::UserRole + 1).toString() == "Awaiting guest response";
+        m_confirmMaintenanceBtn->setEnabled(pendingGuestResponse);
+    });
     connect(cancelBtn, &QPushButton::clicked, this, &QDialog::reject);
     connect(saveBtn, &QPushButton::clicked, this, &RoomDialog::onAccept);
     onStatusChanged(m_availabilityCombo->currentIndex());
@@ -261,7 +280,7 @@ void RoomDialog::onAccept() {
         QMessageBox::warning(this, "Invalid maintenance dates", "The date the room becomes available again must be after the maintenance start date.");
         return;
     }
-    if (!m_maintenanceIdToCancel.isEmpty() && shouldScheduleMaintenance()) {
+    if ((!m_maintenanceIdToCancel.isEmpty() || !m_maintenanceIdToConfirm.isEmpty()) && shouldScheduleMaintenance()) {
         QMessageBox::warning(this, "Complete one maintenance action", "Save the schedule cancellation first, then create a new maintenance schedule.");
         return;
     }
@@ -308,18 +327,32 @@ QString RoomDialog::getMaintenanceNote() const {
     return m_maintenanceNoteEdit->toPlainText().trimmed();
 }
 
-void RoomDialog::setExistingMaintenanceSchedules(const std::vector<RoomMaintenance>& schedules) {
+void RoomDialog::setExistingMaintenanceSchedules(const std::vector<RoomMaintenance>& schedules,
+                                                 const std::vector<MaintenanceGuestNotice>& notices) {
     m_existingMaintenanceCombo->clear();
     m_maintenanceIdToCancel.clear();
+    m_maintenanceIdToConfirm.clear();
 
     for (const RoomMaintenance& maintenance : schedules) {
-        QString label = QString("%1 to %2")
-            .arg(QString::fromStdString(maintenance.getStartDate()),
-                 QString::fromStdString(maintenance.getEndDate()));
+        int noticeCount = 0;
+        for (const auto& notice : notices) {
+            if (notice.getMaintenanceId() == maintenance.getMaintenanceId()) {
+                ++noticeCount;
+            }
+        }
+        QString label = QString("%1 | %2 to %3")
+            .arg(QString::fromStdString(maintenance.getStatus()))
+            .arg(QString::fromStdString(maintenance.getStartDate()))
+            .arg(QString::fromStdString(maintenance.getEndDate()));
+        if (noticeCount > 0) {
+            label += QString(" | Simulated email logged for %1 booking(s)").arg(noticeCount);
+        }
         if (!maintenance.getNote().empty()) {
             label += QString(" — %1").arg(QString::fromStdString(maintenance.getNote()));
         }
         m_existingMaintenanceCombo->addItem(label, QString::fromStdString(maintenance.getMaintenanceId()));
+        m_existingMaintenanceCombo->setItemData(m_existingMaintenanceCombo->count() - 1,
+                                                QString::fromStdString(maintenance.getStatus()), Qt::UserRole + 1);
     }
 
     const bool hasSchedules = m_existingMaintenanceCombo->count() > 0;
@@ -330,11 +363,17 @@ void RoomDialog::setExistingMaintenanceSchedules(const std::vector<RoomMaintenan
     m_cancelMaintenanceBtn->setText("Cancel selected schedule");
     m_cancelMaintenanceBtn->setEnabled(hasSchedules);
     m_cancelMaintenanceBtn->setVisible(hasSchedules);
+    const bool pendingGuestResponse = hasSchedules
+        && m_existingMaintenanceCombo->currentData(Qt::UserRole + 1).toString() == "Awaiting guest response";
+    m_confirmMaintenanceBtn->setEnabled(pendingGuestResponse);
+    m_confirmMaintenanceBtn->setVisible(hasSchedules);
 }
 
 QString RoomDialog::getMaintenanceIdToCancel() const {
     return m_maintenanceIdToCancel;
 }
+
+QString RoomDialog::getMaintenanceIdToConfirm() const { return m_maintenanceIdToConfirm; }
 
 void RoomDialog::markSelectedMaintenanceForCancellation() {
     if (m_existingMaintenanceCombo->currentIndex() < 0) {
@@ -347,6 +386,16 @@ void RoomDialog::markSelectedMaintenanceForCancellation() {
     m_existingMaintenanceCombo->setEnabled(false);
     m_cancelMaintenanceBtn->setText("Cancellation selected");
     m_cancelMaintenanceBtn->setEnabled(false);
+}
+
+void RoomDialog::markSelectedMaintenanceForConfirmation() {
+    if (m_existingMaintenanceCombo->currentIndex() < 0) {
+        return;
+    }
+
+    // Modified: Close immediately after selecting confirmation; the parent workflow rechecks live booking conflicts before persistence.
+    m_maintenanceIdToConfirm = m_existingMaintenanceCombo->currentData().toString();
+    accept();
 }
 
 void RoomDialog::onStatusChanged(int index) {

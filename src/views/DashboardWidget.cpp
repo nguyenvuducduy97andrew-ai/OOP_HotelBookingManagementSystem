@@ -165,6 +165,7 @@ void DashboardWidget::populateData()
     int activeCount = 0;
     int completedCount = 0;
     int cancelledCount = 0;
+    int noShowCount = 0;
     const QDate statsToday = QDate::currentDate();
 
     for (const auto& room : m_manager->getRooms()) {
@@ -195,6 +196,7 @@ void DashboardWidget::populateData()
         case BookingState::ACTIVE: activeCount++; break;
         case BookingState::COMPLETED: completedCount++; break;
         case BookingState::CANCELLED: cancelledCount++; break;
+        case BookingState::NO_SHOW: noShowCount++; break;
         }
 
         const QDate checkIn = QDate::fromString(QString::fromStdString(booking->getCheckInDate()), Qt::ISODate);
@@ -235,7 +237,7 @@ void DashboardWidget::populateData()
     ui->miniCard1->setData("📅", QColor("#E8F0FF"), "Upcoming", QString::number(upcomingCount));
     ui->miniCard2->setData("🛏", QColor("#E6FAF4"), "Active", QString::number(activeCount));
     ui->miniCard3->setData("✔", QColor("#F0EBFF"), "Completed", QString::number(completedCount));
-    ui->miniCard4->setData("✖", QColor("#FDE8E6"), "Cancelled", QString::number(cancelledCount));
+    ui->miniCard4->setData("✖", QColor("#FDE8E6"), "Cancelled / no-show", QString::number(cancelledCount + noShowCount));
 
     // ---- Featured room list ----
     // 1. Update the title for the selected time range.
@@ -828,8 +830,10 @@ QString DashboardWidget::buildBookingHistoryHtml() const
             continue;
         }
 
-        const QDate checkIn = QDate::fromString(QString::fromStdString(booking->getCheckInDate()), Qt::ISODate);
-        const QDate checkOut = QDate::fromString(QString::fromStdString(booking->getCheckOutDate()), Qt::ISODate);
+        const QDate checkIn = QDate::fromString(QString::fromStdString(
+            booking->getActualCheckInDate().empty() ? booking->getCheckInDate() : booking->getActualCheckInDate()), Qt::ISODate);
+        // Modified: Show factual departure dates in completed history after an early or late checkout.
+        const QDate checkOut = QDate::fromString(QString::fromStdString(booking->getEffectiveCheckOutDate()), Qt::ISODate);
         if (!checkIn.isValid() || !checkOut.isValid() || checkOut > today || !isInSelectedRange(checkOut)) {
             continue;
         }
@@ -912,13 +916,22 @@ QString DashboardWidget::buildReportHtml() const
     const int activeCount = report.activeBookings;
     const int completedCount = report.completedBookings;
     const int cancelledCount = report.cancelledBookingsCount;
+    const int noShowCount = report.noShowBookingsCount;
     const int bookingsThisMonth = report.bookingsThisMonth;
     const int bookingsThisYear = report.bookingsThisYear;
+    const int periodOccupiedRoomNights = report.periodOccupiedRoomNights;
+    const int periodAvailableRoomNights = report.periodAvailableRoomNights;
+    const int periodDaysToDate = report.periodDaysToDate;
     const double occupancyRate = report.occupancyRate;
+    const double periodOccupancyRate = report.periodOccupancyRate;
+    const double invoicedRevenue = report.invoicedRevenue;
+    const double averageDailyRate = report.averageDailyRate;
+    const double revenuePerAvailableRoom = report.revenuePerAvailableRoom;
     const auto& popularRooms = report.topRooms;
     const auto& scheduledBookings = report.openBookings;
     const auto& completedStays = report.completedStays;
     const auto& cancelledBookings = report.cancelledBookings;
+    const auto& noShowBookings = report.noShowBookings;
 
     QString html;
     QTextStream stream(&html);
@@ -944,7 +957,7 @@ QString DashboardWidget::buildReportHtml() const
             << ".small-card{border:1px solid #DFE8F5;border-radius:10px;padding:12px;background:#FFFFFF;}"
             << ".small-card h2{margin-top:0;}"
             << ".summary{border-collapse:separate;border-spacing:8px 0;margin-top:14px;}"
-            << ".summary td{border:1px solid #DFE8F5;border-radius:10px;padding:12px 14px;background:#FFFFFF;width:20%;}"
+            << ".summary td{border:1px solid #DFE8F5;border-radius:10px;padding:12px 14px;background:#FFFFFF;width:16.66%;}"
             << ".metric-label{font-size:8pt;color:#7B8BA5;font-weight:650;}"
             << ".metric-value{font-size:19pt;font-weight:800;color:#1B3F83;margin-top:3px;}"
             << ".data-table{border:1px solid #DDE6F2;margin-top:8px;}"
@@ -968,19 +981,26 @@ QString DashboardWidget::buildReportHtml() const
 
     stream << "<table class='summary'><tr>";
     stream << "<td><div class='metric-label'>Total rooms</div><div class='metric-value'>" << totalRooms << "</div></td>";
-    stream << "<td><div class='metric-label'>Occupied rooms</div><div class='metric-value'>" << occupiedRooms << "</div></td>";
-    stream << "<td><div class='metric-label'>Occupancy rate</div><div class='metric-value'>" << qRound(occupancyRate) << "%</div></td>";
+    stream << "<td><div class='metric-label'>Currently occupied rooms</div><div class='metric-value'>" << occupiedRooms << "</div></td>";
+    stream << "<td><div class='metric-label'>Current occupancy</div><div class='metric-value'>" << qRound(occupancyRate) << "%</div></td>";
+    // Modified: Separate the real-time snapshot from selected-period room-night occupancy so PDF KPI labels cannot imply the same measurement.
+    stream << "<td><div class='metric-label'>Period occupancy (to date)</div><div class='metric-value'>" << qRound(periodOccupancyRate) << "%</div><div class='section-note'>"
+           << periodOccupiedRoomNights << " / " << periodAvailableRoomNights << " room-nights across " << periodDaysToDate << " day(s)</div></td>";
     stream << "<td><div class='metric-label'>Active bookings</div><div class='metric-value'>" << activeCount << "</div></td>";
     stream << "<td><div class='metric-label'>Completed stays</div><div class='metric-value'>" << completedCount << "</div></td>";
     stream << "</tr></table>";
 
     // Modified and optimized performance: use one-row wrapper tables for compact report blocks so Qt keeps their title and content on the same PDF page.
     stream << "<table class='overview-grid'><tr><td><div class='small-card'><h2>Portfolio overview</h2><div class='section-note'>Current operational status and booking volume.</div>";
-    stream << "<table class='data-table'><tr><th>Upcoming</th><th>Active</th><th>Completed</th><th>Cancelled</th><th>Check-ins this month</th><th>Check-ins this year</th></tr>";
-    stream << "<tr><td>" << upcomingCount << "</td><td>" << activeCount << "</td><td>" << completedCount << "</td><td>" << cancelledCount << "</td><td>" << bookingsThisMonth << "</td><td>" << bookingsThisYear << "</td></tr></table></div></td><td><div class='small-card'><h2>Room inventory</h2><div class='section-note'>Active room portfolio by category.</div>";
+    stream << "<table class='data-table'><tr><th>Upcoming</th><th>Active</th><th>Completed</th><th>Cancelled</th><th>No-show</th><th>Check-ins this month</th><th>Check-ins this year</th></tr>";
+    stream << "<tr><td>" << upcomingCount << "</td><td>" << activeCount << "</td><td>" << completedCount << "</td><td>" << cancelledCount << "</td><td>" << noShowCount << "</td><td>" << bookingsThisMonth << "</td><td>" << bookingsThisYear << "</td></tr></table></div></td><td><div class='small-card'><h2>Room inventory</h2><div class='section-note'>Active room portfolio by category.</div>";
 
     stream << "<table class='data-table'><tr><th>Standard</th><th>Deluxe</th><th>Suite</th></tr>";
     stream << "<tr><td>" << standardCount << "</td><td>" << deluxeCount << "</td><td>" << suiteCount << "</td></tr></table></div></td></tr></table>";
+
+    stream << "<table class='compact-shell'><tr><td><div class='small-card'><h2>Revenue indicators (period to date)</h2><div class='section-note'>Based on issued invoices for completed stays, not payment settlement. RevPAR uses the selected period's elapsed room-nights.</div>";
+    stream << "<table class='data-table'><tr><th>Invoiced revenue</th><th>ADR</th><th>RevPAR</th></tr>";
+    stream << "<tr><td>" << QString::number(invoicedRevenue, 'f', 0) << " VND</td><td>" << QString::number(averageDailyRate, 'f', 0) << " VND</td><td>" << QString::number(revenuePerAvailableRoom, 'f', 0) << " VND</td></tr></table></div></td></tr></table>";
 
     // Modified and optimized performance: begin the top-room summary on a fresh page so its heading and table always remain one cohesive PDF block.
     stream << "<table class='compact-shell page-break-before'><tr><td><div class='small-card'><h2>Top rooms in selected period</h2><div class='section-note'>Ranked by check-ins during " << escapeHtml(rangeLabel) << ".</div>";
@@ -1013,18 +1033,25 @@ QString DashboardWidget::buildReportHtml() const
     }
     stream << "</table></div></td></tr></table>";
 
-    // Modified and optimized performance: keep the cancellation heading and its empty state or table in one compact PDF block.
-    stream << "<table class='compact-shell'><tr><td><div class='small-card'><h2>Cancelled reservations</h2><div class='section-note'>Reservations with check-in dates in the selected period.</div>";
-    if (cancelledBookings.empty()) {
-        stream << "<div class='empty'>No cancelled reservations in the selected period.</div>";
+    // Modified: Present cancellations and no-shows separately in one audit block so both released-inventory outcomes remain visible.
+    stream << "<table class='compact-shell'><tr><td><div class='small-card'><h2>Cancelled &amp; no-show reservations</h2><div class='section-note'>Reservations with planned check-in dates in the selected period.</div>";
+    if (cancelledBookings.empty() && noShowBookings.empty()) {
+        stream << "<div class='empty'>No cancelled or no-show reservations in the selected period.</div>";
     } else {
-        stream << "<table class='data-table'><tr><th>Booking ID</th><th>Guest</th><th>Customer ID</th><th>Room</th><th>Check-in</th><th>Planned check-out</th></tr>";
-        for (const auto& entry : cancelledBookings) {
+        stream << "<table class='data-table'><tr><th>Booking ID</th><th>Guest</th><th>Customer ID</th><th>Room</th><th>Check-in</th><th>Planned check-out</th><th>Status</th></tr>";
+        const auto renderReleasedReservation = [&stream](const ReportBookingEntry& entry) {
             stream << "<tr><td>" << escapeHtml(entry.bookingId) << "</td><td>" << escapeHtml(entry.customerName)
                    << "</td><td>" << escapeHtml(entry.customerId) << "</td><td>" << escapeHtml(entry.roomNumber)
                    << "<br/><span class='section-note'>" << escapeHtml(entry.roomType)
                    << "</span></td><td>" << escapeHtml(entry.checkIn.toString("dd MMM yyyy"))
-                   << "</td><td>" << escapeHtml(entry.checkOut.toString("dd MMM yyyy")) << "</td></tr>";
+                   << "</td><td>" << escapeHtml(entry.checkOut.toString("dd MMM yyyy"))
+                   << "</td><td class='status'>" << escapeHtml(entry.status) << "</td></tr>";
+        };
+        for (const auto& entry : cancelledBookings) {
+            renderReleasedReservation(entry);
+        }
+        for (const auto& entry : noShowBookings) {
+            renderReleasedReservation(entry);
         }
         stream << "</table>";
     }

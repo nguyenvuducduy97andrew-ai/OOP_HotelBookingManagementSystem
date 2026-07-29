@@ -14,6 +14,7 @@ public:
     bool scheduleMaintenance(const std::string& roomNumber, const std::string& startDate,
                              const std::string& endDate, const std::string& note, std::string& errorMessage);
     bool cancelMaintenance(const std::string& maintenanceId, std::string& errorMessage);
+    bool confirmMaintenance(const std::string& maintenanceId, std::string& errorMessage);
     bool archiveRoom(const std::string& roomNumber, std::string& errorMessage);
     bool restoreRoom(const std::string& roomNumber, std::string& errorMessage);
     bool deleteRoom(const std::string& roomNumber, std::string& errorMessage);

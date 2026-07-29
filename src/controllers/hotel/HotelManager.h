@@ -8,6 +8,7 @@
 #include "Room.h"
 #include "RoomFactory.h"
 #include "RoomMaintenance.h"
+#include "MaintenanceGuestNotice.h"
 
 class BookingService;
 class InvoiceService;
@@ -32,6 +33,7 @@ private:
     std::vector<std::shared_ptr<Booking>> bookings;
     std::vector<std::shared_ptr<Invoice>> invoices;
     std::vector<RoomMaintenance> roomMaintenances;
+    std::vector<MaintenanceGuestNotice> maintenanceGuestNotices;
 
     // Validation helpers
     bool isValidRoomNumber(const std::string& roomNumber) const;
@@ -68,6 +70,7 @@ private:
                                      const std::string& endDate, const std::string& note,
                                      std::string& errorMessage);
     bool cancelRoomMaintenanceCore(const std::string& maintenanceId, std::string& errorMessage);
+    bool confirmRoomMaintenanceCore(const std::string& maintenanceId, std::string& errorMessage);
     bool archiveRoomCore(const std::string& roomNumber, std::string& errorMessage);
     bool archiveCustomerCore(const std::string& customerId, std::string& errorMessage);
     bool restoreRoomCore(const std::string& roomNumber, std::string& errorMessage);
@@ -88,6 +91,8 @@ public:
     const std::vector<std::shared_ptr<Booking>>& getBookings() const;
     const std::vector<std::shared_ptr<Invoice>>& getInvoices() const;
     const std::vector<RoomMaintenance>& getRoomMaintenances() const;
+    const std::vector<MaintenanceGuestNotice>& getMaintenanceGuestNotices() const;
+    std::vector<MaintenanceGuestNotice> getMaintenanceGuestNotices(const std::string& maintenanceId) const;
 
     // Modified: Moved internal add methods to public so DataManager can populate entities when loading database
     
@@ -161,6 +166,8 @@ public:
         const std::string& roomNumber,
         const std::string& checkInDate,
         const std::string& checkOutDate,
+        int adultCount,
+        int childCount,
         std::string& errorMessage
         );
 
@@ -170,16 +177,16 @@ public:
         const std::string& roomNumber,
         const std::string& checkInDate,
         const std::string& checkOutDate,
+        int adultCount,
+        int childCount,
         std::string& errorMessage
         );
 
-    // Modified: Added 'nights' and 'paymentDate' so the view layer can pass down computed duration and billing timestamps
+    // Modified: Invoice values are derived from the booking's locked rate, tax, and actual stay duration.
     bool createInvoice(
         const std::string& invoiceId,
         const std::string& bookingId,
-        double taxRate,
-        int nights,
-        const std::string& paymentDate,
+        const std::string& invoiceIssuedDate,
         std::string& errorMessage
         );
 
@@ -195,10 +202,14 @@ public:
         bool available,
         std::string& errorMessage
         );
+
+    bool checkInBooking(const std::string& bookingId, const std::string& checkInDate,
+                        std::string& errorMessage);
     bool scheduleRoomMaintenance(const std::string& roomNumber, const std::string& startDate,
                                  const std::string& endDate, const std::string& note,
                                  std::string& errorMessage);
     bool cancelRoomMaintenance(const std::string& maintenanceId, std::string& errorMessage);
+    bool confirmRoomMaintenance(const std::string& maintenanceId, std::string& errorMessage);
 
     bool archiveRoom(const std::string& roomNumber, std::string& errorMessage);
     bool archiveCustomer(const std::string& customerId, std::string& errorMessage);
@@ -214,7 +225,18 @@ public:
         const std::string& checkOutDate,
         bool cancelled,
         bool deleted,
+        bool checkedIn,
         bool checkedOut,
+        const std::string& actualCheckInDate,
+        const std::string& actualCheckOutDate,
+        double quotedUnitPrice,
+        double quotedTaxRate,
+        int adultCount,
+        int childCount,
+        const std::string& cancellationReason,
+        const std::string& cancelledAt,
+        const std::string& createdAt,
+        const std::string& updatedAt,
         std::string& errorMessage
     );
     bool restoreCustomerFromDatabase(
@@ -229,7 +251,7 @@ public:
         const std::string& bookingId,
         double taxRate,
         int nights,
-        const std::string& paymentDate,
+        const std::string& invoiceIssuedDate,
         double unitPrice,
         const std::string& customerNameSnapshot,
         const std::string& customerIdSnapshot,
@@ -242,9 +264,15 @@ public:
     );
     bool restoreRoomMaintenanceFromDatabase(const std::string& maintenanceId, const std::string& roomNumber,
                                             const std::string& startDate, const std::string& endDate,
-                                            const std::string& note, std::string& errorMessage);
+                                            const std::string& note, const std::string& status,
+                                            const std::string& createdAt, std::string& errorMessage);
+    bool restoreMaintenanceGuestNoticeFromDatabase(const std::string& noticeId, const std::string& maintenanceId,
+                                                   const std::string& bookingId, const std::string& channel,
+                                                   const std::string& status, const std::string& loggedAt,
+                                                   std::string& errorMessage);
     // Added: Soft-cancels a reservation by changing its status and releasing the assigned room back to inventory
-    bool cancelBooking(const std::string& bookingId, std::string& errorMessage);
+    bool cancelBooking(const std::string& bookingId, const std::string& reason, std::string& errorMessage);
+    bool markNoShow(const std::string& bookingId, const std::string& reason, std::string& errorMessage);
 
     // ID generation
     std::string nextInvoiceId() const;

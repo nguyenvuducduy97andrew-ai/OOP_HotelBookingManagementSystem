@@ -7,7 +7,7 @@ class Room;
 class HotelManager;
 class BookingService;
 
-enum class BookingState { UPCOMING, ACTIVE, COMPLETED, CANCELLED };
+enum class BookingState { UPCOMING, ACTIVE, COMPLETED, CANCELLED, NO_SHOW };
 
 class Booking
 {
@@ -20,8 +20,23 @@ private:
     std::string checkOutDate;
     bool cancelled; 
     bool deleted;
-    // Modified and optimized performance: persist the explicit checkout event independently from planned stay dates.
+    // Modified: Persist explicit arrival and departure facts separately from the reservation's planned dates.
+    bool checkedIn;
     bool checkedOut;
+    std::string actualCheckInDate;
+    std::string actualCheckOutDate;
+    // Modified: Lock the confirmed room rate and tax at reservation time for stable billing.
+    double quotedUnitPrice;
+    double quotedTaxRate;
+    // Modified: Persist reservation occupancy so capacity validation is enforceable beyond the UI.
+    int adultCount;
+    int childCount;
+    // Modified: Retain cancellation context for operational audit instead of removing the reservation.
+    std::string cancellationReason;
+    std::string cancelledAt;
+    // Modified: Persist creation and last-change timestamps so booking history can be audited without inferring events from planned dates.
+    std::string createdAt;
+    std::string updatedAt;
 
 public:
     Booking();
@@ -62,6 +77,34 @@ public:
     // Modified and optimized performance: expose the persisted checkout state used by operational and history views.
     bool isCheckedOut() const;
     void setCheckedOut(bool checkedOut);
+
+    bool isCheckedIn() const;
+    void setCheckedIn(bool checkedIn);
+
+    std::string getActualCheckInDate() const;
+    void setActualCheckInDate(const std::string& value);
+    std::string getActualCheckOutDate() const;
+    void setActualCheckOutDate(const std::string& value);
+    std::string getEffectiveCheckOutDate() const;
+
+    double getQuotedUnitPrice() const;
+    void setQuotedUnitPrice(double value);
+    double getQuotedTaxRate() const;
+    void setQuotedTaxRate(double value);
+
+    int getAdultCount() const;
+    void setAdultCount(int value);
+    int getChildCount() const;
+    void setChildCount(int value);
+
+    std::string getCancellationReason() const;
+    void setCancellationReason(const std::string& value);
+    std::string getCancelledAt() const;
+    void setCancelledAt(const std::string& value);
+    std::string getCreatedAt() const;
+    void setCreatedAt(const std::string& value);
+    std::string getUpdatedAt() const;
+    void setUpdatedAt(const std::string& value);
 
     bool isValid() const;  // Check if booking has valid (non-expired) customer and room
 };

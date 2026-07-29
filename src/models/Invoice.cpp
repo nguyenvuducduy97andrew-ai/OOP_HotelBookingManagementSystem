@@ -28,13 +28,13 @@ std::string formatMoney(double value)
 
 
 // Modified: Updated default constructor to initialize 'nights' instead of 'totalAmount'
-// Modified: paymentDate now defaults to an empty string or dummy ISO format
+// Modified: invoice issue date defaults to an empty ISO value; payment settlement is not modeled here.
 Invoice::Invoice() {
     this->invoiceId = "INV_UNKNOWN";
     this->bookingId = "";
     this->taxRate = 0.0;
     this->nights = 0; // Added: Initializing the new nights member variable
-    this->paymentDate = ""; // Modified: Using empty string instead of QDate::currentDate()
+    this->invoiceIssuedDate = "";
     this->unitPrice = 0.0;
 }
 
@@ -87,13 +87,13 @@ void Invoice::setNights(int nights) {
 }
 
 // Modified: Returns std::string instead of QDate
-std::string Invoice::getPaymentDate() const {
-    return paymentDate;
+std::string Invoice::getInvoiceIssuedDate() const {
+    return invoiceIssuedDate;
 }
 
 // Modified: Parameter type updated to const std::string&
-void Invoice::setPaymentDate(const std::string& paymentDate) {
-    this->paymentDate = paymentDate;
+void Invoice::setInvoiceIssuedDate(const std::string& value) {
+    invoiceIssuedDate = value;
 }
 
 double Invoice::getUnitPrice() const { return unitPrice; }
@@ -125,7 +125,7 @@ bool Invoice::isValid() const {
            unitPrice > 0.0 &&
            !customerNameSnapshot.empty() && !customerIdSnapshot.empty() && !customerPhoneSnapshot.empty() &&
            !roomNumberSnapshot.empty() && !roomTypeSnapshot.empty() &&
-           isIsoDateString(paymentDate) && isIsoDateString(checkInDateSnapshot) &&
+           isIsoDateString(invoiceIssuedDate) && isIsoDateString(checkInDateSnapshot) &&
            isIsoDateString(checkOutDateSnapshot);
 }
 
@@ -146,7 +146,7 @@ std::string Invoice::generateInvoiceDetails() const {
 
     details << "<h3>====== HOTEL BOOKING INVOICE ======</h3>";
     details << "<b>Invoice ID:</b> " << invoiceId << "<br>";
-    details << "<b>Payment Date:</b> " << paymentDate << "<br>"; // Expected format: YYYY-MM-DD
+    details << "<b>Invoice Issued Date:</b> " << invoiceIssuedDate << "<br>";
     details << "--------------------------------------------------<br>";
 
     // Modified: Render the persisted snapshot so later customer or room edits cannot change a historical invoice.
@@ -183,8 +183,11 @@ void Invoice::captureBookingSnapshot(const std::shared_ptr<Booking>& sourceBooki
     }
 
     // Modified: Capture immutable guest, room, date, and pricing data when an invoice is created.
-    checkInDateSnapshot = sourceBooking->getCheckInDate();
-    checkOutDateSnapshot = sourceBooking->getCheckOutDate();
+    // Modified: Bill from confirmed reservation values and actual stay dates, never from mutable room pricing at checkout.
+    checkInDateSnapshot = sourceBooking->getActualCheckInDate().empty()
+        ? sourceBooking->getCheckInDate() : sourceBooking->getActualCheckInDate();
+    checkOutDateSnapshot = sourceBooking->getEffectiveCheckOutDate();
+    unitPrice = sourceBooking->getQuotedUnitPrice();
     const auto customer = sourceBooking->getCustomer();
     if (customer) {
         customerNameSnapshot = customer->getName();
@@ -195,6 +198,5 @@ void Invoice::captureBookingSnapshot(const std::shared_ptr<Booking>& sourceBooki
     if (room) {
         roomNumberSnapshot = room->getRoomNumber();
         roomTypeSnapshot = room->getRoomTypeName();
-        unitPrice = room->calculateTargetPrice();
     }
 }

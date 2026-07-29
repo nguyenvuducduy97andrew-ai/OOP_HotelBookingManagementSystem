@@ -14,6 +14,8 @@ public:
         const std::string& roomNumber,
         const std::string& checkInDate,
         const std::string& checkOutDate,
+        int adultCount,
+        int childCount,
         std::string& errorMessage);
 
     bool updateBooking(
@@ -22,14 +24,20 @@ public:
         const std::string& roomNumber,
         const std::string& checkInDate,
         const std::string& checkOutDate,
+        int adultCount,
+        int childCount,
         std::string& errorMessage);
+
+    bool checkInBooking(const std::string& bookingId, const std::string& checkInDate,
+                        std::string& errorMessage);
 
     bool completeBooking(
         const std::string& bookingId,
         const std::string& checkoutDate,
         std::string& errorMessage);
 
-    bool cancelBooking(const std::string& bookingId, std::string& errorMessage);
+    bool cancelBooking(const std::string& bookingId, const std::string& reason, std::string& errorMessage);
+    bool markNoShow(const std::string& bookingId, const std::string& reason, std::string& errorMessage);
 
 private:
     bool validateBookingDates(
@@ -41,6 +49,8 @@ private:
         const std::string& roomNumber,
         const std::string& checkInDate,
         const std::string& checkOutDate,
+        int adultCount,
+        int childCount,
         std::string& errorMessage) const;
 
     HotelManager& m_hotelManager;

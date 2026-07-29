@@ -30,6 +30,7 @@ private:
     void updateDetailPanel(const std::shared_ptr<Room>& room);
     void refreshOccupancyCache();
     bool isRoomOccupied(const std::string& roomNumber) const;
+    std::shared_ptr<Booking> getAwaitingBooking(const std::string& roomNumber) const;
 
     HotelManager* m_manager;
     QString m_searchQuery;

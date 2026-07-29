@@ -12,9 +12,7 @@ public:
     bool createInvoice(
         const std::string& invoiceId,
         const std::string& bookingId,
-        double taxRate,
-        int nights,
-        const std::string& paymentDate,
+        const std::string& invoiceIssuedDate,
         std::string& errorMessage);
 
 private:

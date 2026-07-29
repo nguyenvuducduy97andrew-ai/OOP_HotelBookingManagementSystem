@@ -39,6 +39,7 @@ QString statusText(BookingState state)
     case BookingState::ACTIVE: return QStringLiteral("Active");
     case BookingState::COMPLETED: return QStringLiteral("Completed");
     case BookingState::CANCELLED: return QStringLiteral("Cancelled");
+    case BookingState::NO_SHOW: return QStringLiteral("No-show");
     }
     return QStringLiteral("Unknown");
 }
@@ -59,6 +60,26 @@ QString formatRangeLabel(const QDate& today, int rangeIndex)
     }
     return QString::number(today.year());
 }
+
+struct ReportingWindow
+{
+    QDate start;
+    QDate endExclusive;
+};
+
+ReportingWindow elapsedReportingWindow(const QDate& today, int rangeIndex)
+{
+    if (rangeIndex == 1) {
+        return {today.addDays(1 - today.dayOfWeek()), today.addDays(1)};
+    }
+    if (rangeIndex == 2) {
+        return {QDate(today.year(), today.month(), 1), today.addDays(1)};
+    }
+    if (rangeIndex >= 3) {
+        return {QDate(today.year(), 1, 1), today.addDays(1)};
+    }
+    return {today, today.addDays(1)};
+}
 }
 
 ReportService::ReportService(const HotelManager* hotelManager)
@@ -73,12 +94,15 @@ DashboardReportData ReportService::buildDashboardReport(int rangeIndex, const QS
     report.rangeName = rangeName;
     const QDate today = report.generatedAt.date();
     report.rangeLabel = formatRangeLabel(today, rangeIndex);
+    const ReportingWindow reportingWindow = elapsedReportingWindow(today, rangeIndex);
+    report.periodDaysToDate = reportingWindow.start.daysTo(reportingWindow.endExclusive);
 
     if (!m_hotelManager) {
         return report;
     }
 
     std::map<std::string, int> roomBookingCounts;
+    int completedNightsInRange = 0;
     for (const auto& room : m_hotelManager->getRooms()) {
         if (!room || room->isArchived()) {
             continue;
@@ -97,6 +121,7 @@ DashboardReportData ReportService::buildDashboardReport(int rangeIndex, const QS
     }
 
     report.occupiedRooms = static_cast<int>(m_hotelManager->getRoomsByOccupancy(true).size());
+    report.periodAvailableRoomNights = report.totalRooms * report.periodDaysToDate;
 
     for (const auto& booking : m_hotelManager->getBookings()) {
         if (!booking || booking->isDeleted()) {
@@ -109,21 +134,37 @@ DashboardReportData ReportService::buildDashboardReport(int rangeIndex, const QS
         case BookingState::ACTIVE: ++report.activeBookings; break;
         case BookingState::COMPLETED: ++report.completedBookings; break;
         case BookingState::CANCELLED: ++report.cancelledBookingsCount; break;
+        case BookingState::NO_SHOW: ++report.noShowBookingsCount; break;
         }
 
-        const QDate checkIn = QDate::fromString(QString::fromStdString(booking->getCheckInDate()), Qt::ISODate);
-        const QDate checkOut = QDate::fromString(QString::fromStdString(booking->getCheckOutDate()), Qt::ISODate);
-        if (checkIn.isValid() && checkIn.month() == today.month() && checkIn.year() == today.year()) {
+        const QDate checkIn = QDate::fromString(QString::fromStdString(
+            booking->getActualCheckInDate().empty() ? booking->getCheckInDate() : booking->getActualCheckInDate()), Qt::ISODate);
+        // Modified: Completed-stay reports use the recorded departure rather than the reservation's planned departure.
+        const QDate checkOut = QDate::fromString(QString::fromStdString(booking->getEffectiveCheckOutDate()), Qt::ISODate);
+        // Modified: Count operational check-ins only after the guest actually arrives, never from a merely scheduled reservation.
+        const bool hasActuallyCheckedIn = state == BookingState::ACTIVE || state == BookingState::COMPLETED;
+        if (hasActuallyCheckedIn && checkIn.isValid() && checkIn.month() == today.month() && checkIn.year() == today.year()) {
             ++report.bookingsThisMonth;
         }
-        if (checkIn.isValid() && checkIn.year() == today.year()) {
+        if (hasActuallyCheckedIn && checkIn.isValid() && checkIn.year() == today.year()) {
             ++report.bookingsThisYear;
         }
 
-        if (isInSelectedRange(checkIn, today, rangeIndex) && !booking->isCancelled()) {
+        // Modified: Rank rooms by actual arrivals so unarrived reservations and no-shows do not inflate demand reporting.
+        if (hasActuallyCheckedIn && isInSelectedRange(checkIn, today, rangeIndex)) {
             const auto room = booking->getRoom();
             if (room && !room->isArchived()) {
                 ++roomBookingCounts[room->getRoomNumber()];
+            }
+        }
+
+        // Modified: Calculate selected-period occupancy from actual occupied room-nights, while retaining the live occupancy snapshot separately.
+        if (hasActuallyCheckedIn && checkIn.isValid()) {
+            const QDate actualEnd = state == BookingState::COMPLETED ? checkOut : today.addDays(1);
+            const QDate overlapStart = std::max(checkIn, reportingWindow.start);
+            const QDate overlapEnd = std::min(actualEnd, reportingWindow.endExclusive);
+            if (overlapStart.isValid() && overlapEnd.isValid() && overlapEnd > overlapStart) {
+                report.periodOccupiedRoomNights += overlapStart.daysTo(overlapEnd);
             }
         }
 
@@ -147,16 +188,33 @@ DashboardReportData ReportService::buildDashboardReport(int rangeIndex, const QS
 
         if (state == BookingState::COMPLETED && isInSelectedRange(checkOut, today, rangeIndex)) {
             report.completedStays.push_back(entry);
+            if (invoice) {
+                // Modified: Derive revenue KPIs from immutable invoices, not mutable room prices or a payment-status assumption.
+                report.invoicedRevenue += invoice->calculateTotal();
+                completedNightsInRange += invoice->getNights();
+            }
         } else if ((state == BookingState::ACTIVE || state == BookingState::UPCOMING)
                    && isInSelectedRange(checkIn, today, rangeIndex)) {
             report.openBookings.push_back(entry);
         } else if (state == BookingState::CANCELLED && isInSelectedRange(checkIn, today, rangeIndex)) {
             report.cancelledBookings.push_back(entry);
+        } else if (state == BookingState::NO_SHOW && isInSelectedRange(checkIn, today, rangeIndex)) {
+            report.noShowBookings.push_back(entry);
         }
     }
 
     if (report.totalRooms > 0) {
         report.occupancyRate = (static_cast<double>(report.occupiedRooms) / report.totalRooms) * 100.0;
+    }
+    if (report.periodAvailableRoomNights > 0) {
+        report.periodOccupancyRate = (static_cast<double>(report.periodOccupiedRoomNights)
+                                      / report.periodAvailableRoomNights) * 100.0;
+    }
+    if (completedNightsInRange > 0) {
+        report.averageDailyRate = report.invoicedRevenue / completedNightsInRange;
+    }
+    if (report.periodAvailableRoomNights > 0) {
+        report.revenuePerAvailableRoom = report.invoicedRevenue / report.periodAvailableRoomNights;
     }
 
     for (const auto& [roomNumber, bookingCount] : roomBookingCounts) {
@@ -180,6 +238,9 @@ DashboardReportData ReportService::buildDashboardReport(int rangeIndex, const QS
         return left.checkOut != right.checkOut ? left.checkOut > right.checkOut : left.bookingId < right.bookingId;
     });
     std::sort(report.cancelledBookings.begin(), report.cancelledBookings.end(), [](const ReportBookingEntry& left, const ReportBookingEntry& right) {
+        return left.checkIn != right.checkIn ? left.checkIn < right.checkIn : left.bookingId < right.bookingId;
+    });
+    std::sort(report.noShowBookings.begin(), report.noShowBookings.end(), [](const ReportBookingEntry& left, const ReportBookingEntry& right) {
         return left.checkIn != right.checkIn ? left.checkIn < right.checkIn : left.bookingId < right.bookingId;
     });
 

@@ -3,6 +3,7 @@
 #include <QDir>
 #include <QString>
 #include "mainwindow.h"
+#include "LoginWindow.h"
 #include "HotelManager.h"
 #include "DataManager.h"
 
@@ -44,6 +45,12 @@ int main(int argc, char *argv[]) {
     }
 
     // Modified: Leave a newly initialized database empty; staff create all operational data through the application.
+
+    // Modified: Authenticate the staff member before constructing the operational window with the shared HotelManager.
+    LoginWindow loginWindow;
+    if (loginWindow.exec() != QDialog::Accepted) {
+        return 0;
+    }
 
     // Inject the managed core logic pointer into the UI view layer and display window
     MainWindow mainWindow(&hotelManager);

@@ -9,12 +9,22 @@ A C++17 / Qt6 desktop application for hotel rooms, customers, reservations, chec
 - Polymorphic room portfolio: `StandardRoom`, `DeluxeRoom`, and `SuiteRoom`.
 - Customer management with archive/delete workflows, country-aware ID and phone validation, and conflict highlighting in the customer list.
 - Reservation creation only from Room Status, reservation editing, cancellation, checkout, and invoice generation.
-- Explicit booking lifecycle: a stay becomes **Completed** only after staff completes checkout.
-- Dated room maintenance intervals with overlap validation against unfinished bookings.
+- Explicit booking lifecycle: staff must record **Check-in** before a room becomes occupied, then record checkout to complete the stay.
+- Reservation occupancy and room capacity validation: every booking stores adult/child counts and is rejected if it exceeds the selected room type's capacity.
+- Confirmed booking rate and tax snapshots: checkout invoices are validated against the booked price, tax, and actual stay duration.
+- Dated room maintenance workflows: conflict-free intervals are confirmed immediately; conflicting intervals become an internal guest-contact case until their bookings are resolved.
 - Shared availability rules for Reservation and Room Status, including booking dates, active stays, archived rooms, permanent room availability, and maintenance periods.
+- Room Status distinguishes a sellable `Available` room from `Awaiting check-in` (an arrival due today or overdue but not yet checked in), `Occupied`, and `Maintenance`.
 - Dashboard Booking History for completed stays in the selected period, with seven entries per page.
-- A4 landscape PDF export with selected-period KPIs, room inventory, top rooms, open bookings, cancellations, and completed stays.
+- A4 landscape PDF export that separates current occupancy from selected-period-to-date room-night occupancy, alongside invoice-based KPIs, room inventory, actual-arrival top rooms, open bookings, cancellations/no-shows, and completed stays.
 - SQLite schema migration, immutable invoice snapshots, staged loading, duplicate-customer reconciliation, and transactional persistence.
+- A modal sign-in gate that starts a staff session before the operational window is opened; the current classroom bootstrap account is `admin` and should be replaced by persisted staff accounts before production use.
+
+## Sign-in and staff context
+
+The application loads the local database first, then requires sign-in before creating `MainWindow`. `StaffSession` keeps the authenticated username, display name, and role in memory for the running process. This prevents the old login flow from creating a second, unconfigured `MainWindow` and provides the actor context required by the forthcoming audit log.
+
+The current project only has one classroom bootstrap account. Its password is verified as a SHA-256 digest rather than stored as plaintext, but this is not a production credential system: it has no database-backed staff records, password reset, lockout policy, or role authorization yet.
 
 ## Booking workflow
 
@@ -33,18 +43,20 @@ After a successful reservation mutation, `bookingChanged` refreshes Room Status 
 ## Booking lifecycle
 
 ```text
-Upcoming ── check-in date reached ──► Active ── explicit checkout ──► Completed
-    │
-    └── cancel before check-in ──► Cancelled
+Upcoming ── explicit check-in ──► Active ── explicit checkout ──► Completed
+    ├── cancel before planned arrival ──► Cancelled
+    └── no arrival on/after planned arrival ──► No-show
 ```
 
-- `cancelled` and `checkedOut` are persisted facts.
-- `Upcoming` and `Active` are derived from the check-in date and the current date.
+- `cancelled`, `checkedIn`, and `checkedOut` are persisted operational facts. Planned and actual stay dates are stored separately; `createdAt` and `updatedAt` preserve booking audit timing.
+- A reservation remains `Upcoming` until staff records check-in; reaching its planned arrival date alone never occupies a room.
 - An overdue stay remains `Active` until checkout is explicitly recorded.
 - Completed bookings leave the operational Reservations table and appear in Dashboard → Booking History when their actual checkout date is in the selected range.
 - New reservations require a check-in date of today or later and `checkOutDate > checkInDate`.
-- Upcoming bookings cannot be moved into the past. An active booking retains its original check-in date and cannot be backdated on checkout.
-- Checkout cannot be before check-in or in the future.
+- Upcoming bookings cannot be moved into the past. After check-in, the guest, room, and planned arrival cannot be changed through a normal edit.
+- Checkout cannot be on/before the actual check-in date or in the future.
+- Cancellation requires a reason and is allowed only before planned arrival. Staff can instead mark an unarrived, overdue reservation as a no-show; both outcomes retain their date in the booking audit record. Booking and invoice deletion are blocked to preserve history.
+- A maintenance interval with no affected booking is confirmed immediately. If it overlaps an unfinished booking, the application creates an `Awaiting guest response` case and logs a `Simulated email` notice per affected reservation. The case is a soft hold: it prevents new conflicting bookings but does not present the room as under maintenance until confirmed. Staff must move, reschedule, or cancel each conflict, then explicitly confirm the case. Confirmation rechecks live booking overlap before the room is blocked. This is an internal operational log, not proof that an email was delivered; an external notification provider can replace the simulated channel later.
 
 Checkout and invoice creation are staged together, then persisted through one `DataManager::commitChanges()` call. If the transaction fails, the in-memory manager reloads the previous committed database snapshot.
 
@@ -81,8 +93,8 @@ Bookings of the removed duplicate are reassigned to the retained customer. Incom
 
 - Runtime database: `data/hotel_data.db`.
 - Tables: `Customer`, `Room`, `RoomMaintenance`, `Booking`, and `Invoice`.
-- Migration adds `Booking.checkedOut` for legacy databases. It marks a legacy booking completed only when an existing invoice proves checkout; a date alone never changes lifecycle state. Non-invoiced legacy rows remain active for staff review.
-- Each `Invoice` stores its own customer, room, date, and unit-price snapshot. Future edits to a customer or room cannot change a completed invoice or completed-stay report.
+- Migration adds explicit check-in/check-out facts, actual stay dates, booked rate/tax, occupancy, and cancellation-audit columns. Legacy completed rows are backfilled only when an invoice proves checkout; a date alone never activates a stay.
+- Each `Invoice` stores its own customer, room, actual-stay date, unit-price snapshot, and invoice issue date. The issue date is not a payment-status field; payment settlement requires a future folio/payment module.
 - SQLite foreign keys, a 5-second busy timeout, and indexes support integrity and common booking/date queries. Customer phone numbers are unique at the database layer. `DataVersion` detects a stale full snapshot from another running instance and prevents it from overwriting newer data.
 - `loadAll()` restores into a temporary `HotelManager` and replaces the live manager only after the complete snapshot is valid.
 - `saveAll()` writes the current manager snapshot in one SQLite transaction. `commitChanges()` restores the last committed state after a failed save.
@@ -141,11 +153,11 @@ If the compiler cannot build CMake's one-file test program, repair or reinstall 
 
 | Class | Responsibility |
 |---|---|
-| `Room`, `StandardRoom`, `DeluxeRoom`, `SuiteRoom` | Room hierarchy, type metadata, and pricing |
+| `Room`, `StandardRoom`, `DeluxeRoom`, `SuiteRoom` | Room hierarchy, type metadata, pricing, and maximum guest capacity |
 | `RoomMaintenance` | One dated maintenance interval for a room |
 | `Customer` | Guest identity, contact details, and archive state |
-| `Booking` | Reservation dates, cancellation state, and explicit checkout state |
-| `Invoice` | Billing data for one completed booking |
+| `Booking` | Planned/actual stay dates, guest counts, confirmed rate/tax, and lifecycle audit facts |
+| `Invoice` | Immutable billing data for one completed booking, validated against the booking snapshot |
 | `HotelManager` | In-memory collections and lookup/query facade; creates workflow managers per facade call |
 | `BookingManager` | Temporary booking-workflow delegate; owns booking and invoice services for its lifetime |
 | `CustomerManager` | Temporary customer-workflow delegate; owns customer service for its lifetime |

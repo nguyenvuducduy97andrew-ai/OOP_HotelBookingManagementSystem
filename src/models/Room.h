@@ -27,6 +27,8 @@ public:
     // Fixed-modified: Expose room type and subtype fee behavior through virtual methods instead of casts.
     virtual double calculateTargetPrice() const = 0;
     virtual std::string getRoomTypeName() const = 0;
+    // Modified: Expose sellable occupancy capacity from the room model so reservations cannot exceed a room's limit.
+    virtual int getMaximumGuests() const = 0;
     virtual double getExtraFeeAmount() const = 0;
     virtual void setExtraFeeAmount(double fee) = 0;
 };

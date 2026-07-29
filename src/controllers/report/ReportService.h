@@ -42,13 +42,22 @@ struct DashboardReportData
     int activeBookings = 0;
     int completedBookings = 0;
     int cancelledBookingsCount = 0;
+    int noShowBookingsCount = 0;
     int bookingsThisMonth = 0;
     int bookingsThisYear = 0;
+    int periodOccupiedRoomNights = 0;
+    int periodAvailableRoomNights = 0;
+    int periodDaysToDate = 0;
     double occupancyRate = 0.0;
+    double periodOccupancyRate = 0.0;
+    double invoicedRevenue = 0.0;
+    double averageDailyRate = 0.0;
+    double revenuePerAvailableRoom = 0.0;
     std::vector<ReportRoomEntry> topRooms;
     std::vector<ReportBookingEntry> openBookings;
     std::vector<ReportBookingEntry> completedStays;
     std::vector<ReportBookingEntry> cancelledBookings;
+    std::vector<ReportBookingEntry> noShowBookings;
 };
 
 class ReportService

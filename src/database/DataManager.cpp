@@ -123,10 +123,34 @@ bool DataManager::initDatabase(const std::string& dataPath) {
         "   startDate TEXT NOT NULL,"
         "   endDate TEXT NOT NULL,"
         "   note TEXT,"
+        "   status TEXT NOT NULL DEFAULT 'Confirmed',"
+        "   createdAt TEXT NOT NULL DEFAULT '',"
         "   FOREIGN KEY (roomNumber) REFERENCES Room(roomNumber) ON DELETE CASCADE ON UPDATE CASCADE"
         ");";
     if (!query.exec(createRoomMaintenance)) {
         qDebug() << "Error creating RoomMaintenance table:" << query.lastError().text();
+        return false;
+    }
+
+    // Modified: Keep draft maintenance cases separate from confirmed room blocks while preserving legacy schedules as confirmed.
+    const auto ensureMaintenanceColumn = [&schemaQuery](const QString& columnName, const QString& definition) {
+        if (!schemaQuery.exec("PRAGMA table_info(RoomMaintenance)")) {
+            qDebug() << "Error inspecting RoomMaintenance schema:" << schemaQuery.lastError().text();
+            return false;
+        }
+        while (schemaQuery.next()) {
+            if (schemaQuery.value(1).toString() == columnName) {
+                return true;
+            }
+        }
+        if (!schemaQuery.exec("ALTER TABLE RoomMaintenance ADD COLUMN " + definition)) {
+            qDebug() << "Error adding RoomMaintenance workflow column:" << schemaQuery.lastError().text();
+            return false;
+        }
+        return true;
+    };
+    if (!ensureMaintenanceColumn("status", "status TEXT NOT NULL DEFAULT 'Confirmed'")
+        || !ensureMaintenanceColumn("createdAt", "createdAt TEXT NOT NULL DEFAULT ''")) {
         return false;
     }
 
@@ -157,7 +181,18 @@ bool DataManager::initDatabase(const std::string& dataPath) {
         "   checkOutDate TEXT NOT NULL,"
         "   cancelled INTEGER NOT NULL DEFAULT 0,"
         "   deleted INTEGER NOT NULL DEFAULT 0,"
+        "   checkedIn INTEGER NOT NULL DEFAULT 0,"
         "   checkedOut INTEGER NOT NULL DEFAULT 0,"
+        "   actualCheckInDate TEXT NOT NULL DEFAULT '',"
+        "   actualCheckOutDate TEXT NOT NULL DEFAULT '',"
+        "   quotedUnitPrice REAL NOT NULL DEFAULT 0,"
+        "   quotedTaxRate REAL NOT NULL DEFAULT 0.10,"
+        "   adultCount INTEGER NOT NULL DEFAULT 1,"
+        "   childCount INTEGER NOT NULL DEFAULT 0,"
+        "   cancellationReason TEXT NOT NULL DEFAULT '',"
+        "   cancelledAt TEXT NOT NULL DEFAULT '',"
+        "   createdAt TEXT NOT NULL DEFAULT '',"
+        "   updatedAt TEXT NOT NULL DEFAULT '',"
         "   FOREIGN KEY (customerId) REFERENCES Customer(customerId) ON DELETE CASCADE ON UPDATE CASCADE,"
         "   FOREIGN KEY (roomNumber) REFERENCES Room(roomNumber) ON DELETE RESTRICT ON UPDATE CASCADE"
         ");";
@@ -215,6 +250,81 @@ bool DataManager::initDatabase(const std::string& dataPath) {
         }
     } else {
         qDebug() << "Error inspecting Booking schema: " << bookingSchemaQuery.lastError().text();
+        return false;
+    }
+
+    // Modified: Upgrade existing databases with explicit stay facts, confirmed pricing, occupancy, and cancellation audit data.
+    const auto ensureBookingColumn = [&bookingSchemaQuery](const QString& columnName, const QString& definition) {
+        if (!bookingSchemaQuery.exec("PRAGMA table_info(Booking)")) {
+            qDebug() << "Error inspecting Booking schema:" << bookingSchemaQuery.lastError().text();
+            return false;
+        }
+        while (bookingSchemaQuery.next()) {
+            if (bookingSchemaQuery.value(1).toString() == columnName) {
+                return true;
+            }
+        }
+        if (!bookingSchemaQuery.exec("ALTER TABLE Booking ADD COLUMN " + definition)) {
+            qDebug() << "Error adding Booking lifecycle column:" << bookingSchemaQuery.lastError().text();
+            return false;
+        }
+        return true;
+    };
+    const std::vector<std::pair<QString, QString>> bookingColumns = {
+        {"checkedIn", "checkedIn INTEGER NOT NULL DEFAULT 0"},
+        {"actualCheckInDate", "actualCheckInDate TEXT NOT NULL DEFAULT ''"},
+        {"actualCheckOutDate", "actualCheckOutDate TEXT NOT NULL DEFAULT ''"},
+        {"quotedUnitPrice", "quotedUnitPrice REAL NOT NULL DEFAULT 0"},
+        {"quotedTaxRate", "quotedTaxRate REAL NOT NULL DEFAULT 0.10"},
+        {"adultCount", "adultCount INTEGER NOT NULL DEFAULT 1"},
+        {"childCount", "childCount INTEGER NOT NULL DEFAULT 0"},
+        {"cancellationReason", "cancellationReason TEXT NOT NULL DEFAULT ''"},
+        {"cancelledAt", "cancelledAt TEXT NOT NULL DEFAULT ''"},
+        {"createdAt", "createdAt TEXT NOT NULL DEFAULT ''"},
+        {"updatedAt", "updatedAt TEXT NOT NULL DEFAULT ''"}
+    };
+    for (const auto& [columnName, definition] : bookingColumns) {
+        if (!ensureBookingColumn(columnName, definition)) {
+            return false;
+        }
+    }
+
+    QSqlQuery bookingMigration(m_db);
+    if (!bookingMigration.exec(
+            "UPDATE Booking SET quotedUnitPrice = COALESCE(NULLIF(quotedUnitPrice, 0), "
+            "(SELECT r.basePrice + CASE r.roomType WHEN 'Deluxe' THEN COALESCE(r.miniBarFee, 0) "
+            "WHEN 'Suite' THEN COALESCE(r.premiumServiceFee, 0) ELSE 0 END "
+            "FROM Room r WHERE r.roomNumber = Booking.roomNumber)) "
+            "WHERE quotedUnitPrice <= 0")) {
+        qDebug() << "Error backfilling confirmed booking rates:" << bookingMigration.lastError().text();
+        return false;
+    }
+
+    QString createMaintenanceGuestNotice =
+        "CREATE TABLE IF NOT EXISTS MaintenanceGuestNotice ("
+        "   noticeId TEXT PRIMARY KEY,"
+        "   maintenanceId TEXT NOT NULL,"
+        "   bookingId TEXT NOT NULL,"
+        "   channel TEXT NOT NULL,"
+        "   status TEXT NOT NULL,"
+        "   loggedAt TEXT NOT NULL DEFAULT '',"
+        "   FOREIGN KEY (maintenanceId) REFERENCES RoomMaintenance(maintenanceId) ON DELETE CASCADE ON UPDATE CASCADE,"
+        "   FOREIGN KEY (bookingId) REFERENCES Booking(bookingId) ON DELETE CASCADE ON UPDATE CASCADE"
+        ");";
+    if (!query.exec(createMaintenanceGuestNotice)) {
+        qDebug() << "Error creating MaintenanceGuestNotice table:" << query.lastError().text();
+        return false;
+    }
+    if (!bookingMigration.exec(
+            "UPDATE Booking SET actualCheckOutDate = checkOutDate "
+            "WHERE checkedOut = 1 AND actualCheckOutDate = ''")) {
+        qDebug() << "Error backfilling actual checkout dates:" << bookingMigration.lastError().text();
+        return false;
+    }
+    if (!bookingMigration.exec(
+            "UPDATE Booking SET checkedIn = 1, actualCheckInDate = checkInDate "
+            "WHERE checkedOut = 1 AND (checkedIn = 0 OR actualCheckInDate = '')")) {
+        qDebug() << "Error backfilling completed stay check-in facts:" << bookingMigration.lastError().text();
         return false;
     }
 
@@ -404,8 +514,8 @@ bool DataManager::loadAll(HotelManager& manager, const std::string& dataPath) {
     // Modified: Rebuild the booking counter in the data layer instead of querying from the model.
     int maxBookingNumber = 1000;
 
-    // Modified: Load the explicit checkout flag so completed history is not inferred from dates.
-    if (query.exec("SELECT bookingId, customerId, roomNumber, checkInDate, checkOutDate, cancelled, deleted, checkedOut FROM Booking")) {
+    // Modified: Load explicit operational facts and audit timestamps so occupancy and history do not infer state from calendar dates.
+    if (query.exec("SELECT bookingId, customerId, roomNumber, checkInDate, checkOutDate, cancelled, deleted, checkedIn, checkedOut, actualCheckInDate, actualCheckOutDate, quotedUnitPrice, quotedTaxRate, adultCount, childCount, cancellationReason, cancelledAt, createdAt, updatedAt FROM Booking")) {
         while (query.next()) {
             std::string bookingId = query.value(0).toString().toStdString();
             std::string custId = query.value(1).toString().toStdString();
@@ -414,7 +524,18 @@ bool DataManager::loadAll(HotelManager& manager, const std::string& dataPath) {
             std::string checkOutStr = query.value(4).toString().toStdString();
             bool cancelled = query.value(5).toInt() == 1;
             bool deleted = query.value(6).toInt() == 1;
-            bool checkedOut = query.value(7).toInt() == 1;
+            bool checkedIn = query.value(7).toInt() == 1;
+            bool checkedOut = query.value(8).toInt() == 1;
+            std::string actualCheckIn = query.value(9).toString().toStdString();
+            std::string actualCheckOut = query.value(10).toString().toStdString();
+            double quotedUnitPrice = query.value(11).toDouble();
+            double quotedTaxRate = query.value(12).toDouble();
+            int adultCount = query.value(13).toInt();
+            int childCount = query.value(14).toInt();
+            std::string cancellationReason = query.value(15).toString().toStdString();
+            std::string cancelledAt = query.value(16).toString().toStdString();
+            std::string createdAt = query.value(17).toString().toStdString();
+            std::string updatedAt = query.value(18).toString().toStdString();
 
             if (bookingId.rfind("BK", 0) == 0) {
                 bool ok = false;
@@ -424,7 +545,9 @@ bool DataManager::loadAll(HotelManager& manager, const std::string& dataPath) {
                 }
             }
 
-            if (!loadedManager.restoreBookingFromDatabase(bookingId, custId, roomNum, checkInStr, checkOutStr, cancelled, deleted, checkedOut, errorMsg)) {
+            if (!loadedManager.restoreBookingFromDatabase(bookingId, custId, roomNum, checkInStr, checkOutStr,
+                    cancelled, deleted, checkedIn, checkedOut, actualCheckIn, actualCheckOut, quotedUnitPrice,
+                    quotedTaxRate, adultCount, childCount, cancellationReason, cancelledAt, createdAt, updatedAt, errorMsg)) {
                 qDebug() << "Failed to restore booking during load:" << QString::fromStdString(errorMsg);
                 return false;
             }
@@ -435,22 +558,39 @@ bool DataManager::loadAll(HotelManager& manager, const std::string& dataPath) {
         return false;
     }
 
-    if (query.exec("SELECT maintenanceId, roomNumber, startDate, endDate, note FROM RoomMaintenance")) {
+    if (query.exec("SELECT maintenanceId, roomNumber, startDate, endDate, note, status, createdAt FROM RoomMaintenance")) {
         while (query.next()) {
             const std::string maintenanceId = query.value(0).toString().toStdString();
             const std::string roomNumber = query.value(1).toString().toStdString();
             const std::string startDate = query.value(2).toString().toStdString();
             const std::string endDate = query.value(3).toString().toStdString();
             const std::string note = query.value(4).toString().toStdString();
+            const std::string status = query.value(5).toString().toStdString();
+            const std::string createdAt = query.value(6).toString().toStdString();
 
             if (!loadedManager.restoreRoomMaintenanceFromDatabase(
-                    maintenanceId, roomNumber, startDate, endDate, note, errorMsg)) {
+                    maintenanceId, roomNumber, startDate, endDate, note, status, createdAt, errorMsg)) {
                 qDebug() << "Failed to restore room maintenance during load:" << QString::fromStdString(errorMsg);
                 return false;
             }
         }
     } else {
         qDebug() << "Error reading RoomMaintenance table:" << query.lastError().text();
+        return false;
+    }
+
+    if (query.exec("SELECT noticeId, maintenanceId, bookingId, channel, status, loggedAt FROM MaintenanceGuestNotice")) {
+        while (query.next()) {
+            if (!loadedManager.restoreMaintenanceGuestNoticeFromDatabase(
+                    query.value(0).toString().toStdString(), query.value(1).toString().toStdString(),
+                    query.value(2).toString().toStdString(), query.value(3).toString().toStdString(),
+                    query.value(4).toString().toStdString(), query.value(5).toString().toStdString(), errorMsg)) {
+                qDebug() << "Failed to restore maintenance notification during load:" << QString::fromStdString(errorMsg);
+                return false;
+            }
+        }
+    } else {
+        qDebug() << "Error reading MaintenanceGuestNotice table:" << query.lastError().text();
         return false;
     }
 
@@ -685,6 +825,11 @@ bool DataManager::saveAll(HotelManager& manager, const std::string& dataPath) {
         qDebug() << "Can't delete from Invoice: " << query.lastError().text();
         return false; // Always return false if the database is not in a valid state after a transaction, not allowing partial saves to occur
     } 
+    if (!query.exec("DELETE FROM MaintenanceGuestNotice")) {
+        m_db.rollback();
+        qDebug() << "Can't delete from MaintenanceGuestNotice:" << query.lastError().text();
+        return false;
+    }
     if (!query.exec("DELETE FROM Booking")) {
         m_db.rollback(); 
         qDebug() << "Can't delete from Booking: " << query.lastError().text();
@@ -757,13 +902,15 @@ bool DataManager::saveAll(HotelManager& manager, const std::string& dataPath) {
     }
 
     // Modified: Persist dated maintenance intervals separately from permanent room availability.
-    query.prepare("INSERT INTO RoomMaintenance (maintenanceId, roomNumber, startDate, endDate, note) VALUES (?, ?, ?, ?, ?)");
+    query.prepare("INSERT INTO RoomMaintenance (maintenanceId, roomNumber, startDate, endDate, note, status, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)");
     for (const RoomMaintenance& maintenance : manager.getRoomMaintenances()) {
         query.addBindValue(QString::fromStdString(maintenance.getMaintenanceId()));
         query.addBindValue(QString::fromStdString(maintenance.getRoomNumber()));
         query.addBindValue(QString::fromStdString(maintenance.getStartDate()));
         query.addBindValue(QString::fromStdString(maintenance.getEndDate()));
         query.addBindValue(QString::fromStdString(maintenance.getNote()));
+        query.addBindValue(QString::fromStdString(maintenance.getStatus()));
+        query.addBindValue(QString::fromStdString(maintenance.getCreatedAt()));
         if (!query.exec()) {
             m_db.rollback();
             qDebug() << "Error saving RoomMaintenance:" << query.lastError().text();
@@ -771,8 +918,8 @@ bool DataManager::saveAll(HotelManager& manager, const std::string& dataPath) {
         }
     }
 
-    // Modified: Persist checkout state with every atomic booking snapshot.
-    query.prepare("INSERT INTO Booking (bookingId, customerId, roomNumber, checkInDate, checkOutDate, cancelled, deleted, checkedOut) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+    // Modified: Persist explicit stay, pricing, occupancy, cancellation, and timestamp audit facts with each booking snapshot.
+    query.prepare("INSERT INTO Booking (bookingId, customerId, roomNumber, checkInDate, checkOutDate, cancelled, deleted, checkedIn, checkedOut, actualCheckInDate, actualCheckOutDate, quotedUnitPrice, quotedTaxRate, adultCount, childCount, cancellationReason, cancelledAt, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
     for (const auto& booking : manager.getBookings()) {
         if (!booking) {
             continue;
@@ -796,11 +943,38 @@ bool DataManager::saveAll(HotelManager& manager, const std::string& dataPath) {
 
         query.addBindValue(booking->isCancelled() ? 1 : 0);
         query.addBindValue(booking->isDeleted() ? 1 : 0);
+        query.addBindValue(booking->isCheckedIn() ? 1 : 0);
         query.addBindValue(booking->isCheckedOut() ? 1 : 0);
+        query.addBindValue(QString::fromStdString(booking->getActualCheckInDate()));
+        query.addBindValue(QString::fromStdString(booking->getActualCheckOutDate()));
+        query.addBindValue(booking->getQuotedUnitPrice());
+        query.addBindValue(booking->getQuotedTaxRate());
+        query.addBindValue(booking->getAdultCount());
+        query.addBindValue(booking->getChildCount());
+        query.addBindValue(QString::fromStdString(booking->getCancellationReason()));
+        query.addBindValue(QString::fromStdString(booking->getCancelledAt()));
+        query.addBindValue(QString::fromStdString(booking->getCreatedAt()));
+        query.addBindValue(QString::fromStdString(booking->getUpdatedAt()));
 
         if (!query.exec()) {
             m_db.rollback();
             qDebug() << "Error saving Booking: " << query.lastError().text();
+            return false;
+        }
+    }
+
+    // Modified: Persist internal, simulated guest-contact records only after their booking and maintenance foreign keys exist.
+    query.prepare("INSERT INTO MaintenanceGuestNotice (noticeId, maintenanceId, bookingId, channel, status, loggedAt) VALUES (?, ?, ?, ?, ?, ?)");
+    for (const MaintenanceGuestNotice& notice : manager.getMaintenanceGuestNotices()) {
+        query.addBindValue(QString::fromStdString(notice.getNoticeId()));
+        query.addBindValue(QString::fromStdString(notice.getMaintenanceId()));
+        query.addBindValue(QString::fromStdString(notice.getBookingId()));
+        query.addBindValue(QString::fromStdString(notice.getChannel()));
+        query.addBindValue(QString::fromStdString(notice.getStatus()));
+        query.addBindValue(QString::fromStdString(notice.getLoggedAt()));
+        if (!query.exec()) {
+            m_db.rollback();
+            qDebug() << "Error saving MaintenanceGuestNotice:" << query.lastError().text();
             return false;
         }
     }
@@ -821,7 +995,8 @@ bool DataManager::saveAll(HotelManager& manager, const std::string& dataPath) {
         query.addBindValue(QString::fromStdString(invoice->getBookingId()));
         query.addBindValue(invoice->getTaxRate());
         query.addBindValue(invoice->getNights());
-        query.addBindValue(QString::fromStdString(invoice->getPaymentDate()));
+        // Modified: The legacy paymentDate database column stores the invoice issue date; it does not represent settlement.
+        query.addBindValue(QString::fromStdString(invoice->getInvoiceIssuedDate()));
         query.addBindValue(invoice->getUnitPrice());
         query.addBindValue(QString::fromStdString(invoice->getCustomerNameSnapshot()));
         query.addBindValue(QString::fromStdString(invoice->getCustomerIdSnapshot()));

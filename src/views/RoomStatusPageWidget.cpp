@@ -103,15 +103,25 @@ void RoomStatusPageWidget::refreshData() {
     int index = 0;
 
     std::unordered_map<std::string, std::shared_ptr<Booking>> activeBookingsByRoom;
+    std::unordered_map<std::string, std::shared_ptr<Booking>> awaitingBookingsByRoom;
+    const std::string today = QDate::currentDate().toString(Qt::ISODate).toStdString();
     for (const auto& booking : m_manager->getBookings()) {
-        if (!booking || booking->isCancelled() || booking->isDeleted()
-            || m_manager->getBookingState(*booking) != BookingState::ACTIVE) {
+        if (!booking || booking->isCancelled() || booking->isDeleted()) {
             continue;
         }
 
         const auto bookedRoom = booking->getRoom();
-        if (bookedRoom) {
+        if (!bookedRoom) {
+            continue;
+        }
+
+        const BookingState state = m_manager->getBookingState(*booking);
+        if (state == BookingState::ACTIVE) {
             activeBookingsByRoom.emplace(bookedRoom->getRoomNumber(), booking);
+        } else if (state == BookingState::UPCOMING
+                   && booking->getCheckInDate() <= today && today < booking->getCheckOutDate()) {
+            // Modified: A reservation due today (or overdue) holds inventory but is not physically occupied until check-in.
+            awaitingBookingsByRoom.emplace(bookedRoom->getRoomNumber(), booking);
         }
     }
 
@@ -128,8 +138,10 @@ void RoomStatusPageWidget::refreshData() {
         const auto activeBookingIt = activeBookingsByRoom.find(room->getRoomNumber());
         const bool isOccupied = activeBookingIt != activeBookingsByRoom.end();
         const std::shared_ptr<Booking> activeBooking = isOccupied ? activeBookingIt->second : nullptr;
+        const auto awaitingBookingIt = awaitingBookingsByRoom.find(room->getRoomNumber());
+        const std::shared_ptr<Booking> awaitingBooking = awaitingBookingIt != awaitingBookingsByRoom.end()
+            ? awaitingBookingIt->second : nullptr;
 
-        const std::string today = QDate::currentDate().toString(Qt::ISODate).toStdString();
         const bool isUnderMaintenance = !room->getIsAvailable()
             || m_manager->isRoomUnderMaintenance(room->getRoomNumber(), today);
         if (isUnderMaintenance) {
@@ -146,15 +158,28 @@ void RoomStatusPageWidget::refreshData() {
             QString dateOut = dOut.isValid() ? dOut.toString("dd/MM") : QString::fromStdString(activeBooking->getCheckOutDate());
             
             card->setOccupied(guestName, idNumber, phone, dateIn, dateOut);
+        } else if (awaitingBooking) {
+            const auto customer = awaitingBooking->getCustomer();
+            const QString guestName = customer ? QString::fromStdString(customer->getName()) : "Awaiting check-in";
+            const QDate plannedCheckIn = QDate::fromString(QString::fromStdString(awaitingBooking->getCheckInDate()), Qt::ISODate);
+            const QDate plannedCheckOut = QDate::fromString(QString::fromStdString(awaitingBooking->getCheckOutDate()), Qt::ISODate);
+            const QString dateIn = plannedCheckIn.isValid() ? plannedCheckIn.toString("dd/MM")
+                : QString::fromStdString(awaitingBooking->getCheckInDate());
+            const QString dateOut = plannedCheckOut.isValid() ? plannedCheckOut.toString("dd/MM")
+                : QString::fromStdString(awaitingBooking->getCheckOutDate());
+            card->setAwaiting(guestName, dateIn, dateOut);
         } else {
+            // Modified: Available now means no active stay or arrival-due reservation holds the room today.
             card->setAvailable();
         }
 
         m_roomCards.append(card);
 
-        connect(card, &RoomCard::cardClicked, this, [this, room]() {
+        connect(card, &RoomCard::cardClicked, this, [this, room, card]() {
             // Modified: Let Room Status select the room while Reservation owns booking validation and persistence.
-            emit bookingRequested(QString::fromStdString(room->getRoomNumber()));
+            if (card->getStatus() == "AVL") {
+                emit bookingRequested(QString::fromStdString(room->getRoomNumber()));
+            }
         });
 
         int row = index / columns;
@@ -229,11 +254,12 @@ void RoomStatusPageWidget::applyFilters() {
             matchAvail = availableRoomNumbers.find(card->getRoomNumber().toStdString()) != availableRoomNumbers.end();
 
             if (matchAvail) {
-                int maxAdults = 2, maxChildren = 1;
-                if (card->getRoomType() == "Deluxe") { maxAdults = 2; maxChildren = 2; }
-                else if (card->getRoomType() == "Suite") { maxAdults = 4; maxChildren = 2; }
+                int maximumGuests = 2;
+                if (card->getRoomType() == "Deluxe") { maximumGuests = 3; }
+                else if (card->getRoomType() == "Suite") { maximumGuests = 4; }
 
-                if (reqAdults > maxAdults || reqChildren > maxChildren) {
+                // Modified: Keep Room Status capacity filtering consistent with the booking service's room limits.
+                if (reqAdults <= 0 || reqChildren < 0 || reqAdults + reqChildren > maximumGuests) {
                     matchAvail = false;
                 }
             }

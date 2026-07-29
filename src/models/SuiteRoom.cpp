@@ -21,6 +21,11 @@ std::string SuiteRoom::getRoomTypeName() const {
     return "Suite";
 }
 
+int SuiteRoom::getMaximumGuests() const {
+    // Modified: Define Suite inventory capacity centrally for reservation validation.
+    return 4;
+}
+
 double SuiteRoom::getExtraFeeAmount() const {
     // Fixed-modified: Surface the premium service fee through the base room interface.
     return getPremiumServiceFee();

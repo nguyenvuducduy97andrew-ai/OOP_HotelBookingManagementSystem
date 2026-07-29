@@ -1,0 +1,340 @@
+HOTEL BOOKING MANAGEMENT SYSTEM
+DETAILED STAFF USER GUIDE
+English reference edition — aligned with the current Vietnamese guide
+
+===============================================================================
+1. WHAT THIS APPLICATION IS FOR
+===============================================================================
+
+This is an internal desktop tool for reception staff and hotel managers. It stores
+rooms, customers, reservations, real check-in/check-out facts, invoices,
+maintenance schedules, dashboard data and PDF reports in a local SQLite database.
+
+It is not a public guest booking website. It does not send real email/SMS, process
+cash/card payment, replace an accounting system, or yet provide production staff
+permissions. Customer ID and phone data are personal information; do not casually
+share screenshots, PDFs or database files.
+
+===============================================================================
+2. SIGN IN, OPENING, AND CLOSING
+===============================================================================
+
+1. Start the application.
+2. The Sign in window appears before operational pages.
+3. Current bootstrap account:
+   Username: admin
+   Password: adminadmin
+4. Select Sign in, or press Enter in the Password field.
+5. If sign-in fails, confirm both fields are completed and password casing is
+   correct.
+
+The current login is for the course project only. Do not share the password. When
+real staff accounts are added, each employee should use an individual account.
+
+Close the application normally with the window Close button. The application tries
+to save data on exit. Do not force-close the program, power off the computer, or
+remove storage while it is saving. Do not delete data/hotel_data.db to solve an
+ordinary mistake without a backup and authorization.
+
+===============================================================================
+3. STATES YOU MUST UNDERSTAND
+===============================================================================
+
+Room Status states:
+- Available: sellable for the date or range being viewed.
+- Awaiting check-in: an arrival is due today or overdue, but staff has not checked
+  the guest in. It is not Occupied, but it must not be booked over.
+- Occupied: staff recorded a real check-in. It remains occupied until a real
+  checkout is recorded.
+- Maintenance: a maintenance period has been confirmed and blocks normal use.
+
+Reservation states:
+- Upcoming: reserved, not checked in.
+- Active: actually checked in.
+- Completed: checked out; listed in Booking History/reporting.
+- Cancelled: cancelled before arrival; history remains.
+- No-show: guest did not arrive on/after planned arrival.
+
+The program uses the local computer date. Verify computer date/time at the start
+of every shift. A wrong date can make check-in, checkout, no-show, and reports
+incorrect.
+
+===============================================================================
+4. START-OF-SHIFT CHECKLIST
+===============================================================================
+
+1. Sign in and open Dashboard.
+2. Review occupied rooms, arrivals and departures.
+3. Open Room Status and inspect Awaiting check-in and Occupied rooms.
+4. Open Room Management and inspect pending maintenance cases.
+5. Remember that “Simulated email” is an internal log only; no message was sent.
+6. Before editing a customer, room or reservation, search by ID/room/booking ID
+   to ensure that you selected the correct record.
+
+===============================================================================
+5. CUSTOMER MANAGEMENT
+===============================================================================
+
+The Customer page shows Customer ID, name, phone and reservation counts. Search
+before adding a record to reduce duplicates.
+
+Adding a customer:
+1. Select Add Customer.
+2. Select the Customer ID country. The nearby hint gives an accepted sample or
+   length, such as “12 digits” or “e.g. S1234567A”.
+3. Enter the identity document exactly for the selected country.
+4. Enter the guest's name consistently with their document.
+5. Select phone country. Enter the local number only; do not repeat a calling code
+   already shown by the selector.
+6. The form removes spaces, punctuation and accidental leading local zeroes.
+   Review the normalized number before saving.
+7. Select Save.
+
+Supported countries currently include Vietnam, United States, Malaysia, United
+Kingdom, Japan, Singapore, South Korea, Thailand, Australia and Germany.
+
+Duplicate messages:
+- “This customer already exists.” means phone, normalized name and ID match.
+- “This phone number is already used by another customer...” means another record
+  already uses that phone.
+- “This ID number is already linked to another customer account...” means an
+  identity document already belongs to another record.
+
+Names alone may match. When a conflict occurs, the existing customer row is
+highlighted. Read it before deciding whether to correct input or use the record.
+
+Use Edit to correct name/phone. Treat Customer ID as identity; do not change it
+casually. Use Archive when a customer should not receive new bookings but history
+must remain. Archived customers cannot be used for new/edited reservations. Do not
+delete historical customers merely to clean up a list.
+
+===============================================================================
+6. ROOM MANAGEMENT AND MAINTENANCE
+===============================================================================
+
+Room Management lets staff add rooms, filter types, inspect room details, edit
+permanent room settings and manage dated maintenance.
+
+Add/Edit room:
+1. Select Add Room, or select a room then Edit.
+2. Confirm Room Number, Room Type and Base Price.
+3. Enter subtype fee when required, for example minibar or suite premium service.
+4. Use permanent availability only for a long-running administrative stop-sale.
+   It is not guest occupancy or short maintenance.
+5. Save and verify the correct category.
+
+Changing current room price affects future booking quotes. Existing confirmed
+bookings and issued invoices retain their historical quote/snapshot.
+
+Maintenance:
+1. Edit the intended room.
+2. Choose date range and write a clear work note.
+3. Save.
+
+With no unfinished overlapping booking, maintenance becomes Confirmed and Room
+Status displays Maintenance for that interval.
+
+With an Upcoming or Active overlapping booking, the system creates “Awaiting guest
+response.” The room is not immediately displayed as Maintenance, but it is held
+against new conflicting bookings. “Simulated email logged” means only an internal
+record was created; no real message was sent.
+
+Staff must contact the guest through the hotel's real process and move,
+reschedule or cancel affected bookings as approved. Then select Confirmation
+selected for the schedule. The system checks live overlap one more time. If it
+rejects confirmation, a conflicting booking still exists. Cancel selected schedule
+if maintenance will not occur.
+
+Never confirm maintenance simply because the simulated notice exists.
+
+===============================================================================
+7. CREATE A NEW RESERVATION
+===============================================================================
+
+New reservations begin from Room Status, not a separate New Reservation button.
+
+1. Open Room Status.
+2. Choose filters/dates if available and review room status.
+3. Click an appropriate room to view details.
+4. Choose Book/Reserve. Reservation form opens with that room preselected.
+5. Select or enter the customer using country selectors and format hints.
+6. Enter planned check-in/check-out. Checkout must be after check-in. New
+   reservations cannot start in the past.
+7. Enter adults and children. At least one adult is required and the total cannot
+   exceed the selected room type capacity.
+8. Confirm/Save.
+9. Verify the new record appears as Upcoming in Reservation Management and that
+   Room Status refreshed.
+
+The program validates availability again immediately before creation. Do not assume
+a room remains free merely because an older screen showed it as free.
+
+===============================================================================
+8. RESERVATION MANAGEMENT
+===============================================================================
+
+Reservation Management provides search, status filter, Action legend and button
+tooltips.
+
+Editing Upcoming reservations:
+Use Edit for allowed changes. The system rejects overlapping dates, archived
+customer/room, invalid capacity and past arrival. After check-in, guest, room and
+planned arrival are locked. Editing an Upcoming room or price-bearing detail can
+refresh its quoted rate from the current room price.
+
+Check in:
+1. Locate an Upcoming booking due today.
+2. Confirm the guest has physically arrived and required hotel process is done.
+3. Select Check in and confirm.
+4. Reservation becomes Active and Room Status becomes Occupied.
+
+Check-in is valid only today, on/after planned arrival and before planned departure.
+A booking is not Occupied solely because its arrival date arrived.
+
+Cancel:
+Use Cancel only before planned check-in date and enter a useful reason. The record
+remains Cancelled history. On arrival day or later, an unarrived guest must use
+No-show rather than Cancel.
+
+No-show:
+On or after planned arrival, if guest has not arrived and was not checked in,
+select No-show and enter a reason. Do not use it before arrival or on an Active
+stay.
+
+Check out and invoice:
+1. Confirm the guest is actually departing.
+2. Select the Active reservation and choose Check out.
+3. Actual checkout must be after actual check-in and cannot be future.
+4. Confirm. Booking becomes Completed and the system issues one invoice from
+   locked rate/tax and actual nights.
+5. Verify Booking History for the selected reporting period.
+
+Financial warning: the invoice does not record payment, balance, deposit, payment
+method, discount, surcharge or refund. Invoice issue date is not evidence that
+the guest paid. Use approved accounting/payment procedure until Folio/Payment
+features exist.
+
+===============================================================================
+9. DASHBOARD, HISTORY, AND PDF
+===============================================================================
+
+Dashboard has selectable Today/week/month/year periods. It shows two different
+occupancy concepts:
+- Current occupancy: rooms with guests actually checked in now.
+- Period occupancy to date: actual occupied room-nights from start of selected
+  period through today divided by available room-nights during that elapsed time.
+
+Do not read these as the same KPI. A property can be busy right now while period
+occupancy is low, or quiet right now after a busy month.
+
+Revenue, ADR and RevPAR are invoice-based, not confirmed cash collection.
+Booking History contains completed stays whose actual checkout is inside selected
+range. It displays up to seven entries per page; use page buttons for more.
+If a stay seems missing, first check actual checkout date and reporting range.
+
+Export Report creates a landscape PDF. Confirm the range and review personal data
+before printing or sharing.
+
+===============================================================================
+10. WHAT NOT TO DO
+===============================================================================
+
+Do not:
+- delete/replace data/hotel_data.db to resolve an ordinary mistake;
+- enter fake ID or phone just to bypass duplicate warnings;
+- mark permanent room unavailability for a short repair; use dated maintenance;
+- confirm maintenance while conflicting bookings remain;
+- check in a guest before arrival or check out with a future date;
+- cancel on/after arrival when the correct state is no-show;
+- assume an invoice means payment was received;
+- rely on an old screenshot/report instead of refreshing the page;
+- force-close the app while saving or copy live DB during a write;
+- share bootstrap credential or guest personal information.
+
+===============================================================================
+11. TROUBLESHOOTING
+===============================================================================
+
+“Room is already booked” or not in available list:
+Check planned dates, Active stays, pending/confirmed maintenance and whether you
+are editing the same booking. Adjacent stays are valid: one can check out on the
+same date another checks in. Only overlapping intervals are blocked.
+
+“Cannot create booking for archived customer/room”:
+Restore the correct record according to policy or select an active record. Do not
+create an unnecessary duplicate.
+
+“Check-in must be recorded for today”:
+Check computer date/time and actual arrival. Normal reception flow does not permit
+retrospective check-in.
+
+“Checkout date must be after actual check-in”:
+Check that you selected the correct booking and are not using same-day checkout.
+The present workflow does not support day-use stays; ask management/development.
+
+Maintenance conflict or rejected confirmation:
+A live booking still overlaps. Move/reschedule/cancel it through approved process,
+then confirm again. A simulated notice is not conflict resolution.
+
+Database error at startup:
+Close the app. Do not repeatedly overwrite/delete the DB. If possible copy
+data/hotel_data.db as a backup and give the exact message to a developer.
+
+===============================================================================
+12. SCENARIO PLAYBOOK AND HANDOVER
+===============================================================================
+
+New guest booking:
+1. Search Customer by ID/phone.
+2. Reuse existing record when found; otherwise create valid customer.
+3. Open Room Status, choose dates/room, create reservation.
+4. Verify booking ID, room and planned dates.
+5. Check in only when guest actually arrives.
+
+Guest changes phone:
+1. Search exact Customer ID.
+2. Edit phone and save.
+3. If conflict, review highlighted existing row.
+4. Do not create another customer merely to change a phone.
+
+Guest changes room/date before arrival:
+1. Find Upcoming reservation and Edit.
+2. Choose new room/date; allow system overlap/maintenance/capacity validation.
+3. Confirm and reread final room/dates.
+4. Do not use normal Edit to move an Active guest; that needs a future room-move
+   workflow and manager direction.
+
+Guest does not arrive:
+1. Confirm reservation is Upcoming and today is planned arrival or later.
+2. Mark No-show with a useful reason.
+3. Do not Cancel on/after arrival.
+4. Apply any charge/penalty through external accounting because this app has no
+   payment model.
+
+Guest departs:
+1. Confirm Active state.
+2. Record actual checkout.
+3. Confirm invoice/history.
+4. Record payment through approved external process.
+
+Maintenance overlaps booking:
+1. Schedule exact dates with a useful note.
+2. Pending case and simulated notice appear.
+3. Contact guest through real hotel channel.
+4. Resolve bookings, then confirm schedule.
+5. If rejected, a live overlap remains; do not force it.
+
+Ask a manager/developer before early check-in, late checkout, same-day day-use,
+moving an Active guest, group bookings, deleting completed booking/invoice,
+payments/refunds/discounts, claiming real message delivery, changing existing
+Customer ID, deleting/importing DB, or operating multiple copied databases.
+
+Handover:
+1. Refresh Room Status and Reservations.
+2. Review Awaiting check-in, Active, today’s departures and pending maintenance.
+3. Record real guest contact in approved internal channel.
+4. Close the app normally.
+5. Follow secure backup procedure; database backups contain PII.
+
+END OF STAFF USER GUIDE
+

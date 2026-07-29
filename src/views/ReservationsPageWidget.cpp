@@ -12,6 +12,8 @@
 #include <QLabel>
 #include <QHeaderView>
 #include <QMessageBox>
+#include <QDialog>
+#include <QLineEdit>
 #include <QDate>
 #include <QDebug>
 #include <QFrame>
@@ -23,6 +25,68 @@
 #include <QEvent>
 
 namespace {
+bool requestReservationReason(
+    QWidget* parent,
+    const QString& title,
+    const QString& explanation,
+    const QString& confirmText,
+    QString& reason)
+{
+    QDialog dialog(parent);
+    dialog.setWindowTitle(title);
+    dialog.setModal(true);
+    dialog.setMinimumWidth(380);
+    dialog.setStyleSheet(
+        "QDialog { background: #FFFFFF; }"
+        "QLabel { color: #2B3674; font-size: 13px; }"
+        "QLineEdit { color: #2B3674; background: #F8FAFC; border: 1px solid #CBD5E1;"
+        " border-radius: 8px; padding: 9px 10px; font-size: 13px; }"
+        "QLineEdit:focus { border: 1px solid #005BFE; }"
+        "QPushButton { min-width: 88px; padding: 8px 14px; border-radius: 8px; font-weight: 700; }"
+        "QPushButton#cancelButton { color: #475569; background: #FFFFFF; border: 1px solid #CBD5E1; }"
+        "QPushButton#confirmButton { color: #FFFFFF; background: #005BFE; border: none; }"
+        "QPushButton#confirmButton:hover { background: #2B7BFF; }"
+    );
+
+    auto* layout = new QVBoxLayout(&dialog);
+    layout->setContentsMargins(22, 20, 22, 18);
+    layout->setSpacing(12);
+
+    auto* message = new QLabel(explanation, &dialog);
+    message->setWordWrap(true);
+    layout->addWidget(message);
+
+    auto* reasonLabel = new QLabel("Reason (optional)", &dialog);
+    layout->addWidget(reasonLabel);
+
+    auto* reasonInput = new QLineEdit(&dialog);
+    reasonInput->setPlaceholderText("Enter a short note for the audit record");
+    reasonInput->setClearButtonEnabled(true);
+    layout->addWidget(reasonInput);
+
+    auto* buttonRow = new QHBoxLayout();
+    buttonRow->addStretch();
+    auto* cancelButton = new QPushButton("Cancel", &dialog);
+    cancelButton->setObjectName("cancelButton");
+    auto* confirmButton = new QPushButton(confirmText, &dialog);
+    confirmButton->setObjectName("confirmButton");
+    buttonRow->addWidget(cancelButton);
+    buttonRow->addWidget(confirmButton);
+    layout->addLayout(buttonRow);
+
+    QObject::connect(cancelButton, &QPushButton::clicked, &dialog, &QDialog::reject);
+    QObject::connect(confirmButton, &QPushButton::clicked, &dialog, &QDialog::accept);
+    QObject::connect(reasonInput, &QLineEdit::returnPressed, &dialog, &QDialog::accept);
+
+    reasonInput->setFocus();
+    if (dialog.exec() != QDialog::Accepted) {
+        return false;
+    }
+
+    reason = reasonInput->text().trimmed();
+    return true;
+}
+
 class BookingActionTooltipFilter : public QObject
 {
 public:
@@ -188,7 +252,8 @@ void setupReservationsPageStyle(QWidget* widget) {
             font-weight: 700;
             border: none;
             border-bottom: 2px solid #E9EDF7;
-            padding: 8px;
+            padding: 8px 10px;
+            text-align: left;
             font-size: 12px;
         }
         QToolTip {
@@ -231,6 +296,11 @@ void ReservationsPageWidget::setupUI() {
     legCheckOut->setStyleSheet("background-color: #ECFDF5; color: #065F46; border: 1px solid #A7F3D0; font-weight: bold; border-radius: 10px; padding: 2px 8px; font-size: 11px;");
     legendRow->addWidget(legCheckOut);
 
+    // Modified: Expose every operational reservation action in the legend using the same color and icon as its table button.
+    auto* legCheckIn = new QLabel("🛎 Check in", this);
+    legCheckIn->setStyleSheet("background-color: #EFF6FF; color: #1D4ED8; border: 1px solid #BFDBFE; font-weight: bold; border-radius: 10px; padding: 2px 8px; font-size: 11px;");
+    legendRow->addWidget(legCheckIn);
+
     auto* legEdit = new QLabel("🖊 Edit", this);
     legEdit->setStyleSheet("background-color: #E9EFFF; color: #1E40AF; border: 1px solid #C3D4FF; font-weight: bold; border-radius: 10px; padding: 2px 8px; font-size: 11px;");
     legendRow->addWidget(legEdit);
@@ -238,6 +308,10 @@ void ReservationsPageWidget::setupUI() {
     auto* legCancel = new QLabel("❌ Cancel", this);
     legCancel->setStyleSheet("background-color: #FFFBEB; color: #92400E; border: 1px solid #FDE68A; font-weight: bold; border-radius: 10px; padding: 2px 8px; font-size: 11px;");
     legendRow->addWidget(legCancel);
+
+    auto* legNoShow = new QLabel("⚠ No-show", this);
+    legNoShow->setStyleSheet("background-color: #F5F3FF; color: #7E22CE; border: 1px solid #DDD6FE; font-weight: bold; border-radius: 10px; padding: 2px 8px; font-size: 11px;");
+    legendRow->addWidget(legNoShow);
 
     mainLayout->addLayout(legendRow);
 
@@ -249,7 +323,7 @@ void ReservationsPageWidget::setupUI() {
 
     m_statusCombo = new QComboBox(this);
     m_statusCombo->setObjectName("statusCombo");
-    m_statusCombo->addItems({"All statuses", "Upcoming", "Active", "Cancelled"});
+    m_statusCombo->addItems({"All statuses", "Upcoming", "Active", "Cancelled", "No-show"});
 
     filterRow->addWidget(m_searchEdit);
     filterRow->addWidget(m_statusCombo);
@@ -269,7 +343,10 @@ void ReservationsPageWidget::setupUI() {
     }
     m_tableWidget->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Stretch); // Let Customer Name take remaining space
     m_tableWidget->horizontalHeader()->setSectionResizeMode(8, QHeaderView::Fixed);
-    m_tableWidget->setColumnWidth(8, 100);
+    // Modified: Reserve button width plus cell padding so the final action's outer border is never clipped.
+    m_tableWidget->setColumnWidth(8, 132);
+    // Modified: Left-align headers so their text does not visually clip against both section borders.
+    m_tableWidget->horizontalHeader()->setDefaultAlignment(Qt::AlignLeft | Qt::AlignVCenter);
     m_tableWidget->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_tableWidget->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_tableWidget->setSelectionMode(QAbstractItemView::SingleSelection);
@@ -319,7 +396,8 @@ void ReservationsPageWidget::openReservationDialog(const QString& preselectedRoo
             return;
         }
 
-        if (m_manager->createBooking(custId, roomNum, checkIn, checkOut, errMsg)) {
+        if (m_manager->createBooking(custId, roomNum, checkIn, checkOut,
+                dialog.getAdultCount(), dialog.getChildCount(), errMsg)) {
             if (!DataManager::getInstance().commitChanges(*m_manager)) {
                 refreshData();
                 QMessageBox::critical(this, "Save Booking Failed", "The reservation was not saved. The previous database state has been restored.");
@@ -356,6 +434,7 @@ void ReservationsPageWidget::refreshData() {
             if (m_statusFilterIndex == 1 && state == BookingState::UPCOMING) matches = true;
             else if (m_statusFilterIndex == 2 && state == BookingState::ACTIVE) matches = true;
             else if (m_statusFilterIndex == 3 && state == BookingState::CANCELLED) matches = true;
+            else if (m_statusFilterIndex == 4 && state == BookingState::NO_SHOW) matches = true;
 
             if (!matches) continue;
         }
@@ -387,7 +466,7 @@ void ReservationsPageWidget::refreshData() {
         m_tableWidget->setItem(row, 3, new QTableWidgetItem(QString::fromStdString(customer->getPhoneNumber())));
         m_tableWidget->setItem(row, 4, new QTableWidgetItem(roomNum));
         m_tableWidget->setItem(row, 5, new QTableWidgetItem(QString::fromStdString(booking->getCheckInDate())));
-        m_tableWidget->setItem(row, 6, new QTableWidgetItem(QString::fromStdString(booking->getCheckOutDate())));
+        m_tableWidget->setItem(row, 6, new QTableWidgetItem(QString::fromStdString(booking->getEffectiveCheckOutDate())));
 
         // Status Item & color
         auto* statusItem = new QTableWidgetItem();
@@ -403,15 +482,19 @@ void ReservationsPageWidget::refreshData() {
         } else if (state == BookingState::CANCELLED) {
             statusItem->setText("✖ Cancelled");
             statusItem->setForeground(QColor("#EF4444"));
+        } else if (state == BookingState::NO_SHOW) {
+            statusItem->setText("⚠ No-show");
+            statusItem->setForeground(QColor("#9333EA"));
         }
         m_tableWidget->setItem(row, 7, statusItem);
 
         // Action Column - Multiple buttons layout container
         auto* actionContainer = new QWidget(m_tableWidget);
         auto* actionLayout = new QHBoxLayout(actionContainer);
-        actionLayout->setContentsMargins(0, 0, 0, 0);
-        actionLayout->setSpacing(6);
+        actionLayout->setContentsMargins(5, 0, 6, 0);
+        actionLayout->setSpacing(5);
         actionLayout->setAlignment(Qt::AlignCenter);
+        actionLayout->setSizeConstraint(QLayout::SetMinimumSize);
 
         auto configureActionButton = [](QPushButton* button, const QString& tooltipText)
         {
@@ -427,7 +510,8 @@ void ReservationsPageWidget::refreshData() {
         if (state == BookingState::ACTIVE) {
             // Check Out
             auto* checkOutBtn = new QPushButton("💳", actionContainer);
-            configureActionButton(checkOutBtn, "Check out & pay");
+            // Modified: Checkout issues an invoice but does not claim that a payment has been collected.
+            configureActionButton(checkOutBtn, "Check out & issue invoice");
             checkOutBtn->setStyleSheet("background-color: #ECFDF5; color: #065F46; border: 1px solid #A7F3D0; border-radius: 8px; font-size: 14px; min-width: 30px; max-width: 30px; min-height: 30px; max-height: 30px; padding: 0px;");
             checkOutBtn->setProperty("bookingId", bId);
             checkOutBtn->setProperty("actionType", "checkout");
@@ -444,14 +528,38 @@ void ReservationsPageWidget::refreshData() {
             actionLayout->addWidget(editBtn);
 
         } else if (state == BookingState::UPCOMING) {
-            // Cancel
-            auto* cancelBtn = new QPushButton("❌", actionContainer);
-            configureActionButton(cancelBtn, "Cancel reservation");
-            cancelBtn->setStyleSheet("background-color: #FFFBEB; color: #92400E; border: 1px solid #FDE68A; border-radius: 8px; font-size: 14px; min-width: 30px; max-width: 30px; min-height: 30px; max-height: 30px; padding: 0px;");
-            cancelBtn->setProperty("bookingId", bId);
-            cancelBtn->setProperty("actionType", "cancel");
-            connect(cancelBtn, &QPushButton::clicked, this, &ReservationsPageWidget::onTableActionClicked);
-            actionLayout->addWidget(cancelBtn);
+            const QDate today = QDate::currentDate();
+            const QDate plannedCheckIn = QDate::fromString(QString::fromStdString(booking->getCheckInDate()), Qt::ISODate);
+            const QDate plannedCheckOut = QDate::fromString(QString::fromStdString(booking->getCheckOutDate()), Qt::ISODate);
+            if (plannedCheckIn.isValid() && plannedCheckOut.isValid()
+                && today >= plannedCheckIn && today < plannedCheckOut) {
+                // Modified: Give staff an explicit operational check-in action instead of activating stays by date.
+                auto* checkInBtn = new QPushButton("🛎", actionContainer);
+                configureActionButton(checkInBtn, "Check in guest");
+                checkInBtn->setStyleSheet("background-color: #EFF6FF; color: #1D4ED8; border: 1px solid #BFDBFE; border-radius: 8px; font-size: 14px; min-width: 30px; max-width: 30px; min-height: 30px; max-height: 30px; padding: 0px;");
+                checkInBtn->setProperty("bookingId", bId);
+                checkInBtn->setProperty("actionType", "checkin");
+                connect(checkInBtn, &QPushButton::clicked, this, &ReservationsPageWidget::onTableActionClicked);
+                actionLayout->addWidget(checkInBtn);
+            }
+            if (plannedCheckIn.isValid() && today >= plannedCheckIn) {
+                auto* noShowBtn = new QPushButton("⚠", actionContainer);
+                configureActionButton(noShowBtn, "Mark no-show");
+                noShowBtn->setStyleSheet("background-color: #F5F3FF; color: #7E22CE; border: 1px solid #DDD6FE; border-radius: 8px; font-size: 14px; min-width: 30px; max-width: 30px; min-height: 30px; max-height: 30px; padding: 0px;");
+                noShowBtn->setProperty("bookingId", bId);
+                noShowBtn->setProperty("actionType", "noshow");
+                connect(noShowBtn, &QPushButton::clicked, this, &ReservationsPageWidget::onTableActionClicked);
+                actionLayout->addWidget(noShowBtn);
+            } else {
+                // Cancel
+                auto* cancelBtn = new QPushButton("❌", actionContainer);
+                configureActionButton(cancelBtn, "Cancel reservation");
+                cancelBtn->setStyleSheet("background-color: #FFFBEB; color: #92400E; border: 1px solid #FDE68A; border-radius: 8px; font-size: 14px; min-width: 30px; max-width: 30px; min-height: 30px; max-height: 30px; padding: 0px;");
+                cancelBtn->setProperty("bookingId", bId);
+                cancelBtn->setProperty("actionType", "cancel");
+                connect(cancelBtn, &QPushButton::clicked, this, &ReservationsPageWidget::onTableActionClicked);
+                actionLayout->addWidget(cancelBtn);
+            }
 
             // Edit
             auto* editBtn = new QPushButton("🖊", actionContainer);
@@ -480,11 +588,60 @@ void ReservationsPageWidget::onTableActionClicked() {
     auto booking = m_manager->findBookingById(bookingId);
     if (!booking || booking->isDeleted()) return;
 
-    if (actionType == "cancel") {
-        CustomConfirmDialog dialog("Confirm cancel reservation", QString("Do you want to cancel reservation %1?").arg(QString::fromStdString(bookingId)), false, this);
+    if (actionType == "checkin") {
+        CustomConfirmDialog dialog("Confirm check-in", QString("Check in reservation %1 now?").arg(QString::fromStdString(bookingId)), false, this);
         if (dialog.exec() == QDialog::Accepted && dialog.isConfirmed()) {
             std::string errMsg;
-            if (m_manager->cancelBooking(bookingId, errMsg)) {
+            const std::string today = QDate::currentDate().toString(Qt::ISODate).toStdString();
+            if (!m_manager->checkInBooking(bookingId, today, errMsg)) {
+                QMessageBox::critical(this, "Check-in error", QString::fromStdString(errMsg));
+                return;
+            }
+            if (!DataManager::getInstance().commitChanges(*m_manager)) {
+                refreshData();
+                QMessageBox::critical(this, "Save Check-in Failed", "The check-in was not saved. The previous database state has been restored.");
+                return;
+            }
+            refreshData();
+            emit bookingChanged();
+            CustomSuccessDialog("Guest checked in successfully.", this).exec();
+        }
+    } else if (actionType == "noshow") {
+        QString reason;
+        // Modified: Use an explicitly styled dialog because the global theme can hide native QInputDialog labels and buttons.
+        if (!requestReservationReason(this, "Mark no-show",
+                                      "Record that the guest did not arrive. This releases the room for future availability.",
+                                      "Mark no-show", reason)) {
+            return;
+        }
+        std::string errMsg;
+        if (!m_manager->markNoShow(bookingId, reason.toStdString(), errMsg)) {
+            QMessageBox::critical(this, "No-show error", QString::fromStdString(errMsg));
+            return;
+        }
+        if (!DataManager::getInstance().commitChanges(*m_manager)) {
+            refreshData();
+            QMessageBox::critical(this, "Save No-show Failed", "The no-show record was not saved. The previous database state has been restored.");
+            return;
+        }
+        refreshData();
+        emit bookingChanged();
+        CustomSuccessDialog("Reservation marked as no-show.", this).exec();
+    } else if (actionType == "cancel") {
+        CustomConfirmDialog dialog("Confirm cancel reservation", QString("Do you want to cancel reservation %1?").arg(QString::fromStdString(bookingId)), false, this);
+        if (dialog.exec() == QDialog::Accepted && dialog.isConfirmed()) {
+            QString reason;
+            if (!requestReservationReason(this, "Cancellation reason",
+                                          "Add a reason so the cancellation remains traceable in the audit record.",
+                                          "Confirm cancellation", reason)) {
+                return;
+            }
+            if (reason.isEmpty()) {
+                QMessageBox::warning(this, "Cancellation reason required", "Enter a cancellation reason to preserve the audit record.");
+                return;
+            }
+            std::string errMsg;
+            if (m_manager->cancelBooking(bookingId, reason.toStdString(), errMsg)) {
                 if (!DataManager::getInstance().commitChanges(*m_manager)) {
                     refreshData();
                     QMessageBox::critical(this, "Save Cancellation Failed", "The cancellation was not saved. The previous database state has been restored.");
@@ -517,6 +674,8 @@ void ReservationsPageWidget::onTableActionClicked() {
                     dialog.getRoomNumber().toStdString(),
                     dialog.getCheckInDate().toStdString(),
                     dialog.getCheckOutDate().toStdString(),
+                    dialog.getAdultCount(),
+                    dialog.getChildCount(),
                     errMsg)) {
                 QMessageBox::critical(this, "Update reservation error", QString::fromStdString(errMsg));
                 return;
@@ -533,10 +692,8 @@ void ReservationsPageWidget::onTableActionClicked() {
             CustomSuccessDialog("Reservation information updated successfully.", this).exec();
         }
     } else if (actionType == "checkout") {
-        CustomConfirmDialog dialog("Confirm check-out", QString("Proceed with check-out and payment for transaction %1?").arg(QString::fromStdString(bookingId)), false, this);
+        CustomConfirmDialog dialog("Confirm check-out", QString("Proceed with check-out and issue an invoice for reservation %1?").arg(QString::fromStdString(bookingId)), false, this);
         if (dialog.exec() == QDialog::Accepted && dialog.isConfirmed()) {
-            // 1. Calculate nights
-            QDate checkIn = QDate::fromString(QString::fromStdString(booking->getCheckInDate()), Qt::ISODate);
             QDate today = QDate::currentDate();
             std::string todayStr = today.toString("yyyy-MM-dd").toStdString();
 
@@ -546,14 +703,10 @@ void ReservationsPageWidget::onTableActionClicked() {
                 return;
             }
 
-            int nights = checkIn.daysTo(today);
-            if (nights <= 0) nights = 1; // Minimum charge 1 night
-
             // Modified: Stage checkout and invoice together before one atomic persistence commit.
             std::string invoiceId = m_manager->nextInvoiceId();
-            double taxRate = 0.1; // 10% VAT
 
-            if (!m_manager->createInvoice(invoiceId, bookingId, taxRate, nights, todayStr, errMsg)) {
+            if (!m_manager->createInvoice(invoiceId, bookingId, todayStr, errMsg)) {
                 DataManager::getInstance().restoreLastSavedState(*m_manager);
                 refreshData();
                 QMessageBox::critical(this, "Invoice generation error", QString::fromStdString(errMsg));

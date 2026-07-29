@@ -24,6 +24,7 @@ public:
     void setRoomType(QString roomType);
 
     void setAvailable();
+    void setAwaiting(QString guestName, QString dateIn, QString dateOut);
     void setOccupied(QString guestName, QString idNumber, QString phoneNumber, QString dateIn, QString dateOut);
     void setMaintenance();
 

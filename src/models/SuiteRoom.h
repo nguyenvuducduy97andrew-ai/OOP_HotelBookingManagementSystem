@@ -14,6 +14,7 @@ public:
 
     double calculateTargetPrice() const override;
     std::string getRoomTypeName() const override;
+    int getMaximumGuests() const override;
     double getExtraFeeAmount() const override;
     void setExtraFeeAmount(double fee) override;
 };

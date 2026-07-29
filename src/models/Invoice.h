@@ -15,7 +15,8 @@ private:
     std::weak_ptr<Booking> booking;  // Weak reference to booking (owned by HotelManager)
     double taxRate;
     int nights;                      // Number of nights stayed (passed down from MainWindow)
-    std::string paymentDate;         // ISO date format string "YYYY-MM-DD"
+    // Modified: This is the invoice issue date, not evidence that the balance has been paid.
+    std::string invoiceIssuedDate;   // ISO date format string "YYYY-MM-DD"
     // Modified: Store immutable billing snapshots so completed invoices do not depend on mutable model records.
     double unitPrice;
     std::string customerNameSnapshot;
@@ -56,8 +57,8 @@ public:
     int getNights() const;
     void setNights(int nights);
 
-    std::string getPaymentDate() const;
-    void setPaymentDate(const std::string& paymentDate);
+    std::string getInvoiceIssuedDate() const;
+    void setInvoiceIssuedDate(const std::string& invoiceIssuedDate);
 
     double getUnitPrice() const;
     void setUnitPrice(double value);

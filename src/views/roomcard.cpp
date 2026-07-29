@@ -69,6 +69,36 @@ void RoomCard::setAvailable() { // Render the available state.
     ui->lblStatusIcon->setScaledContents(true);
 }
 
+void RoomCard::setAwaiting(QString guestName, QString dateIn, QString dateOut) {
+    // Modified: Render reserved arrivals distinctly so a room is not mistaken for sellable inventory before check-in.
+    m_status = "AWT";
+    m_guestName = guestName;
+    m_idNumber = "";
+    m_phoneNumber = "";
+    m_dateIn = dateIn;
+    m_dateOut = dateOut;
+
+    ui->lblCheckOutDate->show();
+    ui->lblCheckInDate->show();
+    ui->lineDivider->show();
+    ui->lblGuestName->show();
+    ui->lblGuestName->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+
+    ui->frameStatusBadge->setStyleSheet("background-color: #6D5DFB; border-radius: 10px;");
+    ui->frameCardContainer->setStyleSheet("background-color: #EEEAFE; border-radius: 10px;");
+    ui->lblGuestName->setStyleSheet("color: #3F3A8F; background: transparent; font-size: 14px; font-weight: bold; border: none;");
+    ui->lblCheckInDate->setStyleSheet("color: #3F3A8F; font-size: 14px; background: transparent;");
+    ui->lblCheckOutDate->setStyleSheet("color: #3F3A8F; font-size: 14px; background: transparent;");
+
+    ui->lblGuestName->setText(guestName.isEmpty() ? "Awaiting check-in" : QString("Awaiting: ") + guestName);
+    ui->lblCheckInDate->setText("IN: " + dateIn);
+    ui->lblCheckOutDate->setText("OUT: " + dateOut);
+    ui->lblStatusIcon->setPixmap(QPixmap());
+    ui->lblStatusIcon->setText("⏳");
+    ui->lblStatusIcon->setStyleSheet("color: white; font-size: 27px; background: transparent;");
+    ui->lblStatusIcon->setAlignment(Qt::AlignCenter);
+}
+
 void RoomCard::setOccupied(QString guestName, QString idNumber, QString phoneNumber, QString dateIn, QString dateOut) { // Render the occupied state.
     m_status = "OCC";
     

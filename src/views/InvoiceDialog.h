@@ -9,7 +9,8 @@ class InvoiceDialog : public QDialog {
 public:
     explicit InvoiceDialog(const QString& invoiceDetails, QWidget* parent = nullptr) 
         : QDialog(parent) {
-        setWindowTitle("Payment Invoice");
+        // Modified: Name the document as an invoice because this screen does not record or confirm a payment.
+        setWindowTitle("Booking Invoice");
         setFixedSize(460, 560);
         setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
 
@@ -50,7 +51,7 @@ public:
         layout->setContentsMargins(24, 20, 24, 20);
         layout->setSpacing(14);
 
-        auto* titleLabel = new QLabel("📄 PAYMENT INVOICE DETAILS", this);
+        auto* titleLabel = new QLabel("📄 BOOKING INVOICE DETAILS", this);
         titleLabel->setObjectName("titleLabel");
         titleLabel->setAlignment(Qt::AlignCenter);
         layout->addWidget(titleLabel);

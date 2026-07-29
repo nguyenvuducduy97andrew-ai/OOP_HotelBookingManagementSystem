@@ -125,6 +125,14 @@ void setupRoomPageStyle(QWidget* widget) {
             font-size: 12px;
             font-weight: 700;
         }
+        QLabel#detailBadgeAwaiting {
+            background-color: #F5F3FF;
+            color: #7E22CE;
+            border-radius: 6px;
+            padding: 4px 10px;
+            font-size: 12px;
+            font-weight: 700;
+        }
         QPushButton#btnEdit {
             background-color: #E9EFFF;
             color: #005BFE;
@@ -402,6 +410,7 @@ QWidget* RoomPageWidget::createRoomCard(const std::shared_ptr<Room>& room) {
 
     // Dynamic Occupied status
     const bool isOccupied = isRoomOccupied(room->getRoomNumber());
+    const auto awaitingBooking = getAwaitingBooking(room->getRoomNumber());
 
     auto* statusBadge = new QLabel(card);
     const bool isUnderMaintenance = !room->getIsAvailable()
@@ -412,6 +421,10 @@ QWidget* RoomPageWidget::createRoomCard(const std::shared_ptr<Room>& room) {
     } else if (isOccupied) {
         statusBadge->setText("Occupied");
         statusBadge->setStyleSheet("background-color: #FFFBEB; color: #D97706; border-radius: 4px; padding: 2px 6px; font-size: 10px; font-weight: 700;");
+    } else if (awaitingBooking) {
+        // Modified: Match Room Status by showing a due but unarrived reservation instead of falsely presenting the room as freely available.
+        statusBadge->setText("Awaiting");
+        statusBadge->setStyleSheet("background-color: #F5F3FF; color: #7E22CE; border-radius: 4px; padding: 2px 6px; font-size: 10px; font-weight: 700;");
     } else {
         statusBadge->setText("Available");
         statusBadge->setStyleSheet("background-color: #ECFDF5; color: #05CD99; border-radius: 4px; padding: 2px 6px; font-size: 10px; font-weight: 700;");
@@ -498,6 +511,7 @@ void RoomPageWidget::updateDetailPanel(const std::shared_ptr<Room>& room) {
 
     // Dynamic Occupied status
     const bool isOccupied = isRoomOccupied(room->getRoomNumber());
+    const auto awaitingBooking = getAwaitingBooking(room->getRoomNumber());
     std::string occupantName = "";
     if (isOccupied && m_manager) {
         for (const auto& booking : m_manager->getBookings()) {
@@ -526,10 +540,17 @@ void RoomPageWidget::updateDetailPanel(const std::shared_ptr<Room>& room) {
         m_detailStatusLabel->setText("Occupied");
         m_detailStatusLabel->setObjectName("detailBadgeOccupied");
         m_detailDescLabel->setText(QString("Room is currently occupied (%1). Booking details are available in the reservation tab.").arg(QString::fromStdString(occupantName)));
+    } else if (awaitingBooking) {
+        const auto customer = awaitingBooking->getCustomer();
+        const QString guestName = customer ? QString::fromStdString(customer->getName()) : QStringLiteral("the booked guest");
+        m_detailStatusLabel->setText("Awaiting check-in");
+        m_detailStatusLabel->setObjectName("detailBadgeAwaiting");
+        // Modified: Explain that an unarrived reservation still protects the room's inventory for its booked date range.
+        m_detailDescLabel->setText(QString("Awaiting check-in for %1. The room remains reserved and cannot be assigned to another booking for this stay.").arg(guestName));
     } else {
-        m_detailStatusLabel->setText("Ready");
+        m_detailStatusLabel->setText("Available");
         m_detailStatusLabel->setObjectName("detailBadgeAvailable");
-        m_detailDescLabel->setText("The room is clean, fully equipped, and ready for guest check-in.");
+        m_detailDescLabel->setText("This room is available for a booking during eligible dates.");
     }
     // Refresh label styles to apply name changes
     m_detailStatusLabel->style()->unpolish(m_detailStatusLabel);
@@ -539,14 +560,14 @@ void RoomPageWidget::updateDetailPanel(const std::shared_ptr<Room>& room) {
     if (typeName == "Standard") {
         m_detailSizeLabel->setText("📏 25m²");
         m_detailBedLabel->setText("🛏 Queen Bed");
-        m_detailGuestLabel->setText("👤 2 Guests");
+        m_detailGuestLabel->setText(QString("👤 %1 Guests").arg(room->getMaximumGuests()));
         m_detailExtraFeeLabel->setVisible(false);
         m_detailImageLabel->setText("🏨 Standard Room Image Placeholder");
         m_detailImageLabel->setStyleSheet("background-color: #F4F7FE; border-radius: 14px; font-weight: bold; color: #A3AED0;");
     } else if (typeName == "Deluxe") {
         m_detailSizeLabel->setText("📏 35m²");
         m_detailBedLabel->setText("🛏 King Bed");
-        m_detailGuestLabel->setText("👤 2 Guests");
+        m_detailGuestLabel->setText(QString("👤 %1 Guests").arg(room->getMaximumGuests()));
         m_detailExtraFeeLabel->setText(QString("💰 Mini Bar Fee: %1 VND").arg(formatMoney(room->getExtraFeeAmount())));
         m_detailExtraFeeLabel->setVisible(true);
         m_detailImageLabel->setText("✨ Deluxe Room Image Placeholder");
@@ -554,7 +575,7 @@ void RoomPageWidget::updateDetailPanel(const std::shared_ptr<Room>& room) {
     } else if (typeName == "Suite") {
         m_detailSizeLabel->setText("📏 55m²");
         m_detailBedLabel->setText("🛏 Super King Bed");
-        m_detailGuestLabel->setText("👤 4 Guests");
+        m_detailGuestLabel->setText(QString("👤 %1 Guests").arg(room->getMaximumGuests()));
         m_detailExtraFeeLabel->setText(QString("👑 Premium Service Fee: %1 VND").arg(formatMoney(room->getExtraFeeAmount())));
         m_detailExtraFeeLabel->setVisible(true);
         m_detailImageLabel->setText("👑 Suite Room Image Placeholder");
@@ -588,6 +609,26 @@ void RoomPageWidget::refreshOccupancyCache()
 bool RoomPageWidget::isRoomOccupied(const std::string& roomNumber) const
 {
     return m_occupiedRoomNumbers.find(roomNumber) != m_occupiedRoomNumbers.end();
+}
+
+std::shared_ptr<Booking> RoomPageWidget::getAwaitingBooking(const std::string& roomNumber) const
+{
+    if (!m_manager) {
+        return nullptr;
+    }
+
+    const std::string today = QDate::currentDate().toString(Qt::ISODate).toStdString();
+    for (const auto& booking : m_manager->getBookings()) {
+        if (!booking || booking->isDeleted() || booking->isCancelled() || !booking->getRoom()) {
+            continue;
+        }
+        if (booking->getRoom()->getRoomNumber() == roomNumber
+            && m_manager->getBookingState(*booking) == BookingState::UPCOMING
+            && booking->getCheckInDate() <= today && today < booking->getCheckOutDate()) {
+            return booking;
+        }
+    }
+    return nullptr;
 }
 
 void RoomPageWidget::onAddRoomClicked() {
@@ -660,7 +701,7 @@ void RoomPageWidget::onEditRoomClicked() {
             existingSchedules.push_back(maintenance);
         }
     }
-    dialog.setExistingMaintenanceSchedules(existingSchedules);
+    dialog.setExistingMaintenanceSchedules(existingSchedules, m_manager->getMaintenanceGuestNotices());
     if (dialog.exec() == QDialog::Accepted) {
         double newPrice = dialog.getBasePrice();
         double newExtraFee = dialog.getExtraFee();
@@ -672,6 +713,11 @@ void RoomPageWidget::onEditRoomClicked() {
             QMessageBox::warning(this, "Maintenance cancellation failed", QString::fromStdString(errorMessage));
             return;
         }
+        if (!dialog.getMaintenanceIdToConfirm().isEmpty() &&
+            !m_manager->confirmRoomMaintenance(dialog.getMaintenanceIdToConfirm().toStdString(), errorMessage)) {
+            QMessageBox::warning(this, "Maintenance case still pending", QString::fromStdString(errorMessage));
+            return;
+        }
         if (scheduleMaintenance && !m_manager->scheduleRoomMaintenance(roomNum,
                 dialog.getMaintenanceStartDate().toStdString(),
                 dialog.getMaintenanceEndDate().toStdString(),
@@ -679,6 +725,7 @@ void RoomPageWidget::onEditRoomClicked() {
             QMessageBox::warning(this, "Maintenance schedule conflict", QString::fromStdString(errorMessage));
             return;
         }
+        const QString maintenanceWorkflowMessage = QString::fromStdString(errorMessage);
         if (!scheduleMaintenance && !room->getIsAvailable() &&
             !m_manager->setRoomAvailability(roomNum, true, errorMessage)) {
             QMessageBox::warning(this, "Room status unavailable", QString::fromStdString(errorMessage));
@@ -702,7 +749,11 @@ void RoomPageWidget::onEditRoomClicked() {
         }
 
         refreshData();
-        CustomSuccessDialog("Room information updated successfully.", this).exec();
+        // Modified: Make a simulated guest-contact case visible to staff instead of silently treating it as confirmed maintenance.
+        CustomSuccessDialog(maintenanceWorkflowMessage.isEmpty()
+                                ? "Room information updated successfully."
+                                : maintenanceWorkflowMessage,
+                            this).exec();
     }
 }
 

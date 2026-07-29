@@ -1,0 +1,466 @@
+HOTEL BOOKING MANAGEMENT SYSTEM
+HƯỚNG DẪN SỬ DỤNG CHI TIẾT CHO NHÂN VIÊN
+Phiên bản: theo working tree hiện tại
+
+===============================================================================
+1. ỨNG DỤNG NÀY DÙNG ĐỂ LÀM GÌ?
+===============================================================================
+
+Đây là phần mềm desktop dùng nội bộ cho nhân viên lễ tân và quản lý khách sạn.
+Ứng dụng lưu phòng, khách hàng, reservation, check-in, check-out, invoice,
+maintenance, dashboard và report PDF trong database SQLite cục bộ.
+
+Ứng dụng không phải website cho khách tự đặt phòng. Nó chưa gửi email/SMS thật,
+chưa xử lý thanh toán thẻ/tiền mặt, chưa thay thế phần mềm kế toán và chưa có
+phân quyền nhân viên production. Dữ liệu chứa CCCD/ID và số điện thoại, vì vậy
+không chia sẻ ảnh chụp màn hình, PDF hoặc file database tùy tiện.
+
+===============================================================================
+2. ĐĂNG NHẬP, MỞ VÀ ĐÓNG ỨNG DỤNG
+===============================================================================
+
+1. Mở ứng dụng.
+2. Cửa sổ Sign in hiện ra trước các màn nghiệp vụ.
+3. Tài khoản bootstrap hiện tại:
+   Username: admin
+   Password: adminadmin
+4. Chọn Sign in hoặc nhấn Enter ở ô Password.
+5. Nếu báo lỗi, kiểm tra cả hai ô đã nhập và phân biệt chữ hoa/thường password.
+
+Login hiện chỉ dành cho đồ án. Không chia sẻ password. Khi nhóm có Staff account
+thật, mỗi người phải dùng account riêng để audit được thao tác.
+
+Để tắt app, dùng nút Close cửa sổ bình thường. Ứng dụng cố lưu data khi đóng.
+Không force-close, tắt máy hoặc rút ổ đĩa khi app đang lưu. Không xóa
+data/hotel_data.db để xử lý lỗi nghiệp vụ nếu chưa backup và chưa có hướng dẫn.
+
+===============================================================================
+3. CÁC TRẠNG THÁI CẦN HIỂU TRƯỚC KHI THAO TÁC
+===============================================================================
+
+Trạng thái phòng ở Room Status:
+- Available: phòng có thể bán trong ngày/khoảng ngày đang xem.
+- Awaiting check-in: có reservation đến hôm nay hoặc quá ngày đến nhưng staff
+  chưa Check in. Không phải Occupied, nhưng không được đặt chồng lịch.
+- Occupied: staff đã Check in thật; còn như vậy đến khi staff Check out thật.
+- Maintenance: maintenance đã Confirmed, phòng bị block dùng bình thường.
+
+Trạng thái reservation:
+- Upcoming: đã đặt, khách chưa check-in.
+- Active: khách đã được check-in.
+- Completed: đã checkout, được đưa vào Booking History/report.
+- Cancelled: hủy trước ngày đến, vẫn giữ lịch sử.
+- No-show: khách không đến vào/sau ngày dự kiến đến.
+
+Ngày hệ thống lấy từ máy tính đang chạy. Đầu mỗi ca kiểm tra giờ/ngày của máy.
+Sai ngày có thể làm Check in, Check out, No-show và report sai.
+
+===============================================================================
+4. CHECKLIST ĐẦU CA
+===============================================================================
+
+1. Login, mở Dashboard.
+2. Xem occupied room, arrival, departure.
+3. Mở Room Status, xem phòng Awaiting check-in và Occupied.
+4. Mở Room Management, xem maintenance pending.
+5. Nhớ rằng “Simulated email” chỉ là log nội bộ, chưa gửi email/SMS thật.
+6. Trước khi sửa Customer, Room hoặc Booking, search theo ID/room number/booking
+   ID để chắc chắn đang chọn đúng bản ghi.
+
+===============================================================================
+5. QUẢN LÝ KHÁCH HÀNG
+===============================================================================
+
+Customer page hiển thị Customer ID, Name, Phone và các số đếm reservation.
+Dùng Search/filter trước khi Add để hạn chế duplicate.
+
+5.1 Thêm khách mới
+
+1. Chọn Add Customer.
+2. Chọn quốc gia của Customer ID. Hint kế bên cho ví dụ ngắn hoặc độ dài hợp lệ,
+   ví dụ “12 digits” hoặc “e.g. S1234567A”.
+3. Nhập ID đúng theo giấy tờ của quốc gia đã chọn.
+4. Nhập họ/tên theo form; dùng tên nhất quán với giấy tờ.
+5. Chọn quốc gia phone. Chỉ nhập số nội địa; không nhập lại calling code nếu form
+   đã hiển thị calling code.
+6. Form tự bỏ space, punctuation và số 0 đầu dư. Kiểm tra lại số sau normalize.
+7. Chọn Save.
+
+Các country hiện hỗ trợ: Vietnam, United States, Malaysia, United Kingdom, Japan,
+Singapore, South Korea, Thailand, Australia và Germany.
+
+5.2 Các thông báo duplicate
+
+Name đơn lẻ có thể trùng, vì ngoài đời có nhiều người cùng tên. Phone và Customer
+ID là field nhận diện mạnh.
+
+- “This customer already exists.”
+  Phone, tên đã normalize và Customer ID đều trùng một record có sẵn.
+- “This phone number is already used by another customer...”
+  Phone đã thuộc người khác. Kiểm tra lại, không tạo record giả để vượt lỗi.
+- “This ID number is already linked to another customer account...”
+  ID/CCCD đã được dùng bởi record khác. Kiểm tra giấy tờ và chọn đúng khách.
+
+Khi conflict, row khách đang trùng được highlight. Hãy đọc row đó trước khi quyết
+định sửa input hay sử dụng customer đã tồn tại.
+
+5.3 Edit, archive và delete
+
+Dùng Edit để sửa name/phone khi cần. Customer ID là identity, không nên thay đổi
+tùy ý. Dùng Archive cho khách không được phép tạo booking mới nhưng vẫn phải giữ
+history. Archived customer không tạo/sửa booking được. Không dùng Delete như
+cách dọn lỗi nếu khách đã có booking history.
+
+===============================================================================
+6. QUẢN LÝ PHÒNG VÀ MAINTENANCE
+===============================================================================
+
+Room Management dùng để thêm room, filter type, xem Room Details, sửa room và
+lập maintenance schedule.
+
+6.1 Add hoặc Edit Room
+
+1. Chọn Add Room, hoặc chọn room rồi chọn Edit.
+2. Kiểm tra Room Number, Room Type và Base Price.
+3. Nhập subtype fee nếu form yêu cầu, ví dụ minibar hoặc premium suite service.
+4. Permanent availability chỉ dùng khi phòng chủ ý ngưng bán dài hạn. Nó không
+   phải trạng thái “có khách” hay maintenance ngắn hạn.
+5. Save, rồi kiểm tra room xuất hiện đúng category.
+
+Sửa price sẽ ảnh hưởng booking mới. Booking đã xác nhận giữ quoted rate theo
+nghiệp vụ; invoice đã issue giữ snapshot lịch sử.
+
+6.2 Lập maintenance
+
+1. Edit room cần sửa.
+2. Chọn date range và ghi note rõ ràng về công việc.
+3. Save.
+
+Không có unfinished booking trùng lịch: maintenance được Confirmed, Room Status
+sẽ hiển thị Maintenance trong khoảng đó.
+
+Có booking Upcoming/Active trùng lịch: hệ thống tạo “Awaiting guest response”.
+Phòng chưa hiển thị Maintenance ngay, nhưng đã bị soft-hold để không nhận booking
+mới trùng lịch. Hệ thống ghi “Simulated email logged” cho booking bị ảnh hưởng.
+
+“Simulated email” KHÔNG gửi email, SMS hay notification thật. Nhân viên phải
+liên hệ khách bằng quy trình khách sạn, xử lý move/reschedule/cancel booking rồi
+mới confirm maintenance.
+
+6.3 Confirm hoặc cancel pending maintenance
+
+1. Trong Edit Room, chọn schedule trong danh sách.
+2. Chỉ sau khi mọi booking conflict đã được xử lý, chọn Confirmation selected.
+   Popup sẽ đóng sau action này.
+3. App recheck overlap. Nếu vẫn còn booking live trùng, confirm bị từ chối.
+4. Nếu không dùng schedule nữa, chọn Cancel selected schedule.
+
+Không confirm maintenance chỉ vì thấy simulated notice. Notice không phải conflict
+resolution hay proof khách đã đồng ý.
+
+===============================================================================
+7. TẠO RESERVATION MỚI
+===============================================================================
+
+Reservation mới bắt đầu ở Room Status, không có nút New Reservation riêng ở
+Reservations page.
+
+1. Mở Room Status.
+2. Chọn date/guest filter nếu màn có hỗ trợ, xem trạng thái room.
+3. Click room phù hợp để xem details.
+4. Chọn Book/Reserve. Reservation form mở với room đã preselect.
+5. Chọn/nhập Customer. Tuân theo country selector và format hint.
+6. Nhập planned Check-in/Check-out. Check-out phải sau Check-in; booking mới
+   không được có planned check-in quá khứ.
+7. Nhập Adults/Children. Phải có ít nhất một adult; tổng không vượt capacity
+   room type.
+8. Confirm/Save.
+9. Kiểm tra booking mới xuất hiện Upcoming ở Reservation Management và Room
+   Status update.
+
+Không tin hoàn toàn vào screen cũ khi form đã mở lâu. Hệ thống validate availability
+lần cuối trước khi tạo để ngăn double booking.
+
+===============================================================================
+8. RESERVATION MANAGEMENT: EDIT, CHECK IN, CANCEL, NO-SHOW, CHECK OUT
+===============================================================================
+
+Reservations page có Search, filter trạng thái, Action legend và tooltips cho
+các icon action.
+
+8.1 Edit Upcoming reservation
+
+Dùng Edit để đổi thông tin cho phép. App sẽ block date overlap, archived
+customer/room, invalid capacity và past arrival. Sau Check in, guest, room và
+planned arrival bị khóa để giữ lịch sử. Nếu sửa Upcoming room/rate-bearing data,
+quoted booking rate có thể được cập nhật theo room hiện tại.
+
+8.2 Check in thật
+
+Booking không tự Occupied chỉ vì đến ngày dự kiến.
+
+1. Tìm Upcoming booking đến hôm nay.
+2. Xác nhận khách đã có mặt và hoàn tất quy trình khách sạn.
+3. Chọn icon Check in, xác nhận.
+4. Booking thành Active, Room Status thành Occupied.
+
+Check in chỉ hợp lệ hôm nay, vào/sau planned arrival và trước planned departure.
+Nếu khách đến muộn, kiểm tra ngày booking và policy khách sạn trước khi thao tác.
+
+8.3 Cancel trước ngày đến
+
+Cancel chỉ dùng trước planned check-in date. Nhập lý do rõ ràng. Record vẫn giữ
+Cancelled history. Vào ngày đến hoặc sau đó, khách chưa đến phải xử lý No-show,
+không dùng Cancel.
+
+8.4 Mark no-show
+
+Vào hoặc sau planned arrival, nếu khách chưa đến và chưa check-in, chọn No-show
+và ghi lý do. No-show khác cancellation do khách yêu cầu. Không dùng No-show cho
+Active booking hoặc trước arrival date.
+
+8.5 Check out và issue invoice
+
+1. Xác nhận khách thực sự rời đi.
+2. Chọn Active booking, chọn Check out.
+3. Actual checkout phải sau actual check-in và không ở tương lai.
+4. Confirm. Booking thành Completed và hệ thống issue một invoice từ locked rate,
+   tax và actual number of nights.
+5. Kiểm tra Dashboard Booking History theo selected period.
+
+CẢNH BÁO TÀI CHÍNH: invoice hiện tại không ghi nhận payment, balance, deposit,
+method, discount, surcharge hay refund. Invoice issue date không chứng minh khách
+đã trả đủ. Dùng quy trình thanh toán/kế toán được khách sạn phê duyệt cho đến khi
+có Folio/Payment feature.
+
+===============================================================================
+9. DASHBOARD, BOOKING HISTORY VÀ PDF
+===============================================================================
+
+Dashboard có selected period: Today, week, month, year. Có hai KPI khác nhau:
+
+- Current occupancy: snapshot ngay lúc này, room có khách Check in thật.
+- Period occupancy to date: actual occupied room-night từ đầu kỳ đến hôm nay /
+  available room-night của phần kỳ đã trôi qua.
+
+Không diễn giải hai KPI như nhau. Một khách sạn có thể đầy hiện tại nhưng period
+occupancy thấp, hoặc ngược lại.
+
+Revenue, ADR, RevPAR là invoice-based, không phải tiền đã thu. Booking History
+chỉ có completed stay whose actual checkout nằm trong selected range. Có tối đa
+7 stay/page; dùng page button để xem trang sau. Nếu thiếu stay, kiểm tra actual
+checkout date và selected range trước.
+
+Export Report tạo PDF landscape. Xác nhận selected period, đọc lại data và cẩn
+thận PII trước khi share/in.
+
+===============================================================================
+10. NHỮNG ĐIỀU CẦN TRÁNH
+===============================================================================
+
+Không:
+- Xóa/thay data/hotel_data.db để xử lý một mistake thông thường.
+- Nhập phone/ID giả để vượt duplicate warning.
+- Set permanent unavailable cho sửa chữa vài ngày; dùng dated maintenance.
+- Confirm maintenance khi booking conflict còn live.
+- Check in khách chưa đến, hoặc Check out future date.
+- Cancel booking vào/sau arrival nếu bản chất là no-show.
+- Giả định invoice nghĩa là đã thanh toán.
+- Dùng screenshot/report cũ làm current operational state; refresh page.
+- Force-close app khi save hoặc copy DB live trong lúc app đang write.
+- Share bootstrap password/PII khách ra ngoài nhóm.
+
+===============================================================================
+11. XỬ LÝ LỖI THƯỜNG GẶP
+===============================================================================
+
+“Room is already booked” hoặc room không có trong available list:
+Kiểm tra planned dates, Active stay, pending/confirmed maintenance và có đang edit
+chính booking đó không. Booking sát nhau hợp lệ: đơn cũ checkout ngày nào, đơn
+mới checkin đúng ngày đó; chỉ date overlap mới bị chặn.
+
+“Cannot create booking for archived customer/room”:
+Restore đúng record theo policy hoặc chọn record active. Không tạo duplicate.
+
+“Check-in must be recorded for today”:
+Kiểm tra PC date/time và actual arrival. App không cho retrospective check-in
+trong normal reception flow.
+
+“Checkout date must be after actual check-in”:
+Kiểm tra booking đúng, không checkout cùng ngày checkin. Nếu khách sạn có day-use
+policy, hiện workflow chưa hỗ trợ loại stay này; hỏi quản lý/developer.
+
+“Maintenance conflict” hoặc confirm bị từ chối:
+Live booking còn trùng. Move/reschedule/cancel theo chính sách, sau đó confirm lại.
+Simulated notice không phải resolution.
+
+Database error lúc startup:
+Đóng app. Không overwrite/xóa DB lặp lại. Nếu có thể copy backup data/hotel_data.db
+và gửi exact error cho developer để kiểm tra schema/migration/revision.
+
+===============================================================================
+12. BÀN GIAO CA VÀ BẢO VỆ DỮ LIỆU
+===============================================================================
+
+Trước khi bàn giao:
+1. Refresh Room Status và Reservations.
+2. Xem Awaiting check-in, Active, departure và maintenance pending.
+3. Ghi nhận liên hệ khách theo kênh khách sạn phê duyệt; nhớ app chỉ simulated.
+4. Đóng app bình thường.
+5. Thực hiện backup DB theo quy định nhóm; backup chứa PII nên phải bảo mật.
+
+Khi không chắc trạng thái, không đoán. Kiểm tra Booking ID, planned/actual date
+và hỏi quản lý/developer trước khi sửa history.
+
++
+
+===============================================================================
+13. PHỤ LỤC A — QUY TRÌNH THAO TÁC THEO TÌNH HUỐNG THỰC TẾ
+===============================================================================
+
+A. Một khách mới gọi đặt phòng
+1. Search Customer trước bằng ID hoặc phone.
+2. Nếu đã có customer, dùng record đó; không tạo record thứ hai.
+3. Nếu chưa có, Add Customer và kiểm tra country/format ID/phone.
+4. Vào Room Status, chọn khoảng ngày và một room phù hợp.
+5. Mở booking form từ room đó, kiểm tra guest count/capacity.
+6. Save, đọc lại booking ID, planned dates, room number trước khi kết thúc.
+7. Khi khách đến, quay lại Reservations và Check in thật; không check-in trước.
+
+B. Khách cũ đổi số điện thoại
+1. Search đúng Customer ID.
+2. Chọn Edit, sửa phone và Save.
+3. Nếu báo conflict phone, đọc row được highlight.
+4. Không tạo customer mới chỉ vì cần đổi phone.
+5. Không sửa Customer ID tùy ý; ID là identity field.
+
+C. Khách muốn đổi ngày hoặc đổi phòng trước khi đến
+1. Tìm Upcoming reservation.
+2. Chọn Edit.
+3. Chọn room/date mới; app tự kiểm tra overlap/maintenance/capacity.
+4. Confirm rồi đọc lại room và dates.
+5. Nếu room/price thay đổi, quoted rate của Upcoming booking có thể cập nhật.
+6. Nếu booking đã Active, không dùng Edit để đổi guest/room/planned arrival;
+   báo quản lý vì room move/transfer là workflow chưa có riêng.
+
+D. Khách không đến
+1. Xác nhận booking Upcoming và hôm nay đã là ngày planned arrival hoặc sau đó.
+2. Chọn No-show, nhập lý do có ý nghĩa.
+3. Không chọn Cancel, vì Cancel chỉ hợp lệ trước ngày đến.
+4. Kiểm tra booking không còn block future availability.
+5. Nếu có charge/penalty, dùng quy trình kế toán ngoài app vì app chưa có payment.
+
+E. Khách rời đi
+1. Xác nhận khách đã được Check in trước đó và booking đang Active.
+2. Xác nhận actual departure, không dùng future date.
+3. Chọn Check out và confirm.
+4. Xem invoice được issue và Booking History theo selected range.
+5. Ghi payment ở quy trình kế toán riêng; invoice trong app chưa là payment receipt.
+
+F. Phát hiện room cần maintenance nhưng có booking trùng
+1. Lập maintenance schedule đúng khoảng ngày và note.
+2. Case trở thành Awaiting guest response; system chỉ log simulated notice.
+3. Liên hệ khách theo quy trình thực tế ngoài app.
+4. Sau khi move/reschedule/cancel các booking conflict, chọn Confirmation selected.
+5. Nếu app vẫn reject, có live booking overlap; không cố confirm.
+6. Nếu không thực hiện maintenance, Cancel selected schedule.
+
+===============================================================================
+14. PHỤ LỤC B — GIẢI THÍCH CHI TIẾT CÁC CON SỐ VÀ NGÀY
+===============================================================================
+
+Planned Check-in/Check-out là lời hẹn trong reservation. Actual Check-in/Check-out
+là fact staff ghi nhận. App dùng actual facts cho occupancy và completed history.
+
+Ví dụ 1:
+- Planned: 29/07 -> 30/07.
+- Ngày 29 khách chưa đến.
+- Booking vẫn Upcoming và Room Status là Awaiting check-in, không Occupied.
+- Chỉ sau Check in mới là Active/Occupied.
+
+Ví dụ 2:
+- Khách check-in 29/07, planned checkout 30/07.
+- Sang 31/07 chưa thao tác checkout.
+- Booking vẫn Active; room vẫn Occupied.
+- Không được coi tự do chỉ vì planned checkout đã qua.
+
+Ví dụ 3:
+- Actual check-in 29/07, actual checkout 31/07.
+- Invoice nights được tính theo actual duration 2 nights, không tự dùng planned end.
+- Booking History được lọc theo actual checkout 31/07.
+
+Ví dụ 4:
+- Booking A: 29/07 -> 30/07.
+- Booking B: 30/07 -> 31/07 cùng một room.
+- Hai booking hợp lệ vì ngày end của A không trùng với ngày start của B.
+
+Guest count:
+- Adults phải >= 1.
+- Children không âm.
+- Adults + Children không vượt capacity loại phòng.
+- Không chọn room chỉ vì giá rẻ nếu capacity không đủ.
+
+Price:
+- Giá room hiện tại dùng để tạo booking mới.
+- Booking giữ quoted price/tax khi được tạo.
+- Invoice giữ snapshot độc lập khi checkout.
+- Vì vậy sửa giá hôm nay không được làm invoice cũ đổi số.
+
+===============================================================================
+15. PHỤ LỤC C — BẢNG QUYẾT ĐỊNH NHANH
+===============================================================================
+
+Tình huống                                      Hành động đúng
+Khách chưa đến, trước ngày đến                  Cancel nếu khách hủy
+Khách chưa đến, ngày đến hoặc sau               No-show
+Khách đến hôm nay                                Check in
+Khách đã check-in và đang ở                      Giữ Active/Occupied
+Khách rời đi                                     Check out
+Đơn đã Completed                                Xem Booking History/Invoice
+Phòng cần sửa, không có đơn trùng                Schedule maintenance -> Confirmed
+Phòng cần sửa, có đơn Upcoming/Active trùng     Pending case, xử lý booking, rồi Confirm
+Khách trùng tên nhưng ID/phone khác             Có thể là người khác; kiểm tra kỹ
+Phone trùng record khác                          Không tạo mới; kiểm tra row highlight
+ID trùng record khác                             Không tạo mới; kiểm tra giấy tờ
+Invoice đã issue                                 Không coi là payment receipt
+
+===============================================================================
+16. PHỤ LỤC D — GIỚI HẠN HIỆN TẠI VÀ KHI NÀO PHẢI HỎI QUẢN LÝ/DEVELOPER
+===============================================================================
+
+Hỏi quản lý hoặc developer trước khi thao tác nếu:
+- cần check-in sớm, check-out muộn, hoặc day-use cùng ngày;
+- cần chuyển phòng cho khách đang Active;
+- cần gộp/tách/group booking;
+- cần hủy completed booking hoặc invoice;
+- cần thu tiền, hoàn tiền, giảm giá, phụ thu, đặt cọc;
+- cần chứng minh đã gửi email/SMS;
+- cần đổi Customer ID đã tồn tại;
+- cần xóa DB, import hàng loạt hoặc chỉnh trực tiếp SQLite;
+- thấy dashboard/report không khớp ngày actual check-in/check-out;
+- nhiều máy cùng sử dụng các bản copy database khác nhau.
+
+Các giới hạn này không phải lỗi thao tác của bạn. Chúng là nghiệp vụ chưa được
+mô hình hóa đầy đủ trong phiên bản hiện tại. Không tìm cách lách bằng cách tạo
+duplicate customer, xóa history hoặc sửa file DB trực tiếp.
+
+===============================================================================
+17. PHỤ LỤC E — BẢO MẬT, BACKUP VÀ BÀN GIAO
+===============================================================================
+
+Database local chứa customer ID và phone. Chỉ lưu/copy file ở vị trí nhóm cho
+phép. Không gửi file DB qua kênh công khai. Khi backup:
+1. Đóng app bình thường hoặc chắc chắn không có người đang ghi database.
+2. Copy file backup theo tên có ngày giờ.
+3. Lưu ở vị trí được bảo vệ.
+4. Khi restore, nhờ developer/manager xác nhận bản backup đúng trước khi thay.
+5. Sau restore, mở app và kiểm tra Customer/Room/Reservation count.
+
+Bàn giao ca:
+1. Refresh Room Status và Reservations.
+2. Đọc Awaiting check-in, Active, departure hôm nay và maintenance pending.
+3. Ghi chú các cuộc liên hệ khách ở kênh nội bộ được phê duyệt.
+4. Nhớ simulated notice trong app không thay thế cuộc liên hệ đó.
+5. Đóng app bình thường.
+
+KẾT THÚC HƯỚNG DẪN SỬ DỤNG

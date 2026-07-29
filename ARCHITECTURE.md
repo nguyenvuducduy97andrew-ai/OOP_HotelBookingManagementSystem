@@ -8,6 +8,9 @@ Hotel Booking Management System is a C++17 / Qt6 desktop application. Its archit
 Qt views
   │ signals, dialogs, rendering
   ▼
+LoginWindow ── authenticates before MainWindow is constructed
+  └── StaffSession ── in-memory username, display name, and role for the active process
+
 HotelManager ── owns in-memory model collections and exposes the UI facade
   ├── creates BookingManager temporarily for each booking facade call
   │     ├── BookingService
@@ -38,8 +41,8 @@ models        ── Room hierarchy, RoomMaintenance, Customer, Booking, Invoice
 ├── data/
 │   └── hotel_data.db                 # Runtime SQLite database; ignored by Git
 └── src/
-    ├── main.cpp                      # Startup, database-path resolution, shutdown safeguard
-    ├── models/                       # Domain objects and Room hierarchy
+    ├── main.cpp                      # Startup, sign-in gate, database-path resolution, shutdown safeguard
+    ├── models/                       # Domain objects, StaffSession, and Room hierarchy
     ├── controllers/
     │   ├── hotel/                    # HotelManager in-memory store and facade
     │   ├── booking/
@@ -53,7 +56,7 @@ models        ── Room hierarchy, RoomMaintenance, Customer, Booking, Invoice
     │   │   └── services/             # Room and maintenance workflow
     │   └── report/                   # ReportService and report DTOs
     ├── database/                     # DataManager singleton
-    └── views/                        # Qt widgets, dialogs, .ui files, and resources
+    └── views/                        # Qt widgets, LoginWindow, dialogs, .ui files, and resources
 ```
 
 `CMakeLists.txt` enables C++17, `AUTOMOC`, `AUTOUIC`, `AUTORCC`, and links Qt6 Core, SQL, Widgets, and Charts.
@@ -90,8 +93,8 @@ Room (abstract)
 |---|---|---|
 | `HotelManager` | Collections, lookups, UI-facing facade, and temporary manager creation | Retained manager or service objects |
 | `BookingManager` | Temporary delegation of reservation, checkout, and invoice use cases | `RoomAvailabilityService`, customer, or room service layers |
-| `BookingService` | Booking date/state validation and mutations; on-demand availability checks | Persistence or report rendering |
-| `InvoiceService` | Invoice validation and creation after checkout | SQLite operations |
+| `BookingService` | Booking date, capacity, explicit check-in/out, cancellation-audit validation; on-demand availability checks | Persistence or report rendering |
+| `InvoiceService` | Invoice validation and creation after checkout against locked booking tax/rate and actual duration | SQLite operations |
 | `RoomAvailabilityService` | Shared booking/maintenance availability calculation | UI navigation or persistence |
 | `CustomerManager` / `CustomerService` | Customer validation, conflict detection, archive/delete workflows | Booking, room, or report workflows |
 | `RoomManager` / `RoomService` | Room registration and dated maintenance workflows | Booking, customer, or report workflows |
@@ -148,15 +151,16 @@ DataManager::commitChanges()
 
 ```text
 ReservationsPageWidget
+  ├── HotelManager::checkInBooking() records today's arrival before occupancy can become active
   ├── HotelManager::completeBooking()
   │     └── temporary BookingManager → BookingService validates active state and actual checkout date
   ├── HotelManager::createInvoice()
-  │     └── temporary BookingManager → InvoiceService validates completed booking, payment date, one invoice per booking,
+  │     └── temporary BookingManager → InvoiceService validates completed booking, invoice issue date, one invoice per booking,
   │         and captures immutable guest/room/date/price data
   └── DataManager::commitChanges()
 ```
 
-Checkout sets `Booking::checkedOut`. The booking becomes `Completed` only from that persisted fact, then moves out of operational reservations and into Dashboard Booking History. Invoice totals and completed-stay report identity fields use the persisted invoice snapshot, not mutable Customer or Room data. The UI performs one persistence commit for the checkout-plus-invoice pair.
+Check-in sets `Booking::checkedIn` and an actual arrival date; only then does the booking become `Active`. Checkout sets `Booking::checkedOut` and an actual departure date while preserving planned dates. The booking then moves out of operational reservations and into Dashboard Booking History. Invoice totals are derived from the locked booking rate/tax and actual duration; completed-stay report identity fields use the immutable invoice snapshot. The UI performs one persistence commit for the checkout-plus-invoice pair.
 
 ### Customer creation and conflict handling
 
@@ -182,12 +186,12 @@ Names are intentionally not unique. The system treats duplicate phone and custom
 
 | State | Source of truth | Operational behavior |
 |---|---|---|
-| `UPCOMING` | Check-in is after today; not cancelled or checked out | May be edited or cancelled |
-| `ACTIVE` | Check-in has arrived; not cancelled or checked out | Blocks present-day occupancy until checkout |
+| `UPCOMING` | Not cancelled, not checked out, and no persisted check-in event | May be edited or cancelled |
+| `ACTIVE` | Persisted `checkedIn == true`; not cancelled or checked out | Blocks present-day occupancy until checkout |
 | `COMPLETED` | Persisted `checkedOut == true` | Listed in history; not editable or cancellable |
 | `CANCELLED` | Persisted `cancelled == true` | Does not block availability |
 
-An overdue departure remains `ACTIVE` until staff checks it out. Planned checkout is not used to infer completion during normal operation.
+An overdue departure remains `ACTIVE` until staff checks it out. Planned dates are never used to infer check-in or completion during normal operation.
 
 ## Persistence design
 
@@ -197,15 +201,16 @@ An overdue departure remains `ACTIVE` until staff checks it out. Planned checkou
 |---|---|
 | `Customer` | Customer ID, name, phone number, archive state |
 | `Room` | Room number, price, room type, fees, permanent availability/archive state |
-| `RoomMaintenance` | Room number, maintenance ID, interval, optional note |
-| `Booking` | Customer/room keys, dates, cancelled/deleted/checked-out flags |
-| `Invoice` | Booking key, tax, nights, payment date, and immutable customer/room/date/price snapshot |
+| `RoomMaintenance` | Room number, maintenance ID, interval, optional note, case status, and creation timestamp |
+| `MaintenanceGuestNotice` | Internal simulated guest-contact log for a maintenance case and affected booking |
+| `Booking` | Customer/room keys, planned/actual dates, adult/child counts, booked rate/tax, check-in/out/cancellation facts, and creation/update audit timestamps |
+| `Invoice` | Booking key, tax, nights, invoice issue date, and immutable customer/room/actual-date/price snapshot |
 
-SQLite foreign keys preserve customer/room/booking relationships. A connection-level 5-second busy timeout reduces transient lock failures. Query indexes cover booking room/date lookup, booking customer lookup, and maintenance room/date lookup; a unique partial index enforces non-empty customer phone numbers. `DataVersion` carries a monotonically increasing revision, so a stale full snapshot from another application instance is rejected rather than overwriting newer data.
+SQLite foreign keys preserve customer/room/booking relationships. A connection-level 5-second busy timeout reduces transient lock failures. Query indexes cover booking room/date lookup, booking customer lookup, and maintenance room/date lookup; a unique partial index enforces non-empty customer phone numbers. A maintenance conflict produces a persisted `Awaiting guest response` case plus simulated internal notices. That case is a soft hold for new reservations but does not change the live room status until confirmed; a separate confirmation operation rechecks live overlap before it becomes a room-blocking maintenance interval. `DataVersion` carries a monotonically increasing revision, so a stale full snapshot from another application instance is rejected rather than overwriting newer data.
 
 ### Migration and duplicate reconciliation
 
-`DataManager::initDatabase()` adds the explicit `Booking.checkedOut` column when needed. The one-time migration marks a row completed only when an existing invoice proves checkout; a passed planned checkout date is never treated as proof. Legacy invoices receive a one-time snapshot from their linked customer, room, and booking records before immutable invoice loading is enforced.
+`DataManager::initDatabase()` migrates explicit check-in/out, actual-date, confirmed pricing/tax, capacity, and cancellation-audit fields. The one-time migration marks a row completed only when an existing invoice proves checkout; a planned date is never treated as proof of occupancy. Legacy invoices receive a one-time snapshot from linked customer, room, and booking records before immutable invoice loading is enforced.
 
 On initialization, the data manager also scans for exact normalized **customer name + phone** duplicates. If duplicates exist, it:
 
@@ -233,7 +238,7 @@ The application currently saves the complete manager snapshot rather than indivi
 
 ## Reporting and PDF export
 
-`ReportService` builds a `DashboardReportData` value from `HotelManager` without mutating it. The PDF-export workflow uses this snapshot for selected-period labels, KPIs, room counts, occupancy, top rooms, open bookings, cancellations, and completed stays. Completed stays prefer immutable invoice snapshots; other statuses use the current linked model. It sorts data before `DashboardWidget` renders the PDF.
+`ReportService` builds a `DashboardReportData` value from `HotelManager` without mutating it. The PDF-export workflow separates the real-time occupancy snapshot from selected-period-to-date occupancy, calculated as actual occupied room-nights divided by available room-nights. It also includes room counts, actual-arrival top rooms, open bookings, cancellations/no-shows, completed stays, and invoice-based revenue KPIs (invoiced revenue, ADR, RevPAR). It does not interpret an invoice issue date as proof of payment. Completed stays prefer immutable invoice snapshots; other statuses use the current linked model. It sorts data before `DashboardWidget` renders the PDF.
 
 `DashboardWidget` owns interactive dashboard presentation, including its own live card, chart, popular-room, and booking-history aggregation over `HotelManager`. It also renders the PDF HTML, but delegates PDF report aggregation to `ReportService`. PDF export uses A4 landscape pages and print-safe wrapper blocks so each heading stays with its related table; Top Rooms and Completed Booking History begin on new pages.
 

@@ -28,7 +28,7 @@ void setupReservationDialogStyle(QDialog* dialog) {
             color: #2B3674;
             font-weight: 600;
         }
-        QLineEdit, QComboBox, QDateEdit {
+        QLineEdit, QComboBox, QDateEdit, QSpinBox {
             background-color: #F4F7FE;
             border: 1px solid #E9EDF7;
             border-radius: 8px;
@@ -39,7 +39,7 @@ void setupReservationDialogStyle(QDialog* dialog) {
         QComboBox {
             padding-right: 28px;
         }
-        QLineEdit:focus, QComboBox:focus, QDateEdit:focus {
+        QLineEdit:focus, QComboBox:focus, QDateEdit:focus, QSpinBox:focus {
             border: 1px solid #005BFE;
         }
         QComboBox QAbstractItemView {
@@ -149,6 +149,17 @@ void ReservationDialog::setupUI() {
     m_checkOutDateEdit->setMinimumDate(today);
     formLayout->addRow("Check-out Date:", m_checkOutDateEdit);
 
+    // Modified: Collect guest occupancy in the reservation so the service can enforce room capacity.
+    m_adultCountSpin = new QSpinBox(this);
+    m_adultCountSpin->setRange(1, 20);
+    m_adultCountSpin->setValue(1);
+    formLayout->addRow("Adults:", m_adultCountSpin);
+
+    m_childCountSpin = new QSpinBox(this);
+    m_childCountSpin->setRange(0, 20);
+    m_childCountSpin->setValue(0);
+    formLayout->addRow("Children:", m_childCountSpin);
+
     m_roomCombo = new QComboBox(this);
     formLayout->addRow("Available Rooms:", m_roomCombo);
 
@@ -168,6 +179,8 @@ void ReservationDialog::setupUI() {
 
     connect(m_checkInDateEdit, &QDateEdit::dateChanged, this, &ReservationDialog::updateAvailableRooms);
     connect(m_checkOutDateEdit, &QDateEdit::dateChanged, this, &ReservationDialog::updateAvailableRooms);
+    connect(m_adultCountSpin, QOverload<int>::of(&QSpinBox::valueChanged), this, &ReservationDialog::updateAvailableRooms);
+    connect(m_childCountSpin, QOverload<int>::of(&QSpinBox::valueChanged), this, &ReservationDialog::updateAvailableRooms);
     connect(m_customerIdCountry, &QComboBox::currentIndexChanged, this, &ReservationDialog::updateIdPlaceholder);
     connect(m_customerPhoneCode, &QComboBox::currentIndexChanged, this, [this]() { updatePhonePlaceholder(); normalizePhoneInput(); });
     connect(m_customerPhoneLocalEdit, &QLineEdit::textChanged, this, &ReservationDialog::normalizePhoneInput);
@@ -211,6 +224,9 @@ void ReservationDialog::updateAvailableRooms() {
     const auto availableRooms = availability.getAvailableRoomsForDates(
         checkInStr.toStdString(), checkOutStr.toStdString(), availabilityError, m_editingBookingId);
     for (const auto& room : availableRooms) {
+        if (m_adultCountSpin->value() + m_childCountSpin->value() > room->getMaximumGuests()) {
+            continue;
+        }
         // Modified: Render the centrally computed availability list instead of recalculating booking conflicts per room.
         const std::string roomNum = room->getRoomNumber();
         const std::string label = roomNum + " (" + room->getRoomTypeName() + ")";
@@ -265,6 +281,11 @@ void ReservationDialog::onAccept() {
         return;
     }
 
+    if (m_adultCountSpin->value() + m_childCountSpin->value() <= 0) {
+        QMessageBox::warning(this, "Invalid guest count", "A reservation must include at least one guest.");
+        return;
+    }
+
     accept();
 }
 
@@ -291,6 +312,14 @@ QString ReservationDialog::getCheckInDate() const {
 
 QString ReservationDialog::getCheckOutDate() const {
     return m_checkOutDateEdit->date().toString("yyyy-MM-dd");
+}
+
+int ReservationDialog::getAdultCount() const {
+    return m_adultCountSpin->value();
+}
+
+int ReservationDialog::getChildCount() const {
+    return m_childCountSpin->value();
 }
 
 void ReservationDialog::setEditBooking(const std::string& bookingId) {
@@ -337,6 +366,8 @@ void ReservationDialog::setEditBooking(const std::string& bookingId) {
     }
     m_checkInDateEdit->setDate(checkIn);
     m_checkOutDateEdit->setDate(checkOut);
+    m_adultCountSpin->setValue(booking->getAdultCount());
+    m_childCountSpin->setValue(booking->getChildCount());
     if (m_manager->getBookingState(*booking) == BookingState::ACTIVE) {
         // Modified: Active stays retain their original arrival date; checkout remains the explicit completion action.
         m_checkInDateEdit->setEnabled(false);

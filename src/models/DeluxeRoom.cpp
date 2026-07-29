@@ -22,6 +22,11 @@ std::string DeluxeRoom::getRoomTypeName() const {
     return "Deluxe";
 }
 
+int DeluxeRoom::getMaximumGuests() const {
+    // Modified: Define Deluxe inventory capacity centrally for reservation validation.
+    return 3;
+}
+
 double DeluxeRoom::getExtraFeeAmount() const {
     // Fixed-modified: Surface the mini-bar fee through the base room interface.
     return getMiniBarFee();

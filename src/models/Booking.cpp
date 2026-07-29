@@ -23,9 +23,18 @@ Booking::Booking() {
     // Fixed-modified: Keep booking construction lightweight and assign the ID from HotelManager instead.
     this->cancelled = false;
     this->deleted = false;
+    this->checkedIn = false;
     this->checkedOut = false;
     this->checkOutDate = "";
     this->checkInDate = "";
+    this->actualCheckInDate = "";
+    this->actualCheckOutDate = "";
+    this->createdAt = "";
+    this->updatedAt = "";
+    this->quotedUnitPrice = 0.0;
+    this->quotedTaxRate = 0.10;
+    this->adultCount = 1;
+    this->childCount = 0;
 }
 
 std::string Booking::nextBookingId() {
@@ -104,6 +113,37 @@ void Booking::setCheckedOut(bool checkedOut) {
     this->checkedOut = checkedOut;
 }
 
+bool Booking::isCheckedIn() const { return checkedIn; }
+void Booking::setCheckedIn(bool value) { checkedIn = value; }
+
+std::string Booking::getActualCheckInDate() const { return actualCheckInDate; }
+void Booking::setActualCheckInDate(const std::string& value) { actualCheckInDate = value; }
+std::string Booking::getActualCheckOutDate() const { return actualCheckOutDate; }
+void Booking::setActualCheckOutDate(const std::string& value) { actualCheckOutDate = value; }
+
+std::string Booking::getEffectiveCheckOutDate() const {
+    return actualCheckOutDate.empty() ? checkOutDate : actualCheckOutDate;
+}
+
+double Booking::getQuotedUnitPrice() const { return quotedUnitPrice; }
+void Booking::setQuotedUnitPrice(double value) { quotedUnitPrice = value; }
+double Booking::getQuotedTaxRate() const { return quotedTaxRate; }
+void Booking::setQuotedTaxRate(double value) { quotedTaxRate = value; }
+
+int Booking::getAdultCount() const { return adultCount; }
+void Booking::setAdultCount(int value) { adultCount = value; }
+int Booking::getChildCount() const { return childCount; }
+void Booking::setChildCount(int value) { childCount = value; }
+
+std::string Booking::getCancellationReason() const { return cancellationReason; }
+void Booking::setCancellationReason(const std::string& value) { cancellationReason = value; }
+std::string Booking::getCancelledAt() const { return cancelledAt; }
+void Booking::setCancelledAt(const std::string& value) { cancelledAt = value; }
+std::string Booking::getCreatedAt() const { return createdAt; }
+void Booking::setCreatedAt(const std::string& value) { createdAt = value; }
+std::string Booking::getUpdatedAt() const { return updatedAt; }
+void Booking::setUpdatedAt(const std::string& value) { updatedAt = value; }
+
 bool Booking::isValid() const {
     auto lockedCustomer = customer.lock();
     auto lockedRoom = room.lock();
@@ -112,6 +152,7 @@ bool Booking::isValid() const {
            lockedRoom != nullptr &&
            isIsoDateString(checkInDate) &&
            isIsoDateString(checkOutDate) &&
-           // Modified and optimized performance: keep restored same-day completed stays valid while booking creation still enforces an overnight stay.
-           checkOutDate >= checkInDate;
+           checkOutDate >= checkInDate &&
+           quotedUnitPrice > 0.0 && quotedTaxRate >= 0.0 && quotedTaxRate <= 1.0 &&
+           adultCount > 0 && childCount >= 0;
 }

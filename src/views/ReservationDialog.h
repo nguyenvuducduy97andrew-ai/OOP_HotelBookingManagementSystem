@@ -3,6 +3,7 @@
 #include <QLineEdit>
 #include <QDateEdit>
 #include <QComboBox>
+#include <QSpinBox>
 #include "HotelManager.h"
 
 class ReservationDialog : public QDialog {
@@ -20,6 +21,8 @@ public:
     QString getRoomNumber() const;
     QString getCheckInDate() const;
     QString getCheckOutDate() const;
+    int getAdultCount() const;
+    int getChildCount() const;
 
 private slots:
     void updateAvailableRooms();
@@ -41,5 +44,7 @@ private:
     QLineEdit* m_customerPhoneLocalEdit;
     QDateEdit* m_checkInDateEdit;
     QDateEdit* m_checkOutDateEdit;
+    QSpinBox* m_adultCountSpin;
+    QSpinBox* m_childCountSpin;
     QComboBox* m_roomCombo;
 };
