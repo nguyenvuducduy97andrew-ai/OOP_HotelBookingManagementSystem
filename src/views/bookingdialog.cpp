@@ -74,7 +74,7 @@ void BookingDialog::setGuestData(QString name, QString id, QString phone, QStrin
     // For simplicity, we just leave the dateEdit as is or set it to current date.
 }
 
-QString BookingDialog::getGuestName() const { return ui->txtFullname->text().trimmed(); }
+QString BookingDialog::getGuestName() const { return ui->txtFullname->text().simplified(); }
 QString BookingDialog::getIdNumber() const { return ui->txtIdNumber->text().trimmed(); }
 QString BookingDialog::getPhoneNumber() const { return ui->txtPhoneNumber->text().trimmed(); }
 QString BookingDialog::getDateIn() const { return ui->dateTimeCheckIn->date().toString("dd/MM"); }
@@ -87,14 +87,15 @@ void BookingDialog::onConfirmClicked() {
 
     if (!HotelManager::isValidCustomerIdFormat(idNumber.toStdString())) {
         shake();
-        ui->lblSubtitle->setText("*Customer ID must contain exactly 12 digits");
+        ui->lblSubtitle->setText("*Customer ID does not match the selected country format");
         ui->lblSubtitle->setStyleSheet("color: #E53935; font-size: 13px; font-weight: bold;");
         return;
     }
 
     if (!HotelManager::isValidCustomerNameFormat(guestName.toStdString())) {
         shake();
-        ui->lblSubtitle->setText("*Name must have at least 2 words and include both uppercase and lowercase letters");
+        // Modified: Apply the same international legal-name rule in the legacy booking form.
+        ui->lblSubtitle->setText("*Enter a valid legal name using letters, spaces, apostrophes, hyphens, or initials");
         ui->lblSubtitle->setStyleSheet("color: #E53935; font-size: 13px; font-weight: bold;");
         return;
     }

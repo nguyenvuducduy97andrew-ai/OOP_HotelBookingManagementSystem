@@ -49,9 +49,12 @@ bool BookingManager::completeBooking(const std::string& bookingId, const std::st
 }
 
 bool BookingManager::createInvoice(const std::string& invoiceId, const std::string& bookingId,
-                                       const std::string& invoiceIssuedDate,
-                                       std::string& errorMessage)
+                                   const std::string& invoiceIssuedDate,
+                                   const std::string& paymentMethod, double paymentAmount,
+                                   const std::string& paymentReceivedDate,
+                                   std::string& errorMessage)
 {
     // Modified and optimized performance: expose one reservation workflow for checkout and its invoice instead of separate UI-facing services.
-    return m_invoiceWorkflow.createInvoice(invoiceId, bookingId, invoiceIssuedDate, errorMessage);
+    return m_invoiceWorkflow.createInvoice(invoiceId, bookingId, invoiceIssuedDate,
+                                           paymentMethod, paymentAmount, paymentReceivedDate, errorMessage);
 }

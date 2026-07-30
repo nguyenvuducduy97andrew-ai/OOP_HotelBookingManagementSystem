@@ -21,7 +21,10 @@ file(GLOB_RECURSE SOURCE_FILES CONFIGURE_DEPENDS
     "src/resources/*.qrc"
 )
 
-add_executable(HotelBookingManagement ${SOURCE_FILES} ${VIEW_HEADERS})
+# Modified: Remove the superseded legacy dialog before the target source list is consumed by CMake.
+list(FILTER SOURCE_FILES EXCLUDE REGEX ".*bookingdialog\\.(cpp|h|ui)$")
+
+add_executable(HotelBookingManagement ${SOURCE_FILES})
 
 target_include_directories(HotelBookingManagement PRIVATE
     src/models

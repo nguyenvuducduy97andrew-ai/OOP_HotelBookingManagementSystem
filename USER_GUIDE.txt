@@ -31,8 +31,8 @@ Login hiện chỉ dành cho đồ án. Không chia sẻ password. Khi nhóm có
 thật, mỗi người phải dùng account riêng để audit được thao tác.
 
 Để tắt app, dùng nút Close cửa sổ bình thường. Ứng dụng cố lưu data khi đóng.
-Không force-close, tắt máy hoặc rút ổ đĩa khi app đang lưu. Không xóa
-data/hotel_data.db để xử lý lỗi nghiệp vụ nếu chưa backup và chưa có hướng dẫn.
+Không force-close, tắt máy hoặc rút ổ đĩa khi app đang lưu. Không xóa file database
+hotel_data.db trong thư mục dữ liệu ứng dụng nếu chưa backup và chưa có hướng dẫn.
 
 ===============================================================================
 3. CÁC TRẠNG THÁI CẦN HIỂU TRƯỚC KHI THAO TÁC
@@ -259,7 +259,7 @@ thận PII trước khi share/in.
 ===============================================================================
 
 Không:
-- Xóa/thay data/hotel_data.db để xử lý một mistake thông thường.
+- Xóa/thay file hotel_data.db trong thư mục dữ liệu ứng dụng để xử lý một mistake thông thường.
 - Nhập phone/ID giả để vượt duplicate warning.
 - Set permanent unavailable cho sửa chữa vài ngày; dùng dated maintenance.
 - Confirm maintenance khi booking conflict còn live.
@@ -295,7 +295,7 @@ Live booking còn trùng. Move/reschedule/cancel theo chính sách, sau đó con
 Simulated notice không phải resolution.
 
 Database error lúc startup:
-Đóng app. Không overwrite/xóa DB lặp lại. Nếu có thể copy backup data/hotel_data.db
+Đóng app. Không overwrite/xóa DB lặp lại. Nếu có thể copy backup file hotel_data.db
 và gửi exact error cho developer để kiểm tra schema/migration/revision.
 
 ===============================================================================
@@ -462,5 +462,19 @@ Bàn giao ca:
 3. Ghi chú các cuộc liên hệ khách ở kênh nội bộ được phê duyệt.
 4. Nhớ simulated notice trong app không thay thế cuộc liên hệ đó.
 5. Đóng app bình thường.
+
+PHỤ LỤC — GIẤY TỜ VÀ THANH TOÁN
+
+Khi tạo khách, chọn loại giấy tờ, quốc gia cấp và số giấy tờ đúng theo giấy tờ
+khách xuất trình. Passport dành cho khách quốc tế. Không dùng cùng một số giấy
+tờ với quốc gia cấp khác nếu không kiểm tra lại giấy tờ gốc.
+
+Khi checkout, bắt buộc chọn phương thức và nhập số tiền đã nhận. Hóa đơn có thể
+hiển thị số dư còn lại nếu khách chỉ thanh toán một phần; không ghi nhận số tiền
+chưa thực nhận là payment.
+
+Số điện thoại chỉ được kiểm tra theo supported format của 10 quốc gia đang có;
+nếu số thực tế không phù hợp, nhờ quản lý/developer xác nhận thay vì tự chọn
+quốc gia khác. Khi schedule maintenance, chỉ chọn ngày hôm nay hoặc ngày sau.
 
 KẾT THÚC HƯỚNG DẪN SỬ DỤNG

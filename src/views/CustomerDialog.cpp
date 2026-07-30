@@ -1,5 +1,6 @@
 #include "CustomerDialog.h"
 #include "Customer.h"
+#include "CustomerIdentity.h"
 #include "CountryInputRules.h"
 #include "HotelManager.h"
 #include <QLabel>
@@ -27,13 +28,17 @@ CustomerDialog::CustomerDialog(const std::shared_ptr<Customer>& customer, QWidge
     populateFields();
     if (m_customer) {
         m_idEdit->setEnabled(false);
+        m_documentType->setEnabled(false);
+        m_idCountry->setEnabled(false);
     }
 }
 
 void CustomerDialog::setupStyle() {
     // Match CustomConfirmDialog's window conventions
     setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
-    setFixedSize(460, 560);
+    // Modified: Reduce dialog height after replacing the two-part name form with one legal-name field.
+    // Modified: Widen the customer dialog so document type, issuing country, and number remain readable on one row.
+    setFixedSize(540, 500);
 
     // Modified and optimized performance: explicitly style the country selector popup so its item text remains visible on every platform theme.
     setStyleSheet(R"(
@@ -154,7 +159,7 @@ void CustomerDialog::setupUI() {
     titleLabel->setObjectName("dialogTitle");
     mainLayout->addWidget(titleLabel);
 
-    auto* descriptionLabel = new QLabel("Choose the ID and phone countries, then enter the matching customer details.", this);
+    auto* descriptionLabel = new QLabel("Choose the ID and phone countries, then enter the customer's legal name and matching details.", this);
     descriptionLabel->setObjectName("dialogDescription");
     descriptionLabel->setWordWrap(true);
     mainLayout->addWidget(descriptionLabel);
@@ -165,25 +170,25 @@ void CustomerDialog::setupUI() {
     formLayout->setHorizontalSpacing(12);
     formLayout->setVerticalSpacing(14);
 
-    // Modified and optimized performance: select the ID country before applying its compact input rule.
+    // Modified: Collect document type and issuing country so foreign guest identity is not reduced to one global national-ID field.
     auto* idRow = new QHBoxLayout();
     idRow->setSpacing(8);
+    m_documentType = new QComboBox(this);
+    m_documentType->addItems({"National ID", "Passport", "Other"});
     m_idCountry = new QComboBox(this);
     for (const auto& rule : countryInputRules()) {
         m_idCountry->addItem(rule.name, rule.key);
     }
     m_idEdit = new QLineEdit(this);
+    idRow->addWidget(m_documentType, 0);
     idRow->addWidget(m_idCountry, 0);
     idRow->addWidget(m_idEdit, 1);
-    formLayout->addRow("Customer ID:", idRow);
+    formLayout->addRow("Identity document:", idRow);
 
-    m_lastNameEdit = new QLineEdit(this);
-    m_lastNameEdit->setPlaceholderText("Surname / middle name");
-    formLayout->addRow("Last name:", m_lastNameEdit);
-
-    m_firstNameEdit = new QLineEdit(this);
-    m_firstNameEdit->setPlaceholderText("Given name");
-    formLayout->addRow("First name:", m_firstNameEdit);
+    // Modified: Capture the legal name as one field so international names are not forced into surname and given-name parts.
+    m_fullNameEdit = new QLineEdit(this);
+    m_fullNameEdit->setPlaceholderText("Full legal name as shown on identification");
+    formLayout->addRow("Full legal name:", m_fullNameEdit);
 
     // Modified and optimized performance: reuse the same country catalogue for normalized phone input.
     auto* phoneRow = new QHBoxLayout();
@@ -224,10 +229,10 @@ void CustomerDialog::setupUI() {
     connect(cancelButton, &QPushButton::clicked, this, &QDialog::reject);
 
     // Clear a field's red border as soon as the user edits it; re-validated on next Save.
+    connect(m_documentType, &QComboBox::currentIndexChanged, this, [this]() { updateIdPlaceholder(); });
     connect(m_idCountry, &QComboBox::currentIndexChanged, this, [this]() { updateIdPlaceholder(); });
     connect(m_idEdit, &QLineEdit::textChanged, this, [this]() { setFieldError(m_idEdit, false); });
-    connect(m_lastNameEdit, &QLineEdit::textChanged, this, [this]() { setFieldError(m_lastNameEdit, false); });
-    connect(m_firstNameEdit, &QLineEdit::textChanged, this, [this]() { setFieldError(m_firstNameEdit, false); });
+    connect(m_fullNameEdit, &QLineEdit::textChanged, this, [this]() { setFieldError(m_fullNameEdit, false); });
     connect(m_phoneCountryCode, &QComboBox::currentIndexChanged, this, [this]() { updatePhonePlaceholder(); normalizePhoneInput(); });
     connect(m_phoneLocalEdit, &QLineEdit::textChanged, this, [this]() { normalizePhoneInput(); setFieldError(m_phoneLocalEdit, false); });
 }
@@ -236,25 +241,23 @@ void CustomerDialog::populateFields() {
     if (!m_customer)
         return;
 
-    const QString existingId = QString::fromStdString(m_customer->getCustomerId()).trimmed().toUpper();
+    const QString existingId = QString::fromStdString(m_customer->getDocumentNumber()).trimmed().toUpper();
+    const QString existingType = QString::fromStdString(m_customer->getDocumentType());
+    const QString existingCountry = QString::fromStdString(m_customer->getIssuingCountry());
+    const int typeIndex = m_documentType->findText(existingType);
+    if (typeIndex >= 0) {
+        m_documentType->setCurrentIndex(typeIndex);
+    }
     for (int i = 0; i < m_idCountry->count(); ++i) {
-        const auto& rule = countryInputRule(m_idCountry->itemData(i).toString());
-        if (rule.idPattern.match(existingId).hasMatch()) {
+        if (m_idCountry->itemData(i).toString() == existingCountry) {
             m_idCountry->setCurrentIndex(i);
             break;
         }
     }
     m_idEdit->setText(existingId);
 
-    const QString existingName = QString::fromStdString(m_customer->getName()).simplified();
-    const QStringList nameParts = existingName.split(' ', Qt::SkipEmptyParts);
-    if (nameParts.size() >= 2) {
-        m_firstNameEdit->setText(nameParts.last());
-        m_lastNameEdit->setText(nameParts.mid(0, nameParts.size() - 1).join(' '));
-    } else {
-        m_lastNameEdit->setText(existingName);
-        m_firstNameEdit->clear();
-    }
+    // Modified: Preserve the stored legal name exactly instead of attempting culturally unsafe name-part splitting.
+    m_fullNameEdit->setText(QString::fromStdString(m_customer->getName()).simplified());
 
     const QString existingPhone = QString::fromStdString(m_customer->getPhoneNumber()).trimmed();
     bool matchedCode = false;
@@ -274,11 +277,18 @@ void CustomerDialog::populateFields() {
 }
 
 QString CustomerDialog::getCustomerId() const {
-    return m_idEdit->text().trimmed().toUpper();
+    if (m_customer) {
+        return QString::fromStdString(m_customer->getCustomerId());
+    }
+    return customerIdentityKey(getDocumentType(), getIssuingCountry(), getDocumentNumber());
 }
 
+QString CustomerDialog::getDocumentType() const { return m_documentType->currentText(); }
+QString CustomerDialog::getIssuingCountry() const { return m_idCountry->currentData().toString(); }
+QString CustomerDialog::getDocumentNumber() const { return m_idEdit->text().trimmed().toUpper(); }
+
 QString CustomerDialog::getCustomerName() const {
-    return QString("%1 %2").arg(m_lastNameEdit->text().trimmed(), m_firstNameEdit->text().trimmed()).simplified();
+    return m_fullNameEdit->text().simplified();
 }
 
 QString CustomerDialog::getCustomerPhone() const {
@@ -294,16 +304,18 @@ void CustomerDialog::setFieldError(QLineEdit* field, bool hasError) {
 
 void CustomerDialog::updateIdPlaceholder()
 {
+    const QString documentType = m_documentType->currentText();
     const auto& rule = countryInputRule(m_idCountry->currentData().toString());
-    m_idEdit->setPlaceholderText(rule.idHint);
-    m_idEdit->setMaxLength(rule.idMaxLength);
+    m_idEdit->setPlaceholderText(documentNumberHint(documentType, rule.key));
+    m_idEdit->setMaxLength(documentType.compare("Passport", Qt::CaseInsensitive) == 0 ? 20
+        : (documentType.compare("Other", Qt::CaseInsensitive) == 0 ? 30 : rule.idMaxLength));
 }
 
 void CustomerDialog::updatePhonePlaceholder()
 {
     const auto& rule = countryInputRule(m_phoneCountryCode->currentData().toString());
     m_phoneLocalEdit->setPlaceholderText(rule.phoneHint);
-    m_phoneLocalEdit->setMaxLength(rule.phoneDigits + 1);
+    m_phoneLocalEdit->setMaxLength(rule.phoneMaxDigits + 1);
 }
 
 void CustomerDialog::normalizePhoneInput()
@@ -317,48 +329,40 @@ void CustomerDialog::normalizePhoneInput()
 
 bool CustomerDialog::validate() {
     setFieldError(m_idEdit, false);
-    setFieldError(m_lastNameEdit, false);
-    setFieldError(m_firstNameEdit, false);
+    setFieldError(m_fullNameEdit, false);
     setFieldError(m_phoneLocalEdit, false);
 
     QStringList errors;
     QLineEdit* firstInvalid = nullptr;
 
     const auto& idRule = countryInputRule(m_idCountry->currentData().toString());
+    const QString documentType = getDocumentType();
     const auto& phoneRule = countryInputRule(m_phoneCountryCode->currentData().toString());
     const QString idText = m_idEdit->text().trimmed().toUpper();
-    const QString lastName = m_lastNameEdit->text().trimmed();
-    const QString firstName = m_firstNameEdit->text().trimmed();
+    const QString fullName = m_fullNameEdit->text().simplified();
     const QString phoneLocal = normalizeLocalPhoneNumber(m_phoneLocalEdit->text());
-    const QString fullName = QString("%1 %2").arg(lastName, firstName).simplified();
     const QString fullPhone = phoneRule.callingCode + phoneLocal;
 
     m_idEdit->setText(idText);
+    m_fullNameEdit->setText(fullName);
     m_phoneLocalEdit->setText(phoneLocal);
 
-    if (!idRule.idPattern.match(idText).hasMatch()) {
-        errors << QString("Customer ID for %1 must be %2.").arg(idRule.name, idRule.idHint);
+    if (!m_customer && !isValidDocumentNumber(documentType, idRule.key, idText)) {
+        errors << QString("%1 for %2 must be %3.").arg(documentType, idRule.name, documentNumberHint(documentType, idRule.key));
         setFieldError(m_idEdit, true);
         firstInvalid = firstInvalid ? firstInvalid : m_idEdit;
     }
 
-    if (lastName.isEmpty()) {
-        errors << "Last name is required.";
-        setFieldError(m_lastNameEdit, true);
-        firstInvalid = firstInvalid ? firstInvalid : m_lastNameEdit;
+    if (fullName.isEmpty()) {
+        errors << "Full legal name is required.";
+        setFieldError(m_fullNameEdit, true);
+        firstInvalid = firstInvalid ? firstInvalid : m_fullNameEdit;
     }
 
-    if (firstName.isEmpty()) {
-        errors << "First name is required.";
-        setFieldError(m_firstNameEdit, true);
-        firstInvalid = firstInvalid ? firstInvalid : m_firstNameEdit;
-    }
-
-    if (!HotelManager::isValidCustomerNameFormat(fullName.toStdString())) {
-        errors << "Customer name must contain at least 2 words and include both uppercase and lowercase letters.";
-        setFieldError(m_lastNameEdit, true);
-        setFieldError(m_firstNameEdit, true);
-        firstInvalid = firstInvalid ? firstInvalid : m_firstNameEdit;
+    if (!fullName.isEmpty() && !HotelManager::isValidCustomerNameFormat(fullName.toStdString())) {
+        errors << "Enter a valid legal name using letters, spaces, apostrophes, hyphens, or initials.";
+        setFieldError(m_fullNameEdit, true);
+        firstInvalid = firstInvalid ? firstInvalid : m_fullNameEdit;
     }
 
     static const QRegularExpression digitsPattern(QStringLiteral(R"(^\d+$)"));
@@ -368,7 +372,7 @@ bool CustomerDialog::validate() {
         firstInvalid = firstInvalid ? firstInvalid : m_phoneLocalEdit;
     }
 
-    if (phoneLocal.size() != phoneRule.phoneDigits) {
+    if (phoneLocal.size() < phoneRule.phoneMinDigits || phoneLocal.size() > phoneRule.phoneMaxDigits) {
         errors << QString("Phone number for %1 must be %2.").arg(phoneRule.name, phoneRule.phoneHint);
         setFieldError(m_phoneLocalEdit, true);
         firstInvalid = firstInvalid ? firstInvalid : m_phoneLocalEdit;

@@ -9,6 +9,7 @@
 #include <QDateTime>
 #include <QFile>
 #include <QHash>
+#include <QSet>
 #include <QString>
 #include <utility>
 #include <vector>
@@ -74,6 +75,9 @@ bool DataManager::initDatabase(const std::string& dataPath) {
     QString createCustomer =
         "CREATE TABLE IF NOT EXISTS Customer ("
         "   customerId TEXT PRIMARY KEY,"
+        "   documentType TEXT NOT NULL DEFAULT 'National ID',"
+        "   issuingCountry TEXT NOT NULL DEFAULT 'VN',"
+        "   documentNumber TEXT NOT NULL DEFAULT '',"
         "   name TEXT NOT NULL,"
         "   phoneNumber TEXT,"
         "   archived INTEGER NOT NULL DEFAULT 0"
@@ -85,9 +89,19 @@ bool DataManager::initDatabase(const std::string& dataPath) {
 
     if (schemaQuery.exec("PRAGMA table_info(Customer)")) {
         bool hasArchived = false;
+        bool hasDocumentType = false;
+        bool hasIssuingCountry = false;
+        bool hasDocumentNumber = false;
         while (schemaQuery.next()) {
-            if (schemaQuery.value(1).toString() == "archived") {
+            const QString columnName = schemaQuery.value(1).toString();
+            if (columnName == "archived") {
                 hasArchived = true;
+            } else if (columnName == "documentType") {
+                hasDocumentType = true;
+            } else if (columnName == "issuingCountry") {
+                hasIssuingCountry = true;
+            } else if (columnName == "documentNumber") {
+                hasDocumentNumber = true;
             }
         }
         if (!hasArchived) {
@@ -95,6 +109,23 @@ bool DataManager::initDatabase(const std::string& dataPath) {
                 qDebug() << "Error adding archived column to Customer: " << schemaQuery.lastError().text();
                 return false;
             }
+        }
+        // Modified: Preserve legacy records while adding explicit document fields for internationally issued identity documents.
+        if (!hasDocumentType && !schemaQuery.exec("ALTER TABLE Customer ADD COLUMN documentType TEXT NOT NULL DEFAULT 'National ID'")) {
+            qDebug() << "Error adding Customer document type:" << schemaQuery.lastError().text();
+            return false;
+        }
+        if (!hasIssuingCountry && !schemaQuery.exec("ALTER TABLE Customer ADD COLUMN issuingCountry TEXT NOT NULL DEFAULT 'Legacy'")) {
+            qDebug() << "Error adding Customer issuing country:" << schemaQuery.lastError().text();
+            return false;
+        }
+        if (!hasDocumentNumber && !schemaQuery.exec("ALTER TABLE Customer ADD COLUMN documentNumber TEXT NOT NULL DEFAULT ''")) {
+            qDebug() << "Error adding Customer document number:" << schemaQuery.lastError().text();
+            return false;
+        }
+        if (!schemaQuery.exec("UPDATE Customer SET documentNumber = customerId WHERE documentNumber = ''")) {
+            qDebug() << "Error backfilling Customer document numbers:" << schemaQuery.lastError().text();
+            return false;
         }
     } else {
         qDebug() << "Error inspecting Customer schema: " << schemaQuery.lastError().text();
@@ -336,6 +367,9 @@ bool DataManager::initDatabase(const std::string& dataPath) {
         "   taxRate REAL NOT NULL,"
         "   nights INTEGER NOT NULL,"
         "   paymentDate TEXT NOT NULL,"
+        "   paymentMethod TEXT NOT NULL DEFAULT 'Legacy payment',"
+        "   paymentAmount REAL NOT NULL DEFAULT 0,"
+        "   paymentReceivedDate TEXT NOT NULL DEFAULT '',"
         "   unitPrice REAL NOT NULL DEFAULT 0,"
         "   customerNameSnapshot TEXT NOT NULL DEFAULT '',"
         "   customerIdSnapshot TEXT NOT NULL DEFAULT '',"
@@ -376,11 +410,18 @@ bool DataManager::initDatabase(const std::string& dataPath) {
         {"roomTypeSnapshot", "roomTypeSnapshot TEXT NOT NULL DEFAULT ''"},
         {"checkInDateSnapshot", "checkInDateSnapshot TEXT NOT NULL DEFAULT ''"},
         {"checkOutDateSnapshot", "checkOutDateSnapshot TEXT NOT NULL DEFAULT ''"}
+        ,{"paymentMethod", "paymentMethod TEXT NOT NULL DEFAULT 'Legacy payment'"}
+        ,{"paymentAmount", "paymentAmount REAL NOT NULL DEFAULT 0"}
+        ,{"paymentReceivedDate", "paymentReceivedDate TEXT NOT NULL DEFAULT ''"}
     };
     for (const auto& [columnName, definition] : invoiceColumns) {
         if (!ensureInvoiceColumn(columnName, definition)) {
             return false;
         }
+    }
+    if (!query.exec("UPDATE Invoice SET paymentAmount = nights * unitPrice * (1 + taxRate), paymentReceivedDate = paymentDate WHERE paymentAmount <= 0 OR paymentReceivedDate = ''")) {
+        qDebug() << "Error backfilling legacy invoice payment facts:" << query.lastError().text();
+        return false;
     }
 
     QSqlQuery snapshotMigration(m_db);
@@ -453,14 +494,17 @@ bool DataManager::loadAll(HotelManager& manager, const std::string& dataPath) {
     std::string errorMsg;
 
     // Load customer records from database into memory structures
-    if (query.exec("SELECT customerId, name, phoneNumber, archived FROM Customer")) {
+    if (query.exec("SELECT customerId, documentType, issuingCountry, documentNumber, name, phoneNumber, archived FROM Customer")) {
         while (query.next()) {
             std::string custId = query.value(0).toString().toStdString();
-            std::string name = query.value(1).toString().toStdString();
-            std::string phone = query.value(2).toString().toStdString();
-            bool archived = query.value(3).toInt() == 1;
+            std::string documentType = query.value(1).toString().toStdString();
+            std::string issuingCountry = query.value(2).toString().toStdString();
+            std::string documentNumber = query.value(3).toString().toStdString();
+            std::string name = query.value(4).toString().toStdString();
+            std::string phone = query.value(5).toString().toStdString();
+            bool archived = query.value(6).toInt() == 1;
 
-            if (!loadedManager.restoreCustomerFromDatabase(custId, name, phone, archived, errorMsg)) {
+            if (!loadedManager.restoreCustomerFromDatabase(custId, documentType, issuingCountry, documentNumber, name, phone, archived, errorMsg)) {
                 qDebug() << "Failed to restore customer during load:" << QString::fromStdString(errorMsg);
                 return false;
             }
@@ -596,23 +640,26 @@ bool DataManager::loadAll(HotelManager& manager, const std::string& dataPath) {
 
     // Reconstruct invoices directly back into the core system memory.
     // Legacy rows with a cancelled flag are ignored by deleting them during migration.
-    if (query.exec("SELECT invoiceId, bookingId, taxRate, nights, paymentDate, unitPrice, customerNameSnapshot, customerIdSnapshot, customerPhoneSnapshot, roomNumberSnapshot, roomTypeSnapshot, checkInDateSnapshot, checkOutDateSnapshot FROM Invoice")) {
+    if (query.exec("SELECT invoiceId, bookingId, taxRate, nights, paymentDate, paymentMethod, paymentAmount, paymentReceivedDate, unitPrice, customerNameSnapshot, customerIdSnapshot, customerPhoneSnapshot, roomNumberSnapshot, roomTypeSnapshot, checkInDateSnapshot, checkOutDateSnapshot FROM Invoice")) {
         while (query.next()) {
             std::string invId = query.value(0).toString().toStdString();
             std::string bookId = query.value(1).toString().toStdString();
             double tax = query.value(2).toDouble();
             int nightsCount = query.value(3).toInt();
             std::string payDate = query.value(4).toString().toStdString();
-            double unitPrice = query.value(5).toDouble();
-            std::string customerNameSnapshot = query.value(6).toString().toStdString();
-            std::string customerIdSnapshot = query.value(7).toString().toStdString();
-            std::string customerPhoneSnapshot = query.value(8).toString().toStdString();
-            std::string roomNumberSnapshot = query.value(9).toString().toStdString();
-            std::string roomTypeSnapshot = query.value(10).toString().toStdString();
-            std::string checkInDateSnapshot = query.value(11).toString().toStdString();
-            std::string checkOutDateSnapshot = query.value(12).toString().toStdString();
+            std::string paymentMethod = query.value(5).toString().toStdString();
+            double paymentAmount = query.value(6).toDouble();
+            std::string paymentReceivedDate = query.value(7).toString().toStdString();
+            double unitPrice = query.value(8).toDouble();
+            std::string customerNameSnapshot = query.value(9).toString().toStdString();
+            std::string customerIdSnapshot = query.value(10).toString().toStdString();
+            std::string customerPhoneSnapshot = query.value(11).toString().toStdString();
+            std::string roomNumberSnapshot = query.value(12).toString().toStdString();
+            std::string roomTypeSnapshot = query.value(13).toString().toStdString();
+            std::string checkInDateSnapshot = query.value(14).toString().toStdString();
+            std::string checkOutDateSnapshot = query.value(15).toString().toStdString();
 
-            if (!loadedManager.restoreInvoiceFromDatabase(invId, bookId, tax, nightsCount, payDate, unitPrice,
+            if (!loadedManager.restoreInvoiceFromDatabase(invId, bookId, tax, nightsCount, payDate, paymentMethod, paymentAmount, paymentReceivedDate, unitPrice,
                                                           customerNameSnapshot, customerIdSnapshot, customerPhoneSnapshot,
                                                           roomNumberSnapshot, roomTypeSnapshot, checkInDateSnapshot,
                                                           checkOutDateSnapshot, errorMsg)) {
@@ -670,15 +717,16 @@ bool DataManager::reconcileCustomerDuplicates()
     selectQuery.finish();
 
     QHash<QString, QString> nameByPhone;
+    QSet<QString> ambiguousPhones;
     for (const CustomerRow& row : customerRows) {
-        if (row.normalizedPhone.isEmpty() || row.normalizedName.isEmpty()) {
+        if (row.normalizedPhone.isEmpty()) {
             continue;
         }
         const auto knownName = nameByPhone.constFind(row.normalizedPhone);
-        if (knownName != nameByPhone.cend() && *knownName != row.normalizedName) {
-            // Modified: Stop on ambiguous shared-phone records instead of deleting data that cannot be identified safely.
-            qDebug() << "Ambiguous duplicate customer phone requires manual review:" << row.normalizedPhone;
-            return false;
+        if (knownName != nameByPhone.cend()
+            && (row.normalizedName.isEmpty() || knownName->isEmpty() || *knownName != row.normalizedName)) {
+            ambiguousPhones.insert(row.normalizedPhone);
+            continue;
         }
         nameByPhone.insert(row.normalizedPhone, row.normalizedName);
     }
@@ -698,7 +746,7 @@ bool DataManager::reconcileCustomerDuplicates()
         knownCustomerRows.insert(identityKey, row.rowId);
     }
 
-    if (!duplicatesDetected) {
+    if (!duplicatesDetected && ambiguousPhones.isEmpty()) {
         return true;
     }
 
@@ -725,10 +773,35 @@ bool DataManager::reconcileCustomerDuplicates()
     }
 
     QHash<QString, CanonicalCustomer> canonicalCustomers;
+    QSet<QString> retainedAmbiguousPhones;
     int mergedCount = 0;
+    int quarantinedCount = 0;
     for (const CustomerRow& row : customerRows) {
+        if (row.customerId.isEmpty() || row.normalizedPhone.isEmpty()) {
+            continue;
+        }
+
+        if (ambiguousPhones.contains(row.normalizedPhone)) {
+            if (!retainedAmbiguousPhones.contains(row.normalizedPhone)) {
+                retainedAmbiguousPhones.insert(row.normalizedPhone);
+                continue;
+            }
+
+            // Modified: Preserve ambiguous historical customers and bookings while quarantining secondary shared-phone values.
+            QSqlQuery quarantineCustomer(m_db);
+            quarantineCustomer.prepare("UPDATE Customer SET phoneNumber = '', archived = 1 WHERE rowid = ?");
+            quarantineCustomer.addBindValue(row.rowId);
+            if (!quarantineCustomer.exec()) {
+                m_db.rollback();
+                qDebug() << "Failed to quarantine ambiguous customer phone:" << quarantineCustomer.lastError().text();
+                return false;
+            }
+            ++quarantinedCount;
+            continue;
+        }
+
         // Modified: Keep incomplete historical rows separate because their identity cannot be verified safely.
-        if (row.customerId.isEmpty() || row.normalizedName.isEmpty() || row.normalizedPhone.isEmpty()) {
+        if (row.normalizedName.isEmpty()) {
             continue;
         }
 
@@ -764,7 +837,7 @@ bool DataManager::reconcileCustomerDuplicates()
         ++mergedCount;
     }
 
-    if (mergedCount > 0) {
+    if (mergedCount > 0 || quarantinedCount > 0) {
         // Modified: Publish duplicate reconciliation as a database revision so other running instances cannot save stale snapshots.
         QSqlQuery revisionQuery(m_db);
         if (!revisionQuery.exec("UPDATE DataVersion SET revision = revision + 1 WHERE id = 1")) {
@@ -779,8 +852,9 @@ bool DataManager::reconcileCustomerDuplicates()
         return false;
     }
 
-    if (mergedCount > 0) {
-        qDebug() << "Reconciled duplicate customer records:" << mergedCount;
+    if (mergedCount > 0 || quarantinedCount > 0) {
+        qDebug() << "Reconciled duplicate customer records:" << mergedCount
+                 << "; quarantined ambiguous shared-phone records:" << quarantinedCount;
     }
     return true;
 }
@@ -852,10 +926,13 @@ bool DataManager::saveAll(HotelManager& manager, const std::string& dataPath) {
     }
 
     // 2. Persist Customer object lists
-    query.prepare("INSERT INTO Customer (customerId, name, phoneNumber, archived) VALUES (?, ?, ?, ?)");
+    query.prepare("INSERT INTO Customer (customerId, documentType, issuingCountry, documentNumber, name, phoneNumber, archived) VALUES (?, ?, ?, ?, ?, ?, ?)");
     for (const auto& customer : manager.getCustomers()) {
         if (customer) {
             query.addBindValue(QString::fromStdString(customer->getCustomerId()));
+            query.addBindValue(QString::fromStdString(customer->getDocumentType()));
+            query.addBindValue(QString::fromStdString(customer->getIssuingCountry()));
+            query.addBindValue(QString::fromStdString(customer->getDocumentNumber()));
             query.addBindValue(QString::fromStdString(customer->getName()));
             query.addBindValue(QString::fromStdString(customer->getPhoneNumber()));
             query.addBindValue(customer->isArchived() ? 1 : 0);
@@ -980,7 +1057,7 @@ bool DataManager::saveAll(HotelManager& manager, const std::string& dataPath) {
     }
 
     // Modified: Persist immutable invoice snapshots with every financial record.
-    query.prepare("INSERT INTO Invoice (invoiceId, bookingId, taxRate, nights, paymentDate, unitPrice, customerNameSnapshot, customerIdSnapshot, customerPhoneSnapshot, roomNumberSnapshot, roomTypeSnapshot, checkInDateSnapshot, checkOutDateSnapshot) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    query.prepare("INSERT INTO Invoice (invoiceId, bookingId, taxRate, nights, paymentDate, paymentMethod, paymentAmount, paymentReceivedDate, unitPrice, customerNameSnapshot, customerIdSnapshot, customerPhoneSnapshot, roomNumberSnapshot, roomTypeSnapshot, checkInDateSnapshot, checkOutDateSnapshot) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
     for (const auto& invoice : manager.getInvoices()) {
         if (!invoice) {
             continue;
@@ -997,6 +1074,9 @@ bool DataManager::saveAll(HotelManager& manager, const std::string& dataPath) {
         query.addBindValue(invoice->getNights());
         // Modified: The legacy paymentDate database column stores the invoice issue date; it does not represent settlement.
         query.addBindValue(QString::fromStdString(invoice->getInvoiceIssuedDate()));
+        query.addBindValue(QString::fromStdString(invoice->getPaymentMethod()));
+        query.addBindValue(invoice->getPaymentAmount());
+        query.addBindValue(QString::fromStdString(invoice->getPaymentReceivedDate()));
         query.addBindValue(invoice->getUnitPrice());
         query.addBindValue(QString::fromStdString(invoice->getCustomerNameSnapshot()));
         query.addBindValue(QString::fromStdString(invoice->getCustomerIdSnapshot()));

@@ -112,7 +112,8 @@ This structure keeps `HotelManager` as an in-memory facade rather than a persist
 ```text
 main.cpp
   │
-  ├── resolve database path → data/hotel_data.db
+  ├── resolve database path → per-user Qt AppLocalDataLocation
+  │     └── copy the former developer `data/hotel_data.db` once when present
   ├── DataManager::loadAll(hotelManager, path)
   │     ├── open SQLite and create/migrate tables
   │     ├── create query-supporting indexes
@@ -202,14 +203,16 @@ An overdue departure remains `ACTIVE` until staff checks it out. Planned dates a
 
 | Table | Purpose |
 |---|---|
-| `Customer` | Customer ID, name, phone number, archive state |
+| `Customer` | Internal composite identity key, document type, issuing country, document number, name, phone number, archive state |
 | `Room` | Room number, price, room type, fees, permanent availability/archive state |
 | `RoomMaintenance` | Room number, maintenance ID, interval, optional note, case status, and creation timestamp |
 | `MaintenanceGuestNotice` | Internal simulated guest-contact log for a maintenance case and affected booking |
 | `Booking` | Customer/room keys, planned/actual dates, adult/child counts, booked rate/tax, check-in/out/cancellation facts, and creation/update audit timestamps |
-| `Invoice` | Booking key, tax, nights, invoice issue date, and immutable customer/room/actual-date/price snapshot |
+| `Invoice` | Booking key, tax, nights, invoice issue date, one mandatory payment fact, and immutable customer/room/actual-date/price snapshot |
 
 SQLite foreign keys preserve customer/room/booking relationships. A connection-level 5-second busy timeout reduces transient lock failures. Query indexes cover booking room/date lookup, booking customer lookup, and maintenance room/date lookup; a unique partial index enforces non-empty customer phone numbers. A maintenance conflict produces a persisted `Awaiting guest response` case plus simulated internal notices. That case is a soft hold for new reservations but does not change the live room status until confirmed; a separate confirmation operation rechecks live overlap before it becomes a room-blocking maintenance interval. `DataVersion` carries a monotonically increasing revision, so a stale full snapshot from another application instance is rejected rather than overwriting newer data.
+
+Customer identity stores a full legal name plus document type, issuing country, and document number. Its internal key is the normalized document combination, preventing false global collisions between countries. `HotelManager::isValidCustomerNameFormat()` normalizes whitespace and permits Unicode letter tokens separated by spaces, apostrophes, hyphens, and initials. Dialogs enforce supported local-phone ranges for the ten configured country profiles, while the core accepts a valid E.164 envelope; this is not a complete global numbering-plan implementation. Operational maintenance must start today or later, and every persisted booking requires `checkOut > checkIn`. Checkout creates an invoice only together with a positive payment method, amount, and received date; the invoice issue date remains distinct from settlement.
 
 ### Migration and duplicate reconciliation
 
@@ -222,7 +225,7 @@ On initialization, the data manager also scans for exact normalized **customer n
 3. repoints its historical bookings; and
 4. removes only the unambiguous duplicate row inside a transaction.
 
-Incomplete rows are intentionally left unchanged. Same-phone/different-name rows stop initialization without a destructive write, because they are ambiguous and must be reviewed manually. Only after that check does SQLite enable the unique customer-phone index.
+Incomplete rows with no duplicate phone are intentionally left unchanged. For a same-phone/different-name (or incomplete-name) collision, reconciliation first preserves a backup, then retains the active, earliest row's phone. Each secondary row is archived and its phone is cleared, preserving its identity and booking references while making the unique customer-phone index enforceable. This is a deterministic data-recovery policy, not a deletion policy.
 
 ### Save and recovery
 

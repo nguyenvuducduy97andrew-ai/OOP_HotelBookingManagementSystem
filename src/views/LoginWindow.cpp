@@ -2,10 +2,13 @@
 
 #include "StaffSession.h"
 
+#include <QAction>
 #include <QCryptographicHash>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMessageBox>
+#include <QPainter>
+#include <QPixmap>
 #include <QPushButton>
 #include <QVBoxLayout>
 
@@ -16,6 +19,26 @@ const QByteArray kAdminPasswordHash = QByteArray::fromHex(
 QByteArray passwordHash(const QString& password)
 {
     return QCryptographicHash::hash(password.toUtf8(), QCryptographicHash::Sha256);
+}
+
+QIcon passwordVisibilityIcon(bool passwordIsVisible)
+{
+    QPixmap pixmap(18, 18);
+    pixmap.fill(Qt::transparent);
+
+    QPainter painter(&pixmap);
+    painter.setRenderHint(QPainter::Antialiasing);
+    painter.setPen(QPen(QColor("#6E86B5"), 1.6));
+    painter.setBrush(Qt::NoBrush);
+    painter.drawEllipse(QRectF(2.0, 5.0, 14.0, 8.0));
+    painter.setBrush(QColor("#6E86B5"));
+    painter.drawEllipse(QRectF(7.0, 7.0, 4.0, 4.0));
+
+    if (!passwordIsVisible) {
+        painter.setPen(QPen(QColor("#6E86B5"), 1.8));
+        painter.drawLine(QPointF(2.5, 2.5), QPointF(15.5, 15.5));
+    }
+    return QIcon(pixmap);
 }
 }
 
@@ -60,6 +83,16 @@ void LoginWindow::setupUi()
     m_passwordEdit = new QLineEdit(this);
     m_passwordEdit->setPlaceholderText("Enter password");
     m_passwordEdit->setEchoMode(QLineEdit::Password);
+    auto* passwordVisibilityAction = m_passwordEdit->addAction(
+        passwordVisibilityIcon(false), QLineEdit::TrailingPosition);
+    passwordVisibilityAction->setToolTip("Show password");
+    // Modified: let staff verify a password before submitting without exposing it by default.
+    connect(passwordVisibilityAction, &QAction::triggered, this, [this, passwordVisibilityAction] {
+        const bool showPassword = m_passwordEdit->echoMode() == QLineEdit::Password;
+        m_passwordEdit->setEchoMode(showPassword ? QLineEdit::Normal : QLineEdit::Password);
+        passwordVisibilityAction->setIcon(passwordVisibilityIcon(showPassword));
+        passwordVisibilityAction->setToolTip(showPassword ? "Hide password" : "Show password");
+    });
 
     auto* usernameLabel = new QLabel("Username", this);
     auto* passwordLabel = new QLabel("Password", this);
@@ -74,7 +107,9 @@ void LoginWindow::setupUi()
     rootLayout->addWidget(m_passwordEdit);
 
     m_loginButton = new QPushButton("Sign in", this);
-    m_loginButton->setDefault(true);
+    // Modified: avoid a duplicate sign-in attempt when Return emits both the editor and default-button signals.
+    m_loginButton->setAutoDefault(false);
+    m_loginButton->setDefault(false);
     rootLayout->addSpacing(6);
     rootLayout->addWidget(m_loginButton);
 
@@ -96,8 +131,9 @@ void LoginWindow::attemptLogin()
 
     // Modified: Authenticate before opening the main window and keep password text out of the source code.
     if (username.compare("admin", Qt::CaseInsensitive) != 0 || passwordHash(password) != kAdminPasswordHash) {
-        m_passwordEdit->clear();
         setError("Incorrect username or password.");
+        m_passwordEdit->setFocus();
+        m_passwordEdit->selectAll();
         return;
     }
 

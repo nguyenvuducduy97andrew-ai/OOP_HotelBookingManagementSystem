@@ -17,6 +17,9 @@ private:
     int nights;                      // Number of nights stayed (passed down from MainWindow)
     // Modified: This is the invoice issue date, not evidence that the balance has been paid.
     std::string invoiceIssuedDate;   // ISO date format string "YYYY-MM-DD"
+    std::string paymentMethod;
+    double paymentAmount;
+    std::string paymentReceivedDate;
     // Modified: Store immutable billing snapshots so completed invoices do not depend on mutable model records.
     double unitPrice;
     std::string customerNameSnapshot;
@@ -59,6 +62,13 @@ public:
 
     std::string getInvoiceIssuedDate() const;
     void setInvoiceIssuedDate(const std::string& invoiceIssuedDate);
+
+    std::string getPaymentMethod() const;
+    void setPaymentMethod(const std::string& value);
+    double getPaymentAmount() const;
+    void setPaymentAmount(double value);
+    std::string getPaymentReceivedDate() const;
+    void setPaymentReceivedDate(const std::string& value);
 
     double getUnitPrice() const;
     void setUnitPrice(double value);

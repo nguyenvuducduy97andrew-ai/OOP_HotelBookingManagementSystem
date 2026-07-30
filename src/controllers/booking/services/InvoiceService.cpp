@@ -16,6 +16,9 @@ bool InvoiceService::createInvoice(
     const std::string& invoiceId,
     const std::string& bookingId,
     const std::string& invoiceIssuedDate,
+    const std::string& paymentMethod,
+    double paymentAmount,
+    const std::string& paymentReceivedDate,
     std::string& errorMessage)
 {
     if (invoiceId.empty()) {
@@ -29,6 +32,11 @@ bool InvoiceService::createInvoice(
     const QDate issuedDate = QDate::fromString(QString::fromStdString(invoiceIssuedDate), Qt::ISODate);
     if (!issuedDate.isValid()) {
         errorMessage = "Date must use ISO format (YYYY-MM-DD).";
+        return false;
+    }
+    const QDate receivedDate = QDate::fromString(QString::fromStdString(paymentReceivedDate), Qt::ISODate);
+    if (paymentMethod.empty() || paymentAmount <= 0.0 || !receivedDate.isValid() || receivedDate > QDate::currentDate()) {
+        errorMessage = "A positive payment amount, method, and valid received date are required at checkout.";
         return false;
     }
 
@@ -72,6 +80,14 @@ bool InvoiceService::createInvoice(
     invoice->setTaxRate(booking->getQuotedTaxRate());
     invoice->setNights(derivedNights);
     invoice->setInvoiceIssuedDate(invoiceIssuedDate);
+    // Modified: Persist the mandatory checkout payment separately from the invoice issue date.
+    invoice->setPaymentMethod(paymentMethod);
+    invoice->setPaymentAmount(paymentAmount);
+    invoice->setPaymentReceivedDate(paymentReceivedDate);
+    if (paymentAmount > invoice->calculateTotal()) {
+        errorMessage = "Payment amount cannot exceed the invoice total in the current single-payment workflow.";
+        return false;
+    }
     if (!invoice->isValid()) {
         errorMessage = "Failed to validate invoice details.";
         return false;

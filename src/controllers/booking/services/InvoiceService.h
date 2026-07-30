@@ -13,6 +13,9 @@ public:
         const std::string& invoiceId,
         const std::string& bookingId,
         const std::string& invoiceIssuedDate,
+        const std::string& paymentMethod,
+        double paymentAmount,
+        const std::string& paymentReceivedDate,
         std::string& errorMessage);
 
 private:

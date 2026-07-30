@@ -16,6 +16,9 @@ public:
     explicit CustomerDialog(const std::shared_ptr<Customer>& customer, QWidget* parent = nullptr);
 
     QString getCustomerId() const;
+    QString getDocumentType() const;
+    QString getIssuingCountry() const;
+    QString getDocumentNumber() const;
     QString getCustomerName() const;
     QString getCustomerPhone() const;
 
@@ -33,10 +36,10 @@ private:
     void normalizePhoneInput();
 
     std::shared_ptr<Customer> m_customer;
+    QComboBox* m_documentType;
     QComboBox* m_idCountry;
     QLineEdit* m_idEdit;
-    QLineEdit* m_lastNameEdit;
-    QLineEdit* m_firstNameEdit;
+    QLineEdit* m_fullNameEdit;
     QComboBox* m_phoneCountryCode;
     QLineEdit* m_phoneLocalEdit;
     QPushButton* m_okButton;

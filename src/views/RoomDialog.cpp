@@ -180,12 +180,15 @@ void RoomDialog::setupUI() {
 
     m_maintenanceStartLabel = new QLabel("Maintenance starts:", this);
     m_maintenanceStartDateEdit = new QDateEdit(QDate::currentDate(), this);
+    // Modified: Prevent operational maintenance scheduling from creating a past interval.
+    m_maintenanceStartDateEdit->setMinimumDate(QDate::currentDate());
     m_maintenanceStartDateEdit->setCalendarPopup(true);
     m_maintenanceStartDateEdit->setDisplayFormat("dd MMM yyyy");
     formLayout->addRow(m_maintenanceStartLabel, m_maintenanceStartDateEdit);
 
     m_maintenanceEndLabel = new QLabel("Available again on:", this);
     m_maintenanceEndDateEdit = new QDateEdit(QDate::currentDate().addDays(1), this);
+    m_maintenanceEndDateEdit->setMinimumDate(QDate::currentDate().addDays(1));
     m_maintenanceEndDateEdit->setCalendarPopup(true);
     m_maintenanceEndDateEdit->setDisplayFormat("dd MMM yyyy");
     formLayout->addRow(m_maintenanceEndLabel, m_maintenanceEndDateEdit);

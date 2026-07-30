@@ -16,6 +16,9 @@ public:
     bool selectRoom(const std::string& roomNumber);
 
     QString getCustomerId() const;
+    QString getDocumentType() const;
+    QString getIssuingCountry() const;
+    QString getDocumentNumber() const;
     QString getCustomerName() const;
     QString getCustomerPhone() const;
     QString getRoomNumber() const;
@@ -37,6 +40,7 @@ private:
     HotelManager* m_manager;
     std::string m_editingBookingId;
 
+    QComboBox* m_customerDocumentType;
     QComboBox* m_customerIdCountry;
     QLineEdit* m_customerIdEdit;
     QLineEdit* m_customerNameEdit;

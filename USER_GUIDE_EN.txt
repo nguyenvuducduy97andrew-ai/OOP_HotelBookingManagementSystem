@@ -33,8 +33,8 @@ real staff accounts are added, each employee should use an individual account.
 
 Close the application normally with the window Close button. The application tries
 to save data on exit. Do not force-close the program, power off the computer, or
-remove storage while it is saving. Do not delete data/hotel_data.db to solve an
-ordinary mistake without a backup and authorization.
+remove storage while it is saving. Do not delete hotel_data.db from the application
+data folder to solve an ordinary mistake without a backup and authorization.
 
 ===============================================================================
 3. STATES YOU MUST UNDERSTAND
@@ -240,7 +240,7 @@ before printing or sharing.
 ===============================================================================
 
 Do not:
-- delete/replace data/hotel_data.db to resolve an ordinary mistake;
+- delete/replace hotel_data.db in the application data folder to resolve an ordinary mistake;
 - enter fake ID or phone just to bypass duplicate warnings;
 - mark permanent room unavailability for a short repair; use dated maintenance;
 - confirm maintenance while conflicting bookings remain;
@@ -278,7 +278,7 @@ then confirm again. A simulated notice is not conflict resolution.
 
 Database error at startup:
 Close the app. Do not repeatedly overwrite/delete the DB. If possible copy
-data/hotel_data.db as a backup and give the exact message to a developer.
+hotel_data.db from the application data folder as a backup and give the exact message to a developer.
 
 ===============================================================================
 12. SCENARIO PLAYBOOK AND HANDOVER
@@ -336,5 +336,17 @@ Handover:
 4. Close the app normally.
 5. Follow secure backup procedure; database backups contain PII.
 
-END OF STAFF USER GUIDE
+ADDENDUM — IDENTITY DOCUMENTS AND PAYMENT
 
+When creating a customer, select the document type, issuing country, and the
+number shown on the original document. Use Passport for international guests.
+
+At checkout, staff must select a payment method and enter the amount actually
+received. A partial payment leaves an outstanding balance on the invoice; do
+not record money that has not been received as a payment.
+
+Phone validation covers supported formats for the ten configured countries; it
+does not represent every real carrier numbering plan. Schedule maintenance only
+from today onward.
+
+END OF STAFF USER GUIDE

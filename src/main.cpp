@@ -1,6 +1,9 @@
 #include <QApplication>
+#include <QCoreApplication>
+#include <QFile>
 #include <QMessageBox>
 #include <QDir>
+#include <QStandardPaths>
 #include <QString>
 #include "mainwindow.h"
 #include "LoginWindow.h"
@@ -8,7 +11,7 @@
 #include "DataManager.h"
 
 namespace {
-QString resolveDatabasePath()
+QString findLegacyProjectDatabasePath()
 {
     QDir searchDir(QDir::currentPath());
 
@@ -22,17 +25,39 @@ QString resolveDatabasePath()
         }
     }
 
-    const QString projectRoot = searchDir.path();
-    const QString dataDirPath = QDir(projectRoot).filePath("data");
-    QDir().mkpath(dataDirPath);
+    if (!searchDir.exists("CMakeLists.txt") || !searchDir.exists("src")) {
+        return {};
+    }
 
-    return QDir(dataDirPath).filePath("hotel_data.db");
+    return QDir(searchDir.path()).filePath("data/hotel_data.db");
+}
+
+QString resolveDatabasePath()
+{
+    const QString dataDirPath = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
+    if (dataDirPath.isEmpty() || !QDir().mkpath(dataDirPath)) {
+        return {};
+    }
+
+    const QString managedDatabasePath = QDir(dataDirPath).filePath("hotel_data.db");
+    const QString legacyDatabasePath = findLegacyProjectDatabasePath();
+    if (!QFile::exists(managedDatabasePath) && !legacyDatabasePath.isEmpty()
+        && QFile::exists(legacyDatabasePath) && legacyDatabasePath != managedDatabasePath) {
+        // Modified: Preserve a developer-run database once while moving runtime storage away from the working directory.
+        if (!QFile::copy(legacyDatabasePath, managedDatabasePath)) {
+            qWarning() << "Could not migrate legacy database to application data:" << legacyDatabasePath;
+        }
+    }
+
+    return managedDatabasePath;
 }
 }
 
 int main(int argc, char *argv[]) {
     // Initialize the Qt application.
     QApplication app(argc, argv);
+    QCoreApplication::setOrganizationName("VNUHCM-US");
+    QCoreApplication::setApplicationName("HotelBookingManagement");
     // Create the HotelManager that owns the hotel's in-memory data.
     HotelManager hotelManager;
 

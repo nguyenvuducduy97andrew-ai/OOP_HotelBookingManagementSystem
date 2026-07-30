@@ -35,6 +35,9 @@ Invoice::Invoice() {
     this->taxRate = 0.0;
     this->nights = 0; // Added: Initializing the new nights member variable
     this->invoiceIssuedDate = "";
+    this->paymentMethod = "";
+    this->paymentAmount = 0.0;
+    this->paymentReceivedDate = "";
     this->unitPrice = 0.0;
 }
 
@@ -96,6 +99,13 @@ void Invoice::setInvoiceIssuedDate(const std::string& value) {
     invoiceIssuedDate = value;
 }
 
+std::string Invoice::getPaymentMethod() const { return paymentMethod; }
+void Invoice::setPaymentMethod(const std::string& value) { paymentMethod = value; }
+double Invoice::getPaymentAmount() const { return paymentAmount; }
+void Invoice::setPaymentAmount(double value) { paymentAmount = value; }
+std::string Invoice::getPaymentReceivedDate() const { return paymentReceivedDate; }
+void Invoice::setPaymentReceivedDate(const std::string& value) { paymentReceivedDate = value; }
+
 double Invoice::getUnitPrice() const { return unitPrice; }
 void Invoice::setUnitPrice(double value) { unitPrice = value; }
 std::string Invoice::getCustomerNameSnapshot() const { return customerNameSnapshot; }
@@ -123,6 +133,7 @@ bool Invoice::isValid() const {
            nights > 0 &&
            taxRate >= 0.0 && taxRate <= 1.0 &&
            unitPrice > 0.0 &&
+           !paymentMethod.empty() && paymentAmount > 0.0 && isIsoDateString(paymentReceivedDate) &&
            !customerNameSnapshot.empty() && !customerIdSnapshot.empty() && !customerPhoneSnapshot.empty() &&
            !roomNumberSnapshot.empty() && !roomTypeSnapshot.empty() &&
            isIsoDateString(invoiceIssuedDate) && isIsoDateString(checkInDateSnapshot) &&
@@ -171,6 +182,9 @@ std::string Invoice::generateInvoiceDetails() const {
     details << "<b>Tax Amount:</b> " << formatMoney(taxAmount) << " VND<br>";
     details << "--------------------------------------------------<br>";
     details << "<h2>TOTAL AMOUNT: " << formatMoney(totalAmount) << " VND</h2>";
+    // Modified: Display the payment fact and remaining balance separately so issuing an invoice is never confused with settlement.
+    details << "<b>Payment received:</b> " << formatMoney(paymentAmount) << " VND (" << paymentMethod << ")<br>";
+    details << "<b>Outstanding balance:</b> " << formatMoney(totalAmount - paymentAmount) << " VND<br>";
     details << "=========================================<br>";
 
     return details.str();
@@ -191,7 +205,7 @@ void Invoice::captureBookingSnapshot(const std::shared_ptr<Booking>& sourceBooki
     const auto customer = sourceBooking->getCustomer();
     if (customer) {
         customerNameSnapshot = customer->getName();
-        customerIdSnapshot = customer->getCustomerId();
+        customerIdSnapshot = customer->getDocumentNumber();
         customerPhoneSnapshot = customer->getPhoneNumber();
     }
     const auto room = sourceBooking->getRoom();

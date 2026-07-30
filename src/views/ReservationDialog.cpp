@@ -1,5 +1,6 @@
 #include "ReservationDialog.h"
 #include "CountryInputRules.h"
+#include "CustomerIdentity.h"
 #include "StandardRoom.h"
 #include "DeluxeRoom.h"
 #include "SuiteRoom.h"
@@ -106,21 +107,24 @@ void ReservationDialog::setupUI() {
     auto* formLayout = new QFormLayout();
     formLayout->setSpacing(12);
 
-    // Modified: Keep reservation ID validation consistent with Customer Management.
+    // Modified: Keep reservation document validation consistent with Customer Management.
     auto* idRow = new QHBoxLayout();
     idRow->setSpacing(8);
+    m_customerDocumentType = new QComboBox(this);
+    m_customerDocumentType->addItems({"National ID", "Passport", "Other"});
     m_customerIdCountry = new QComboBox(this);
     for (const auto& rule : countryInputRules()) {
         m_customerIdCountry->addItem(rule.name, rule.key);
     }
     m_customerIdEdit = new QLineEdit(this);
+    idRow->addWidget(m_customerDocumentType, 0);
     idRow->addWidget(m_customerIdCountry, 0);
     idRow->addWidget(m_customerIdEdit, 1);
-    formLayout->addRow("Customer ID:", idRow);
+    formLayout->addRow("Identity document:", idRow);
 
     m_customerNameEdit = new QLineEdit(this);
-    m_customerNameEdit->setPlaceholderText("Customer name");
-    formLayout->addRow("Customer Name:", m_customerNameEdit);
+    m_customerNameEdit->setPlaceholderText("Full legal name as shown on identification");
+    formLayout->addRow("Full legal name:", m_customerNameEdit);
 
     auto* phoneRow = new QHBoxLayout();
     phoneRow->setSpacing(8);
@@ -181,6 +185,7 @@ void ReservationDialog::setupUI() {
     connect(m_checkOutDateEdit, &QDateEdit::dateChanged, this, &ReservationDialog::updateAvailableRooms);
     connect(m_adultCountSpin, QOverload<int>::of(&QSpinBox::valueChanged), this, &ReservationDialog::updateAvailableRooms);
     connect(m_childCountSpin, QOverload<int>::of(&QSpinBox::valueChanged), this, &ReservationDialog::updateAvailableRooms);
+    connect(m_customerDocumentType, &QComboBox::currentIndexChanged, this, &ReservationDialog::updateIdPlaceholder);
     connect(m_customerIdCountry, &QComboBox::currentIndexChanged, this, &ReservationDialog::updateIdPlaceholder);
     connect(m_customerPhoneCode, &QComboBox::currentIndexChanged, this, [this]() { updatePhonePlaceholder(); normalizePhoneInput(); });
     connect(m_customerPhoneLocalEdit, &QLineEdit::textChanged, this, &ReservationDialog::normalizePhoneInput);
@@ -190,14 +195,16 @@ void ReservationDialog::setupUI() {
 
 void ReservationDialog::updateIdPlaceholder() {
     const auto& rule = countryInputRule(m_customerIdCountry->currentData().toString());
-    m_customerIdEdit->setPlaceholderText(rule.idHint);
-    m_customerIdEdit->setMaxLength(rule.idMaxLength);
+    const QString documentType = m_customerDocumentType->currentText();
+    m_customerIdEdit->setPlaceholderText(documentNumberHint(documentType, rule.key));
+    m_customerIdEdit->setMaxLength(documentType.compare("Passport", Qt::CaseInsensitive) == 0 ? 20
+        : (documentType.compare("Other", Qt::CaseInsensitive) == 0 ? 30 : rule.idMaxLength));
 }
 
 void ReservationDialog::updatePhonePlaceholder() {
     const auto& rule = countryInputRule(m_customerPhoneCode->currentData().toString());
     m_customerPhoneLocalEdit->setPlaceholderText(rule.phoneHint);
-    m_customerPhoneLocalEdit->setMaxLength(rule.phoneDigits + 1);
+    m_customerPhoneLocalEdit->setMaxLength(rule.phoneMaxDigits + 1);
 }
 
 void ReservationDialog::normalizePhoneInput() {
@@ -236,22 +243,25 @@ void ReservationDialog::updateAvailableRooms() {
 
 void ReservationDialog::onAccept() {
     const auto& idRule = countryInputRule(m_customerIdCountry->currentData().toString());
+    const QString documentType = getDocumentType();
     const auto& phoneRule = countryInputRule(m_customerPhoneCode->currentData().toString());
     const QString customerId = m_customerIdEdit->text().trimmed().toUpper();
-    const QString customerName = m_customerNameEdit->text().trimmed();
+    // Modified: Normalize one legal-name field without imposing a Western first/last-name structure.
+    const QString customerName = m_customerNameEdit->text().simplified();
     const QString phoneLocal = normalizeLocalPhoneNumber(m_customerPhoneLocalEdit->text());
     const QString fullPhone = phoneRule.callingCode + phoneLocal;
 
     m_customerIdEdit->setText(customerId);
+    m_customerNameEdit->setText(customerName);
     m_customerPhoneLocalEdit->setText(phoneLocal);
 
-    if (!idRule.idPattern.match(customerId).hasMatch()) {
-        QMessageBox::warning(this, "Invalid customer ID", QString("Customer ID for %1 must be %2.").arg(idRule.name, idRule.idHint));
+    if (m_editingBookingId.empty() && !isValidDocumentNumber(documentType, idRule.key, customerId)) {
+        QMessageBox::warning(this, "Invalid identity document", QString("%1 for %2 must be %3.").arg(documentType, idRule.name, documentNumberHint(documentType, idRule.key)));
         return;
     }
 
     if (!HotelManager::isValidCustomerNameFormat(customerName.toStdString())) {
-        QMessageBox::warning(this, "Invalid customer name", "Customer name must have at least 2 words and include both uppercase and lowercase letters.");
+        QMessageBox::warning(this, "Invalid customer name", "Enter a valid legal name using letters, spaces, apostrophes, hyphens, or initials.");
         return;
     }
 
@@ -261,7 +271,7 @@ void ReservationDialog::onAccept() {
         return;
     }
 
-    if (phoneLocal.size() != phoneRule.phoneDigits) {
+    if (phoneLocal.size() < phoneRule.phoneMinDigits || phoneLocal.size() > phoneRule.phoneMaxDigits) {
         QMessageBox::warning(this, "Invalid phone number", QString("Phone number for %1 must be %2.").arg(phoneRule.name, phoneRule.phoneHint));
         return;
     }
@@ -290,11 +300,21 @@ void ReservationDialog::onAccept() {
 }
 
 QString ReservationDialog::getCustomerId() const {
-    return m_customerIdEdit->text().trimmed().toUpper();
+    if (!m_editingBookingId.empty() && m_manager) {
+        const auto booking = m_manager->findBookingById(m_editingBookingId);
+        if (booking && booking->getCustomer()) {
+            return QString::fromStdString(booking->getCustomer()->getCustomerId());
+        }
+    }
+    return customerIdentityKey(getDocumentType(), getIssuingCountry(), getDocumentNumber());
 }
 
+QString ReservationDialog::getDocumentType() const { return m_customerDocumentType->currentText(); }
+QString ReservationDialog::getIssuingCountry() const { return m_customerIdCountry->currentData().toString(); }
+QString ReservationDialog::getDocumentNumber() const { return m_customerIdEdit->text().trimmed().toUpper(); }
+
 QString ReservationDialog::getCustomerName() const {
-    return m_customerNameEdit->text().trimmed();
+    return m_customerNameEdit->text().simplified();
 }
 
 QString ReservationDialog::getCustomerPhone() const {
@@ -330,16 +350,23 @@ void ReservationDialog::setEditBooking(const std::string& bookingId) {
     if (!booking) return;
 
     setWindowTitle("Edit Reservation");
-    const QString existingId = QString::fromStdString(booking->getCustomer()->getCustomerId()).trimmed().toUpper();
+    const QString existingId = QString::fromStdString(booking->getCustomer()->getDocumentNumber()).trimmed().toUpper();
+    const QString existingType = QString::fromStdString(booking->getCustomer()->getDocumentType());
+    const QString existingCountry = QString::fromStdString(booking->getCustomer()->getIssuingCountry());
+    const int typeIndex = m_customerDocumentType->findText(existingType);
+    if (typeIndex >= 0) {
+        m_customerDocumentType->setCurrentIndex(typeIndex);
+    }
     for (int i = 0; i < m_customerIdCountry->count(); ++i) {
-        const auto& rule = countryInputRule(m_customerIdCountry->itemData(i).toString());
-        if (rule.idPattern.match(existingId).hasMatch()) {
+        if (m_customerIdCountry->itemData(i).toString() == existingCountry) {
             m_customerIdCountry->setCurrentIndex(i);
             break;
         }
     }
     m_customerIdEdit->setText(existingId);
     m_customerIdEdit->setEnabled(false); // Disallow editing Guest ID to protect DB references
+    m_customerDocumentType->setEnabled(false);
+    m_customerIdCountry->setEnabled(false);
 
     m_customerNameEdit->setText(QString::fromStdString(booking->getCustomer()->getName()));
 

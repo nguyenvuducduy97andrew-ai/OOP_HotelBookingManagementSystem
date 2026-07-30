@@ -149,7 +149,7 @@ void RoomStatusPageWidget::refreshData() {
         } else if (isOccupied && activeBooking) {
             QString guestName = activeBooking->getCustomer() ? QString::fromStdString(activeBooking->getCustomer()->getName()) : "Unknown";
             QString phone = activeBooking->getCustomer() ? QString::fromStdString(activeBooking->getCustomer()->getPhoneNumber()) : "";
-            QString idNumber = activeBooking->getCustomer() ? QString::fromStdString(activeBooking->getCustomer()->getCustomerId()) : "";
+            QString idNumber = activeBooking->getCustomer() ? QString::fromStdString(activeBooking->getCustomer()->getDocumentNumber()) : "";
             
             QDate dIn = QDate::fromString(QString::fromStdString(activeBooking->getCheckInDate()), "yyyy-MM-dd");
             QString dateIn = dIn.isValid() ? dIn.toString("dd/MM") : QString::fromStdString(activeBooking->getCheckInDate());

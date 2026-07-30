@@ -3,6 +3,9 @@
 Customer::Customer() {
     // Fixed-modified: Keep the default customer invalid until real data is assigned.
     this->customerId = "";
+    this->documentType = "";
+    this->issuingCountry = "";
+    this->documentNumber = "";
     this->name = "";
     this->phoneNumber = "";
     this->archived = false;
@@ -22,6 +25,13 @@ std::string Customer::getCustomerId() const {
 void Customer::setCustomerId(const std::string& customerId) {
     this->customerId = customerId;
 }
+
+std::string Customer::getDocumentType() const { return documentType; }
+void Customer::setDocumentType(const std::string& value) { documentType = value; }
+std::string Customer::getIssuingCountry() const { return issuingCountry; }
+void Customer::setIssuingCountry(const std::string& value) { issuingCountry = value; }
+std::string Customer::getDocumentNumber() const { return documentNumber.empty() ? customerId : documentNumber; }
+void Customer::setDocumentNumber(const std::string& value) { documentNumber = value; }
 
 std::string Customer::getName() const {
     return this->name;
@@ -49,6 +59,9 @@ void Customer::setArchived(bool archived) {
 bool Customer::isValid() const {
     // Fixed-modified: Reject empty and placeholder customer records.
     return !customerId.empty() &&
+           !documentType.empty() &&
+           !issuingCountry.empty() &&
+           !documentNumber.empty() &&
            !name.empty() &&
            !phoneNumber.empty() &&
            customerId != "UNKNOWN" &&

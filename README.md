@@ -75,8 +75,10 @@ Checkout and invoice creation are staged together, then persisted through one `D
 `src/views/CountryInputRules.h` is shared by Customer and Reservation dialogs.
 
 - Supported countries: Vietnam, United States, Malaysia, United Kingdom, Japan, Singapore, South Korea, Thailand, Australia, and Germany.
-- Each country defines an ID pattern, concise input hint, calling code, and expected local phone length.
+- Each identity document stores a type (`National ID`, `Passport`, or `Other`), issuing country, and document number. Customer identity is keyed by that combination, so the same number from different issuing countries does not collide.
+- Phone checks implement documented **supported formats** for these ten profiles, including variable-length ranges where applicable. They are intentionally not a complete numbering-plan implementation for every carrier or country.
 - Phone normalization removes punctuation, spaces, and accidental local leading zeroes before storage. Stored values use international form, for example `+84912345678`.
+- Customer name is captured as one required **full legal name**. The validation accepts a one-part legal name, all-uppercase document names, and scripts without uppercase/lowercase; it does not force a Western surname/given-name structure.
 - Customer names are not unique. Customer IDs and normalized phone numbers are protected by the customer workflow and a SQLite unique phone index. The same validation is applied when creating and editing a customer. When a conflict is detected, the conflicting customer is highlighted for the user.
 
 ### Existing database reconciliation
@@ -87,14 +89,15 @@ During database initialization, `DataManager` checks existing rows for an exact 
 hotel_data.db.customer-dedup-YYYYMMDD-HHMMSSmmm.bak
 ```
 
-Bookings of the removed duplicate are reassigned to the retained customer. Incomplete rows are not merged. Same-phone/different-name rows are considered ambiguous: initialization stops without deleting data, so they can be reviewed and corrected manually before the unique phone rule is enabled.
+Bookings of a removed exact duplicate are reassigned to the retained customer. Incomplete rows are not merged. For an ambiguous same-phone/different-name conflict, initialization preserves every customer and its booking history: the active, earliest row retains the phone number, while secondary rows are archived and have their phone cleared. This makes the unique-phone rule enforceable without deleting an identity. The timestamped backup remains available for manual review.
 
 ## Persistence
 
-- Runtime database: `data/hotel_data.db`.
+- Runtime database: the current user's Qt `AppLocalDataLocation` (on Windows, normally under `AppData\\Local\\VNUHCM-US\\HotelBookingManagement\\hotel_data.db`).
+- A database at the former developer path `data/hotel_data.db` is copied once on first launch when it exists, so running from an IDE does not lose existing operational data.
 - Tables: `Customer`, `Room`, `RoomMaintenance`, `MaintenanceGuestNotice`, `Booking`, and `Invoice`.
 - Migration adds explicit check-in/check-out facts, actual stay dates, booked rate/tax, occupancy, and cancellation-audit columns. Legacy completed rows are backfilled only when an invoice proves checkout; a date alone never activates a stay.
-- Each `Invoice` stores its own customer, room, actual-stay date, unit-price snapshot, and invoice issue date. The issue date is not a payment-status field; payment settlement requires a future folio/payment module.
+- Checkout requires one recorded payment with a method, amount, and received date. The invoice stores this payment fact separately from its issue date; a remaining balance is shown when the received amount is partial.
 - SQLite foreign keys, a 5-second busy timeout, and indexes support integrity and common booking/date queries. Customer phone numbers are unique at the database layer. `DataVersion` detects a stale full snapshot from another running instance and prevents it from overwriting newer data.
 - `loadAll()` restores into a temporary `HotelManager` and replaces the live manager only after the complete snapshot is valid.
 - `saveAll()` writes the current manager snapshot in one SQLite transaction. `commitChanges()` restores the last committed state after a failed save.
@@ -134,7 +137,7 @@ cmake -S . -B build
 cmake --build build --target HotelBookingManagement
 ```
 
-Run the executable from the build directory. On a first launch, `data/hotel_data.db` is created with an empty schema; rooms, customers, bookings, and invoices are created only through the application.
+Run the executable from any directory. On a first launch, the per-user application-data database is created with an empty schema; rooms, customers, bookings, and invoices are created only through the application.
 
 ### Windows Qt kit note
 

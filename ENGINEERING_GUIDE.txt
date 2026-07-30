@@ -44,7 +44,7 @@ Root files:
   ENGINEERING_GUIDE.txt       This detailed guide.
   USER_GUIDE.txt              Vietnamese staff manual.
   USER_GUIDE_EN.txt           English staff manual.
-  data/hotel_data.db          Runtime SQLite database, ignored by Git.
+  <AppLocalData>/hotel_data.db Per-user runtime SQLite database; an old project data file migrates once.
 
 Source folders:
   src/main.cpp
@@ -85,10 +85,9 @@ Exact execution path in main.cpp:
 1. QApplication app(argc, argv) is constructed.
 2. HotelManager hotelManager is created on the stack. It outlives MainWindow and
    every child widget, so it is the single live in-memory hotel aggregate.
-3. resolveDatabasePath() starts from QDir::currentPath(), walks upward until both
-   CMakeLists.txt and src exist, creates <project>/data, and returns
-   <project>/data/hotel_data.db. This avoids creating a separate DB inside a
-   build directory when the executable is launched from there.
+3. resolveDatabasePath() uses Qt AppLocalDataLocation, so the database location is
+   independent of the executable's working directory. On a developer machine it
+   copies the former <project>/data/hotel_data.db once when that legacy file exists.
 4. DataManager::getInstance().loadAll(hotelManager, databasePath) opens SQLite,
    initializes/migrates schema, reconciles legacy duplicate data, and restores
    all valid data into HotelManager. On failure main shows a critical error and
@@ -844,5 +843,22 @@ Before submitting:
 [ ] Do not commit database, build output, credentials or real personal data.
 [ ] Update README.md, ARCHITECTURE.md and user/developer guides.
 
-END OF ENGINEERING GUIDE
+ADDENDUM — INTERNATIONAL IDENTITY AND CHECKOUT PAYMENT
 
+Customer identity now consists of document type, issuing country and document
+number. `customerId` is an internal normalized composite key used by bookings;
+views display the document number instead. Keep this combination intact when
+adding document types or countries, and migrate/load/save all three fields.
+
+Checkout requires a positive payment amount, method and received date. These
+fields belong to Invoice but are distinct from the invoice issue date. The
+current coursework scope supports one mandatory payment, possibly partial; a
+future folio module should replace it with a one-to-many Payment table.
+
+Phone ranges in CountryInputRules are supported classroom formats, not complete
+carrier numbering plans. Keep selected-country range validation in dialogs and
+the E.164 envelope in the core. Maintenance scheduling is operational only and
+must start today or later. Persistence rejects zero-night bookings by requiring
+planned check-out to be strictly after planned check-in.
+
+END OF ENGINEERING GUIDE

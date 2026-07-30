@@ -14,6 +14,8 @@
 #include <QMessageBox>
 #include <QDialog>
 #include <QLineEdit>
+#include <QComboBox>
+#include <QDoubleSpinBox>
 #include <QDate>
 #include <QDebug>
 #include <QFrame>
@@ -85,6 +87,36 @@ bool requestReservationReason(
 
     reason = reasonInput->text().trimmed();
     return true;
+}
+
+bool requestCheckoutPayment(QWidget* parent, double total, QString& method, double& amount)
+{
+    QDialog dialog(parent);
+    dialog.setWindowTitle("Record checkout payment");
+    dialog.setModal(true);
+    auto* layout = new QVBoxLayout(&dialog);
+    layout->addWidget(new QLabel(QString("Invoice total: %1 VND").arg(QString::number(total, 'f', 0)), &dialog));
+    auto* methodBox = new QComboBox(&dialog);
+    methodBox->addItems({"Cash", "Card", "Bank transfer", "Other"});
+    auto* amountSpin = new QDoubleSpinBox(&dialog);
+    amountSpin->setRange(1.0, total);
+    amountSpin->setDecimals(0);
+    amountSpin->setValue(total);
+    amountSpin->setSuffix(" VND");
+    layout->addWidget(new QLabel("Payment method:", &dialog));
+    layout->addWidget(methodBox);
+    layout->addWidget(new QLabel("Amount received:", &dialog));
+    layout->addWidget(amountSpin);
+    auto* buttons = new QHBoxLayout();
+    auto* cancel = new QPushButton("Cancel", &dialog);
+    auto* confirm = new QPushButton("Record payment", &dialog);
+    buttons->addStretch(); buttons->addWidget(cancel); buttons->addWidget(confirm); layout->addLayout(buttons);
+    QObject::connect(cancel, &QPushButton::clicked, &dialog, &QDialog::reject);
+    QObject::connect(confirm, &QPushButton::clicked, &dialog, &QDialog::accept);
+    if (dialog.exec() != QDialog::Accepted) return false;
+    method = methodBox->currentText();
+    amount = amountSpin->value();
+    return !method.isEmpty() && amount > 0.0;
 }
 
 class BookingActionTooltipFilter : public QObject
@@ -461,7 +493,7 @@ void ReservationsPageWidget::refreshData() {
 
         // Populate items
         m_tableWidget->setItem(row, 0, new QTableWidgetItem(bId));
-        m_tableWidget->setItem(row, 1, new QTableWidgetItem(QString::fromStdString(customer->getCustomerId())));
+        m_tableWidget->setItem(row, 1, new QTableWidgetItem(QString::fromStdString(customer->getDocumentNumber())));
         m_tableWidget->setItem(row, 2, new QTableWidgetItem(custName));
         m_tableWidget->setItem(row, 3, new QTableWidgetItem(QString::fromStdString(customer->getPhoneNumber())));
         m_tableWidget->setItem(row, 4, new QTableWidgetItem(roomNum));
@@ -697,6 +729,16 @@ void ReservationsPageWidget::onTableActionClicked() {
             QDate today = QDate::currentDate();
             std::string todayStr = today.toString("yyyy-MM-dd").toStdString();
 
+            const QDate actualCheckIn = QDate::fromString(QString::fromStdString(booking->getActualCheckInDate()), Qt::ISODate);
+            const int nights = actualCheckIn.daysTo(today);
+            const double invoiceTotal = nights * booking->getQuotedUnitPrice() * (1.0 + booking->getQuotedTaxRate());
+            QString paymentMethod;
+            double paymentAmount = 0.0;
+            // Modified: Require a real payment entry before checkout can complete and issue an invoice.
+            if (nights <= 0 || !requestCheckoutPayment(this, invoiceTotal, paymentMethod, paymentAmount)) {
+                return;
+            }
+
             std::string errMsg;
             if (!m_manager->completeBooking(bookingId, todayStr, errMsg)) {
                 QMessageBox::critical(this, "Check-out error", QString::fromStdString(errMsg));
@@ -706,7 +748,8 @@ void ReservationsPageWidget::onTableActionClicked() {
             // Modified: Stage checkout and invoice together before one atomic persistence commit.
             std::string invoiceId = m_manager->nextInvoiceId();
 
-            if (!m_manager->createInvoice(invoiceId, bookingId, todayStr, errMsg)) {
+            if (!m_manager->createInvoice(invoiceId, bookingId, todayStr, paymentMethod.toStdString(),
+                                          paymentAmount, todayStr, errMsg)) {
                 DataManager::getInstance().restoreLastSavedState(*m_manager);
                 refreshData();
                 QMessageBox::critical(this, "Invoice generation error", QString::fromStdString(errMsg));

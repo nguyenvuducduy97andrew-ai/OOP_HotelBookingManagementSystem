@@ -2,6 +2,7 @@
 #include "CustomerDialog.h"
 #include "CustomConfirmDialog.h"
 #include "CustomSuccessDialog.h"
+#include "CountryInputRules.h"
 #include "DataManager.h"
 #include <QVBoxLayout>
 #include <QLabel>
@@ -16,6 +17,43 @@
 #include <QEvent>
 
 namespace {
+class ExpandableSearchEdit : public QLineEdit {
+public:
+    using QLineEdit::QLineEdit;
+
+protected:
+    void focusInEvent(QFocusEvent* event) override
+    {
+        QLineEdit::focusInEvent(event);
+        setMinimumWidth(500);
+        setMaximumWidth(620);
+    }
+
+    void focusOutEvent(QFocusEvent* event) override
+    {
+        QLineEdit::focusOutEvent(event);
+        setFixedWidth(325);
+    }
+};
+
+class NumericTableItem : public QTableWidgetItem {
+public:
+    explicit NumericTableItem(int value)
+        : QTableWidgetItem(QString::number(value)), m_value(value)
+    {
+    }
+
+    bool operator<(const QTableWidgetItem& other) const override
+    {
+        const auto* numericOther = dynamic_cast<const NumericTableItem*>(&other);
+        return numericOther ? m_value < numericOther->m_value
+                            : QTableWidgetItem::operator<(other);
+    }
+
+private:
+    int m_value;
+};
+
 class HoverRowDelegate : public QStyledItemDelegate {
 public:
     explicit HoverRowDelegate(QTableWidget* table)
@@ -92,6 +130,9 @@ CustomerPageWidget::CustomerPageWidget(HotelManager* manager, QWidget *parent)
 }
 
 void CustomerPageWidget::setupStyle() {
+    // Modified: make filter dropdown text readable against its popup background.
+    // Modified: use a distinct green selected-filter state so it is not confused with the primary add action.
+    // Modified: reuse the dashboard's rounded scrollbar treatment for filter popup lists.
     setStyleSheet(R"(
         QLabel#pageTitle {
             font-size: 20px;
@@ -105,6 +146,71 @@ void CustomerPageWidget::setupStyle() {
             padding: 8px 14px;
             font-size: 13px;
             color: #2B3674;
+        }
+        QComboBox#documentTypeFilter, QComboBox#issuingCountryFilter {
+            background-color: #F4F7FE;
+            border: 1px solid #E9EDF7;
+            border-radius: 10px;
+            padding: 7px 12px;
+            font-size: 13px;
+            color: #2B3674;
+            min-height: 18px;
+        }
+        QComboBox#documentTypeFilter::drop-down, QComboBox#issuingCountryFilter::drop-down {
+            border: none;
+            width: 24px;
+        }
+        QComboBox#documentTypeFilter QAbstractItemView,
+        QComboBox#issuingCountryFilter QAbstractItemView {
+            background-color: #FFFFFF;
+            color: #2B3674;
+            border: 1px solid #D9E2F2;
+            outline: none;
+            selection-background-color: #EAF2FF;
+            selection-color: #005BFE;
+        }
+        QComboBox#documentTypeFilter QAbstractItemView::item,
+        QComboBox#issuingCountryFilter QAbstractItemView::item {
+            min-height: 30px;
+            padding: 4px 10px;
+            color: #2B3674;
+            background-color: #FFFFFF;
+        }
+        QComboBox#documentTypeFilter QAbstractItemView::item:hover,
+        QComboBox#issuingCountryFilter QAbstractItemView::item:hover,
+        QComboBox#documentTypeFilter QAbstractItemView::item:selected,
+        QComboBox#issuingCountryFilter QAbstractItemView::item:selected {
+            background-color: #EAF2FF;
+            color: #005BFE;
+        }
+        QComboBox#documentTypeFilter QAbstractItemView QScrollBar:vertical,
+        QComboBox#issuingCountryFilter QAbstractItemView QScrollBar:vertical {
+            background: transparent;
+            width: 10px;
+            margin: 6px 3px 6px 0;
+        }
+        QComboBox#documentTypeFilter QAbstractItemView QScrollBar::handle:vertical,
+        QComboBox#issuingCountryFilter QAbstractItemView QScrollBar::handle:vertical {
+            background: #C7D3E3;
+            border: 2px solid transparent;
+            border-radius: 4px;
+            min-height: 32px;
+        }
+        QComboBox#documentTypeFilter QAbstractItemView QScrollBar::handle:vertical:hover,
+        QComboBox#issuingCountryFilter QAbstractItemView QScrollBar::handle:vertical:hover {
+            background: #94A9C2;
+        }
+        QComboBox#documentTypeFilter QAbstractItemView QScrollBar::add-line:vertical,
+        QComboBox#documentTypeFilter QAbstractItemView QScrollBar::sub-line:vertical,
+        QComboBox#issuingCountryFilter QAbstractItemView QScrollBar::add-line:vertical,
+        QComboBox#issuingCountryFilter QAbstractItemView QScrollBar::sub-line:vertical {
+            height: 0px;
+        }
+        QComboBox#documentTypeFilter QAbstractItemView QScrollBar::add-page:vertical,
+        QComboBox#documentTypeFilter QAbstractItemView QScrollBar::sub-page:vertical,
+        QComboBox#issuingCountryFilter QAbstractItemView QScrollBar::add-page:vertical,
+        QComboBox#issuingCountryFilter QAbstractItemView QScrollBar::sub-page:vertical {
+            background: transparent;
         }
         QPushButton.filterBtn {
             background-color: #F4F7FE;
@@ -120,9 +226,9 @@ void CustomerPageWidget::setupStyle() {
             color: #2B3674;
         }
         QPushButton.filterBtn[active="true"] {
-            background-color: #005BFE;
+            background-color: #10B981;
             color: #FFFFFF;
-            border: 1px solid #005BFE;
+            border: 1px solid #10B981;
         }
         QPushButton#btnAddCustomer, QPushButton#btnEditCustomer, QPushButton#btnArchiveCustomer, QPushButton#btnDeleteCustomer {
             background-color: #005BFE;
@@ -197,10 +303,11 @@ void CustomerPageWidget::setupUI() {
     headerRow->addStretch();
     mainLayout->addLayout(headerRow);
 
-    auto* actionRow = new QHBoxLayout();
-    m_searchEdit = new QLineEdit(this);
+    auto* searchRow = new QHBoxLayout();
+    m_searchEdit = new ExpandableSearchEdit(this);
     m_searchEdit->setObjectName("searchEdit");
-    m_searchEdit->setPlaceholderText("Search by customer name or ID...");
+    m_searchEdit->setPlaceholderText("Search name, document number, or phone...");
+    m_searchEdit->setFixedWidth(325);
 
     m_filterActiveBtn = new QPushButton("Active", this);
     m_filterActiveBtn->setProperty("class", "filterBtn");
@@ -210,10 +317,33 @@ void CustomerPageWidget::setupUI() {
     m_filterArchivedBtn->setProperty("active", false);
     m_selectedStatusFilter = "Active";
 
-    actionRow->addWidget(m_searchEdit);
-    actionRow->addWidget(m_filterActiveBtn);
-    actionRow->addWidget(m_filterArchivedBtn);
-    actionRow->addStretch();
+    // Modified: keep status selection beside search while leaving the remaining controls on a compact second row.
+    searchRow->addWidget(m_searchEdit);
+    searchRow->addWidget(m_filterActiveBtn);
+    searchRow->addWidget(m_filterArchivedBtn);
+    searchRow->addStretch();
+    mainLayout->addLayout(searchRow);
+
+    auto* actionRow = new QHBoxLayout();
+
+    m_documentTypeFilter = new QComboBox(this);
+    m_documentTypeFilter->setObjectName("documentTypeFilter");
+    m_documentTypeFilter->addItem("All document types", "");
+    m_documentTypeFilter->addItem("National ID", "National ID");
+    m_documentTypeFilter->addItem("Passport", "Passport");
+    m_documentTypeFilter->addItem("Other document", "Other");
+
+    m_issuingCountryFilter = new QComboBox(this);
+    m_issuingCountryFilter->setObjectName("issuingCountryFilter");
+    m_issuingCountryFilter->addItem("All issuing countries", "");
+    for (const auto& rule : countryInputRules()) {
+        m_issuingCountryFilter->addItem(rule.name, rule.key);
+    }
+    m_issuingCountryFilter->addItem("Legacy record", "Legacy");
+
+    // Modified: align secondary filters and customer actions from the left in one predictable toolbar row.
+    actionRow->addWidget(m_documentTypeFilter);
+    actionRow->addWidget(m_issuingCountryFilter);
 
     m_addCustomerBtn = new QPushButton("Add Customer", this);
     m_addCustomerBtn->setObjectName("btnAddCustomer");
@@ -228,19 +358,23 @@ void CustomerPageWidget::setupUI() {
     actionRow->addWidget(m_editCustomerBtn);
     actionRow->addWidget(m_archiveCustomerBtn);
     actionRow->addWidget(m_deleteCustomerBtn);
+    actionRow->addStretch();
     mainLayout->addLayout(actionRow);
 
     m_tableWidget = new QTableWidget(this);
-    m_tableWidget->setColumnCount(6);
-    m_tableWidget->setHorizontalHeaderLabels({
-        "Customer ID", "Name", "Phone", "Reservations", "Completed", "Upcoming"
-    });
+    m_tableWidget->setColumnCount(7);
+    const QStringList sortableHeaders = {
+        "Document Number", "Document Type", "Name", "Phone", "Reservations", "Completed", "Upcoming"
+    };
+    m_tableWidget->setHorizontalHeaderLabels(sortableHeaders);
     m_tableWidget->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
-    m_tableWidget->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
+    m_tableWidget->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
     m_tableWidget->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
     m_tableWidget->horizontalHeader()->setSectionResizeMode(3, QHeaderView::ResizeToContents);
     m_tableWidget->horizontalHeader()->setSectionResizeMode(4, QHeaderView::ResizeToContents);
     m_tableWidget->horizontalHeader()->setSectionResizeMode(5, QHeaderView::ResizeToContents);
+    m_tableWidget->horizontalHeader()->setSectionResizeMode(6, QHeaderView::ResizeToContents);
+    m_tableWidget->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Stretch);
     m_tableWidget->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_tableWidget->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_tableWidget->setSelectionMode(QAbstractItemView::SingleSelection);
@@ -251,9 +385,30 @@ void CustomerPageWidget::setupUI() {
 
     mainLayout->addWidget(m_tableWidget);
 
+    // Modified: label every sortable header and show the active ascending or descending direction explicitly.
+    auto* horizontalHeader = m_tableWidget->horizontalHeader();
+    horizontalHeader->setSectionsClickable(true);
+    horizontalHeader->setSortIndicatorShown(true);
+    const auto updateSortHeaderLabels = [this, sortableHeaders](int sortedSection, Qt::SortOrder order) {
+        for (int column = 0; column < sortableHeaders.size(); ++column) {
+            const QString indicator = column == sortedSection
+                ? (order == Qt::AscendingOrder ? QStringLiteral(" ↑") : QStringLiteral(" ↓"))
+                : QStringLiteral(" ↕");
+            m_tableWidget->horizontalHeaderItem(column)->setText(sortableHeaders.at(column) + indicator);
+        }
+    };
+    connect(horizontalHeader, &QHeaderView::sortIndicatorChanged, this, updateSortHeaderLabels);
+    horizontalHeader->setSortIndicator(0, Qt::AscendingOrder);
+    updateSortHeaderLabels(0, Qt::AscendingOrder);
+    m_tableWidget->setSortingEnabled(true);
+
     connect(m_searchEdit, &QLineEdit::textChanged, this, &CustomerPageWidget::onSearchChanged);
     connect(m_filterActiveBtn, &QPushButton::clicked, this, &CustomerPageWidget::onStatusFilterClicked);
     connect(m_filterArchivedBtn, &QPushButton::clicked, this, &CustomerPageWidget::onStatusFilterClicked);
+    connect(m_documentTypeFilter, qOverload<int>(&QComboBox::currentIndexChanged), this,
+            [this](int) { refreshDataInternal(); });
+    connect(m_issuingCountryFilter, qOverload<int>(&QComboBox::currentIndexChanged), this,
+            [this](int) { refreshDataInternal(); });
     connect(m_addCustomerBtn, &QPushButton::clicked, this, &CustomerPageWidget::onAddCustomerClicked);
     connect(m_editCustomerBtn, &QPushButton::clicked, this, &CustomerPageWidget::onEditCustomerClicked);
     connect(m_archiveCustomerBtn, &QPushButton::clicked, this, &CustomerPageWidget::onArchiveCustomerClicked);
@@ -326,7 +481,7 @@ void CustomerPageWidget::onEditCustomerClicked() {
         return;
     }
 
-    QString customerId = m_tableWidget->item(m_tableWidget->currentRow(), 0)->text();
+    QString customerId = m_tableWidget->item(m_tableWidget->currentRow(), 0)->data(Qt::UserRole).toString();
     auto customer = m_manager->findCustomerById(customerId.toStdString());
     if (!customer) {
         QMessageBox::critical(this, "Edit Customer", "Selected customer could not be found.");
@@ -362,7 +517,7 @@ void CustomerPageWidget::onArchiveCustomerClicked() {
         return;
     }
 
-    QString customerId = m_tableWidget->item(m_tableWidget->currentRow(), 0)->text();
+    QString customerId = m_tableWidget->item(m_tableWidget->currentRow(), 0)->data(Qt::UserRole).toString();
     std::string errorMessage;
     bool success = false;
     QString action;
@@ -395,7 +550,7 @@ void CustomerPageWidget::onDeleteCustomerClicked() {
         return;
     }
 
-    QString customerId = m_tableWidget->item(m_tableWidget->currentRow(), 0)->text();
+    QString customerId = m_tableWidget->item(m_tableWidget->currentRow(), 0)->data(Qt::UserRole).toString();
     CustomConfirmDialog dialog(
         "Confirm delete customer",
         QString("Are you sure you want to permanently delete customer %1 from the system?").arg(customerId),
@@ -467,7 +622,7 @@ void CustomerPageWidget::highlightConflictingCustomer(const QString& customerId)
 
     for (int row = 0; row < m_tableWidget->rowCount(); ++row) {
         const auto* idItem = m_tableWidget->item(row, 0);
-        if (!idItem || idItem->text() != customerId) {
+        if (!idItem || idItem->data(Qt::UserRole).toString() != customerId) {
             continue;
         }
 
@@ -495,7 +650,10 @@ void CustomerPageWidget::refreshDataInternal() {
     }
 
     const QString searchText = m_searchEdit->text().trimmed();
+    const QString documentTypeFilter = m_documentTypeFilter->currentData().toString();
+    const QString issuingCountryFilter = m_issuingCountryFilter->currentData().toString();
 
+    m_tableWidget->setSortingEnabled(false);
     m_tableWidget->setRowCount(0);
     int row = 0;
 
@@ -510,12 +668,27 @@ void CustomerPageWidget::refreshDataInternal() {
             continue;
         }
 
-        QString id = QString::fromStdString(customer->getCustomerId());
+        const QString internalId = QString::fromStdString(customer->getCustomerId());
+        QString id = QString::fromStdString(customer->getDocumentNumber());
         QString name = QString::fromStdString(customer->getName());
+        const QString phone = QString::fromStdString(customer->getPhoneNumber());
+        const QString documentType = QString::fromStdString(customer->getDocumentType());
+        const QString issuingCountry = QString::fromStdString(customer->getIssuingCountry());
+
+        if (!documentTypeFilter.isEmpty() &&
+            documentType.compare(documentTypeFilter, Qt::CaseInsensitive) != 0) {
+            continue;
+        }
+        if (!issuingCountryFilter.isEmpty() &&
+            issuingCountry.compare(issuingCountryFilter, Qt::CaseInsensitive) != 0) {
+            continue;
+        }
 
         if (!searchText.isEmpty()) {
             if (!id.contains(searchText, Qt::CaseInsensitive) &&
-                !name.contains(searchText, Qt::CaseInsensitive)) {
+                !internalId.contains(searchText, Qt::CaseInsensitive) &&
+                !name.contains(searchText, Qt::CaseInsensitive) &&
+                !phone.contains(searchText, Qt::CaseInsensitive)) {
                 continue;
             }
         }
@@ -543,14 +716,19 @@ void CustomerPageWidget::refreshDataInternal() {
         }
 
         m_tableWidget->insertRow(row);
-        m_tableWidget->setItem(row, 0, new QTableWidgetItem(id));
-        m_tableWidget->setItem(row, 1, new QTableWidgetItem(name));
-        m_tableWidget->setItem(row, 2, new QTableWidgetItem(QString::fromStdString(customer->getPhoneNumber())));
-        m_tableWidget->setItem(row, 3, new QTableWidgetItem(QString::number(totalReservations)));
-        m_tableWidget->setItem(row, 4, new QTableWidgetItem(QString::number(completedCount)));
-        m_tableWidget->setItem(row, 5, new QTableWidgetItem(QString::number(upcomingCount)));
+        auto* documentItem = new QTableWidgetItem(id);
+        documentItem->setData(Qt::UserRole, internalId);
+        m_tableWidget->setItem(row, 0, documentItem);
+        // Modified: show the document type so identity filters remain understandable without adding a country column.
+        m_tableWidget->setItem(row, 1, new QTableWidgetItem(documentType));
+        m_tableWidget->setItem(row, 2, new QTableWidgetItem(name));
+        m_tableWidget->setItem(row, 3, new QTableWidgetItem(phone));
+        m_tableWidget->setItem(row, 4, new NumericTableItem(totalReservations));
+        m_tableWidget->setItem(row, 5, new NumericTableItem(completedCount));
+        m_tableWidget->setItem(row, 6, new NumericTableItem(upcomingCount));
         row++;
     }
 
+    m_tableWidget->setSortingEnabled(true);
     updateActionButtons();
 }

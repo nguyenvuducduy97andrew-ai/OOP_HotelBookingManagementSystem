@@ -8,6 +8,8 @@
 #include <QRegularExpression>
 #include <QString>
 #include <QStringList>
+#include "CustomerIdentity.h"
+#include "CountryInputRules.h"
 #include <QUuid>
 #include <algorithm>
 #include <cctype>
@@ -20,29 +22,9 @@ std::string collapseWhitespace(const std::string& value)
     return QString::fromStdString(value).simplified().toStdString();
 }
 
-bool hasMixedCaseLetters(const QString& value)
-{
-    bool hasUpper = false;
-    bool hasLower = false;
-
-    for (const QChar ch : value) {
-        if (ch.isUpper()) {
-            hasUpper = true;
-        } else if (ch.isLower()) {
-            hasLower = true;
-        }
-
-        if (hasUpper && hasLower) {
-            return true;
-        }
-    }
-
-    return false;
-}
-
 bool isSingleNameTokenValid(const QString& token)
 {
-    static const QRegularExpression tokenPattern(QStringLiteral(R"(^[\p{L}][\p{L}'’\-]*$)"));
+    static const QRegularExpression tokenPattern(QStringLiteral(R"(^[\p{L}][\p{L}'’\-.]*$)"));
     return tokenPattern.match(token).hasMatch();
 }
 }
@@ -70,8 +52,12 @@ HotelManager::HotelManager() = default;
 
 bool HotelManager::isValidCustomerIdFormat(const std::string& customerId)
 {
-    // Modified: Validate supported national ID formats before data reaches persistence.
+    // Modified: Validate the document type, issuing country, and number stored in the international customer identity key.
     const QString id = QString::fromStdString(customerId).trimmed().toUpper();
+    const QStringList identityParts = id.split('|');
+    if (identityParts.size() == 3) {
+        return isValidDocumentNumber(identityParts.at(0), identityParts.at(1), identityParts.at(2));
+    }
     static const QList<QRegularExpression> idPatterns = {
         QRegularExpression(QStringLiteral(R"(^\d{12}$)")),
         QRegularExpression(QStringLiteral(R"(^\d{9}$)")),
@@ -89,13 +75,14 @@ bool HotelManager::isValidCustomerIdFormat(const std::string& customerId)
 
 bool HotelManager::isValidCustomerNameFormat(const std::string& customerName)
 {
+    // Modified: Accept international legal names, including mononyms, uppercase document names, caseless scripts, and initials.
     const QString normalized = QString::fromStdString(collapseWhitespace(customerName));
-    if (normalized.isEmpty()) {
+    if (normalized.isEmpty() || normalized.size() > 120) {
         return false;
     }
 
     const QStringList tokens = normalized.split(' ', Qt::SkipEmptyParts);
-    if (tokens.size() < 2) {
+    if (tokens.isEmpty()) {
         return false;
     }
 
@@ -104,16 +91,14 @@ bool HotelManager::isValidCustomerNameFormat(const std::string& customerName)
             return false;
         }
     }
-
-    return hasMixedCaseLetters(normalized);
+    return true;
 }
 
 bool HotelManager::isValidPhoneNumberFormat(const std::string& phoneNumber)
 {
-    // Modified: Validate E.164-style numbers for selectable country dialing codes.
+    // Modified: Validate the E.164 envelope while dialogs enforce the documented supported range for their selected country profile.
     const QString phone = QString::fromStdString(collapseWhitespace(phoneNumber));
-    static const QRegularExpression phonePattern(
-        QStringLiteral(R"(^(?:\+84\d{9}|\+1\d{10}|\+60\d{9}|\+44\d{10}|\+81\d{10}|\+65\d{8}|\+82\d{10}|\+66\d{9}|\+61\d{9}|\+49\d{10})$)"));
+    static const QRegularExpression phonePattern(QStringLiteral(R"(^\+[1-9]\d{7,14}$)"));
     return phonePattern.match(phone).hasMatch();
 }
 
@@ -248,7 +233,7 @@ bool HotelManager::validateCustomerInput(
 
     if (!isValidCustomerNameFormat(name))
     {
-        errorMessage = "Customer name must have at least 2 words and include both uppercase and lowercase letters.";
+        errorMessage = "Customer name must be a valid legal name using letters, spaces, apostrophes, hyphens, or initials.";
         return false;
     }
 
@@ -608,6 +593,16 @@ bool HotelManager::registerCustomerCore(
 
     auto customer = std::make_shared<Customer>();
     customer->setCustomerId(id);
+    const QStringList identityParts = QString::fromStdString(id).split('|');
+    if (identityParts.size() == 3) {
+        customer->setDocumentType(identityParts.at(0).toStdString());
+        customer->setIssuingCountry(identityParts.at(1).toStdString());
+        customer->setDocumentNumber(identityParts.at(2).toStdString());
+    } else {
+        customer->setDocumentType("National ID");
+        customer->setIssuingCountry("Legacy");
+        customer->setDocumentNumber(id);
+    }
     customer->setName(name);
     customer->setPhoneNumber(phone);
 
@@ -627,7 +622,7 @@ bool HotelManager::updateCustomerCore(
         return false;
     }
     if (!isValidCustomerNameFormat(name)) {
-        errorMessage = "Customer name must have at least 2 words and include both uppercase and lowercase letters.";
+        errorMessage = "Customer name must be a valid legal name using letters, spaces, apostrophes, hyphens, or initials.";
         return false;
     }
     if (!isValidPhoneNumberFormat(phone)) {
@@ -778,10 +773,14 @@ bool HotelManager::createInvoice( // In practice, checkout first, then create in
     const std::string &invoiceId,
     const std::string &bookingId,
     const std::string &invoiceIssuedDate,
+    const std::string& paymentMethod,
+    double paymentAmount,
+    const std::string& paymentReceivedDate,
     std::string &errorMessage)
 {
     // Modified: Keep invoice validation and creation isolated from the in-memory hotel store.
-    return BookingManager(*this).createInvoice(invoiceId, bookingId, invoiceIssuedDate, errorMessage);
+    return BookingManager(*this).createInvoice(invoiceId, bookingId, invoiceIssuedDate,
+                                                paymentMethod, paymentAmount, paymentReceivedDate, errorMessage);
 }
 
 bool HotelManager::setRoomAvailabilityCore(
@@ -928,8 +927,8 @@ bool HotelManager::scheduleRoomMaintenanceCore(const std::string& roomNumber,
 
     const QDate start = QDate::fromString(QString::fromStdString(startDate), Qt::ISODate);
     const QDate end = QDate::fromString(QString::fromStdString(endDate), Qt::ISODate);
-    if (!start.isValid() || !end.isValid() || end <= start) {
-        errorMessage = "Maintenance end date must be after the start date.";
+    if (!start.isValid() || !end.isValid() || start < QDate::currentDate() || end <= start) {
+        errorMessage = "Maintenance must start today or later and end after its start date.";
         return false;
     }
 
@@ -1134,9 +1133,9 @@ bool HotelManager::restoreBookingFromDatabase(
     const QDate checkIn = QDate::fromString(QString::fromStdString(checkInDate), Qt::ISODate);
     const QDate checkOut = QDate::fromString(QString::fromStdString(checkOutDate), Qt::ISODate);
     // Modified: Keep legacy planned dates loadable while validating actual completed-stay duration separately below.
-    if (checkOut < checkIn)
+    if (checkOut <= checkIn)
     {
-        errorMessage = "Check-out cannot be before check-in.";
+        errorMessage = "Check-out must be after check-in.";
         return false;
     }
 
@@ -1188,6 +1187,9 @@ bool HotelManager::restoreBookingFromDatabase(
 
 bool HotelManager::restoreCustomerFromDatabase(
     const std::string &customerId,
+    const std::string &documentType,
+    const std::string &issuingCountry,
+    const std::string &documentNumber,
     const std::string &name,
     const std::string &phone,
     bool archived,
@@ -1205,7 +1207,7 @@ bool HotelManager::restoreCustomerFromDatabase(
         return false;
     }
 
-    if (!isValidCustomerIdFormat(customerId) || !isValidCustomerNameFormat(name) || !isValidPhoneNumberFormat(phone))
+    if ((!isValidCustomerIdFormat(customerId) && issuingCountry != "Legacy") || !isValidCustomerNameFormat(name) || !isValidPhoneNumberFormat(phone))
     {
         errorMessage = "Persisted customer record has an invalid ID, name, or phone number.";
         return false;
@@ -1220,6 +1222,9 @@ bool HotelManager::restoreCustomerFromDatabase(
 
     auto customer = std::make_shared<Customer>();
     customer->setCustomerId(customerId);
+    customer->setDocumentType(documentType.empty() ? "National ID" : documentType);
+    customer->setIssuingCountry(issuingCountry.empty() ? "Legacy" : issuingCountry);
+    customer->setDocumentNumber(documentNumber.empty() ? customerId : documentNumber);
     customer->setName(name);
     customer->setPhoneNumber(phone);
     customer->setArchived(archived);
@@ -1234,6 +1239,9 @@ bool HotelManager::restoreInvoiceFromDatabase(
     double taxRate,
     int nights,
     const std::string &invoiceIssuedDate,
+    const std::string& paymentMethod,
+    double paymentAmount,
+    const std::string& paymentReceivedDate,
     double unitPrice,
     const std::string &customerNameSnapshot,
     const std::string &customerIdSnapshot,
@@ -1287,7 +1295,8 @@ bool HotelManager::restoreInvoiceFromDatabase(
         return false;
     }
 
-    if (unitPrice <= 0 || customerNameSnapshot.empty() || customerIdSnapshot.empty() || customerPhoneSnapshot.empty() ||
+    if (paymentMethod.empty() || paymentAmount <= 0 || !isValidDateString(paymentReceivedDate, errorMessage)
+        || unitPrice <= 0 || customerNameSnapshot.empty() || customerIdSnapshot.empty() || customerPhoneSnapshot.empty() ||
         roomNumberSnapshot.empty() || roomTypeSnapshot.empty() ||
         !isValidDateString(checkInDateSnapshot, errorMessage) ||
         !isValidDateString(checkOutDateSnapshot, errorMessage))
@@ -1323,6 +1332,9 @@ bool HotelManager::restoreInvoiceFromDatabase(
     invoice->setTaxRate(taxRate);
     invoice->setNights(nights);
     invoice->setInvoiceIssuedDate(invoiceIssuedDate);
+    invoice->setPaymentMethod(paymentMethod);
+    invoice->setPaymentAmount(paymentAmount);
+    invoice->setPaymentReceivedDate(paymentReceivedDate);
     invoice->setUnitPrice(unitPrice);
     invoice->setCustomerNameSnapshot(customerNameSnapshot);
     invoice->setCustomerIdSnapshot(customerIdSnapshot);

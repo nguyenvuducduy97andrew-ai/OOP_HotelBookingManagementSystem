@@ -4,6 +4,9 @@
 class Customer {
 private:
     std::string customerId;
+    std::string documentType;
+    std::string issuingCountry;
+    std::string documentNumber;
     std::string name;
     std::string phoneNumber;
     bool archived = false;
@@ -16,6 +19,13 @@ public:
 
     std::string getCustomerId() const;
     void setCustomerId(const std::string& customerId);
+
+    std::string getDocumentType() const;
+    void setDocumentType(const std::string& documentType);
+    std::string getIssuingCountry() const;
+    void setIssuingCountry(const std::string& issuingCountry);
+    std::string getDocumentNumber() const;
+    void setDocumentNumber(const std::string& documentNumber);
 
     std::string getName() const;
     void setName(const std::string& name);

@@ -187,6 +187,9 @@ public:
         const std::string& invoiceId,
         const std::string& bookingId,
         const std::string& invoiceIssuedDate,
+        const std::string& paymentMethod,
+        double paymentAmount,
+        const std::string& paymentReceivedDate,
         std::string& errorMessage
         );
 
@@ -241,6 +244,9 @@ public:
     );
     bool restoreCustomerFromDatabase(
         const std::string& customerId,
+        const std::string& documentType,
+        const std::string& issuingCountry,
+        const std::string& documentNumber,
         const std::string& name,
         const std::string& phone,
         bool archived,
@@ -252,6 +258,9 @@ public:
         double taxRate,
         int nights,
         const std::string& invoiceIssuedDate,
+        const std::string& paymentMethod,
+        double paymentAmount,
+        const std::string& paymentReceivedDate,
         double unitPrice,
         const std::string& customerNameSnapshot,
         const std::string& customerIdSnapshot,
