@@ -11,9 +11,11 @@ Phiên bản: theo working tree hiện tại
 maintenance, dashboard và report PDF trong database SQLite cục bộ.
 
 Ứng dụng không phải website cho khách tự đặt phòng. Nó chưa gửi email/SMS thật,
-chưa xử lý thanh toán thẻ/tiền mặt, chưa thay thế phần mềm kế toán và chưa có
-phân quyền nhân viên production. Dữ liệu chứa CCCD/ID và số điện thoại, vì vậy
-không chia sẻ ảnh chụp màn hình, PDF hoặc file database tùy tiện.
+chưa tích hợp cổng thanh toán thẻ/tiền mặt, chưa thay thế phần mềm kế toán và chưa
+có phân quyền nhân viên production. Khi checkout, app chỉ ghi một payment do staff
+xác nhận gồm method, amount và received date; đây chưa phải hệ thống folio/payment
+đầy đủ. Dữ liệu chứa CCCD/ID và số điện thoại, vì vậy không chia sẻ ảnh chụp màn
+hình, PDF hoặc file database tùy tiện.
 
 ===============================================================================
 2. ĐĂNG NHẬP, MỞ VÀ ĐÓNG ỨNG DỤNG
@@ -24,7 +26,8 @@ không chia sẻ ảnh chụp màn hình, PDF hoặc file database tùy tiện.
 3. Tài khoản bootstrap hiện tại:
    Username: admin
    Password: adminadmin
-4. Chọn Sign in hoặc nhấn Enter ở ô Password.
+4. Chọn Sign in hoặc nhấn Enter ở ô Password. Dùng nút hình con mắt ở ô Password
+   khi cần đối chiếu nội dung đang nhập.
 5. Nếu báo lỗi, kiểm tra cả hai ô đã nhập và phân biệt chữ hoa/thường password.
 
 Login hiện chỉ dành cho đồ án. Không chia sẻ password. Khi nhóm có Staff account
@@ -33,6 +36,11 @@ thật, mỗi người phải dùng account riêng để audit được thao tá
 Để tắt app, dùng nút Close cửa sổ bình thường. Ứng dụng cố lưu data khi đóng.
 Không force-close, tắt máy hoặc rút ổ đĩa khi app đang lưu. Không xóa file database
 hotel_data.db trong thư mục dữ liệu ứng dụng nếu chưa backup và chưa có hướng dẫn.
+
+Lưu ý cho người cài đặt/developer: nếu ở thư mục dự án còn `data/hotel_data.db`,
+lần chạy đầu có thể copy file cũ này vào thư mục dữ liệu ứng dụng để migrate dữ
+liệu. Đây không phải demo data. Muốn một database hoàn toàn mới phải xử lý file
+cũ trước lần mở đầu, theo quy trình backup của nhóm.
 
 ===============================================================================
 3. CÁC TRẠNG THÁI CẦN HIỂU TRƯỚC KHI THAO TÁC
@@ -71,15 +79,17 @@ Sai ngày có thể làm Check in, Check out, No-show và report sai.
 5. QUẢN LÝ KHÁCH HÀNG
 ===============================================================================
 
-Customer page hiển thị Customer ID, Name, Phone và các số đếm reservation.
-Dùng Search/filter trước khi Add để hạn chế duplicate.
+Customer page hiển thị Document Number, Document Type, Name, Phone và các số đếm
+reservation. Dùng Search, Active/Archived, document-type và issuing-country filter
+trước khi Add để hạn chế duplicate. Có thể bấm header để sort; mũi tên cho biết
+hướng sort hiện tại.
 
 5.1 Thêm khách mới
 
 1. Chọn Add Customer.
-2. Chọn quốc gia của Customer ID. Hint kế bên cho ví dụ ngắn hoặc độ dài hợp lệ,
-   ví dụ “12 digits” hoặc “e.g. S1234567A”.
-3. Nhập ID đúng theo giấy tờ của quốc gia đã chọn.
+2. Chọn Document Type và quốc gia cấp giấy tờ. Hint kế bên cho ví dụ ngắn hoặc độ
+   dài hợp lệ, ví dụ “12 digits” hoặc “e.g. S1234567A”.
+3. Nhập ID đúng theo loại giấy tờ và quốc gia đã chọn.
 4. Nhập họ/tên theo form; dùng tên nhất quán với giấy tờ.
 5. Chọn quốc gia phone. Chỉ nhập số nội địa; không nhập lại calling code nếu form
    đã hiển thị calling code.
@@ -228,10 +238,11 @@ Active booking hoặc trước arrival date.
    tax và actual number of nights.
 5. Kiểm tra Dashboard Booking History theo selected period.
 
-CẢNH BÁO TÀI CHÍNH: invoice hiện tại không ghi nhận payment, balance, deposit,
-method, discount, surcharge hay refund. Invoice issue date không chứng minh khách
-đã trả đủ. Dùng quy trình thanh toán/kế toán được khách sạn phê duyệt cho đến khi
-có Folio/Payment feature.
+CẢNH BÁO TÀI CHÍNH: checkout bắt buộc nhập một payment có method, amount dương và
+received date. Nếu amount chỉ là một phần, invoice hiển thị outstanding balance.
+Phạm vi hiện tại chưa có deposit, nhiều lần thanh toán, cổng thanh toán, discount,
+surcharge hay refund. Invoice issue date không chứng minh khách đã trả đủ; kiểm tra
+recorded amount/balance và dùng quy trình kế toán được khách sạn phê duyệt.
 
 ===============================================================================
 9. DASHBOARD, BOOKING HISTORY VÀ PDF
@@ -265,7 +276,7 @@ Không:
 - Confirm maintenance khi booking conflict còn live.
 - Check in khách chưa đến, hoặc Check out future date.
 - Cancel booking vào/sau arrival nếu bản chất là no-show.
-- Giả định invoice nghĩa là đã thanh toán.
+- Giả định invoice nghĩa là khách đã thanh toán đủ.
 - Dùng screenshot/report cũ làm current operational state; refresh page.
 - Force-close app khi save hoặc copy DB live trong lúc app đang write.
 - Share bootstrap password/PII khách ra ngoài nhóm.
@@ -348,14 +359,17 @@ D. Khách không đến
 2. Chọn No-show, nhập lý do có ý nghĩa.
 3. Không chọn Cancel, vì Cancel chỉ hợp lệ trước ngày đến.
 4. Kiểm tra booking không còn block future availability.
-5. Nếu có charge/penalty, dùng quy trình kế toán ngoài app vì app chưa có payment.
+5. Nếu có charge/penalty, dùng quy trình kế toán ngoài app vì app hiện chỉ lưu
+   một payment tại checkout, không có nghiệp vụ charge/penalty riêng.
 
 E. Khách rời đi
 1. Xác nhận khách đã được Check in trước đó và booking đang Active.
 2. Xác nhận actual departure, không dùng future date.
 3. Chọn Check out và confirm.
 4. Xem invoice được issue và Booking History theo selected range.
-5. Ghi payment ở quy trình kế toán riêng; invoice trong app chưa là payment receipt.
+5. Trong hộp checkout, chọn method, nhập đúng amount đã thực nhận và received date.
+   Nếu chỉ nhận một phần, xem số dư còn lại trên invoice; các lần thu sau xử lý
+   theo quy trình kế toán ngoài app.
 
 F. Phát hiện room cần maintenance nhưng có booking trùng
 1. Lập maintenance schedule đúng khoảng ngày và note.
@@ -422,7 +436,7 @@ Phòng cần sửa, có đơn Upcoming/Active trùng     Pending case, xử lý 
 Khách trùng tên nhưng ID/phone khác             Có thể là người khác; kiểm tra kỹ
 Phone trùng record khác                          Không tạo mới; kiểm tra row highlight
 ID trùng record khác                             Không tạo mới; kiểm tra giấy tờ
-Invoice đã issue                                 Không coi là payment receipt
+Invoice đã issue                                 Xem payment amount/balance, không mặc định đã đủ
 
 ===============================================================================
 16. PHỤ LỤC D — GIỚI HẠN HIỆN TẠI VÀ KHI NÀO PHẢI HỎI QUẢN LÝ/DEVELOPER

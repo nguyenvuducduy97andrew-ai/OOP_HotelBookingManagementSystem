@@ -7,7 +7,7 @@ A C++17 / Qt6 desktop application for hotel rooms, customers, reservations, chec
 ## Current capabilities
 
 - Polymorphic room portfolio: `StandardRoom`, `DeluxeRoom`, and `SuiteRoom`.
-- Customer management with archive/delete workflows, country-aware ID and phone validation, and conflict highlighting in the customer list.
+- Customer management with archive/delete workflows, searchable/filterable/sortable lists, country-aware ID and phone validation, and conflict highlighting in the customer list.
 - Reservation creation only from Room Status, reservation editing, cancellation, checkout, and invoice generation.
 - Explicit booking lifecycle: staff must record **Check-in** before a room becomes occupied, then record checkout to complete the stay.
 - Reservation occupancy and room capacity validation: every booking stores adult/child counts and is rejected if it exceeds the selected room type's capacity.
@@ -18,7 +18,7 @@ A C++17 / Qt6 desktop application for hotel rooms, customers, reservations, chec
 - Dashboard Booking History for completed stays in the selected period, with seven entries per page.
 - A4 landscape PDF export that separates current occupancy from selected-period-to-date room-night occupancy, alongside invoice-based KPIs, room inventory, actual-arrival top rooms, open bookings, cancellations/no-shows, and completed stays.
 - SQLite schema migration, immutable invoice snapshots, staged loading, duplicate-customer reconciliation, and transactional persistence.
-- A modal sign-in gate that starts a staff session before the operational window is opened; the current classroom bootstrap account is `admin` and should be replaced by persisted staff accounts before production use.
+- A modal sign-in gate that starts a staff session before the operational window is opened, including a password-visibility control and a single validation message per failed sign-in; the current classroom bootstrap account is `admin` and should be replaced by persisted staff accounts before production use.
 
 ## Sign-in and staff context
 
@@ -137,7 +137,7 @@ cmake -S . -B build
 cmake --build build --target HotelBookingManagement
 ```
 
-Run the executable from any directory. On a first launch, the per-user application-data database is created with an empty schema; rooms, customers, bookings, and invoices are created only through the application.
+Run the executable from any directory. On a first launch with no legacy project database, the per-user application-data database is created with an empty schema; rooms, customers, bookings, and invoices are created only through the application. If the former developer file `data/hotel_data.db` exists, it is copied once into the managed location to preserve legacy work. Rename or move that legacy file before the first launch when an intentionally clean database is required.
 
 ### Windows Qt kit note
 

@@ -40,9 +40,9 @@ models        ── Room hierarchy, RoomMaintenance, MaintenanceGuestNotice,
 ├── README.md
 ├── ARCHITECTURE.md
 ├── data/
-│   └── hotel_data.db                 # Runtime SQLite database; ignored by Git
+│   └── hotel_data.db                 # Legacy developer database; copied once only when a managed runtime DB is absent
 └── src/
-    ├── main.cpp                      # Startup, sign-in gate, database-path resolution, shutdown safeguard
+    ├── main.cpp                      # Startup, sign-in gate, per-user database-path resolution/migration, shutdown safeguard
     ├── models/                       # Domain objects, StaffSession, and Room hierarchy
     ├── controllers/
     │   ├── hotel/                    # HotelManager in-memory store and facade
@@ -117,7 +117,7 @@ main.cpp
   ├── DataManager::loadAll(hotelManager, path)
   │     ├── open SQLite and create/migrate tables
   │     ├── create query-supporting indexes
-  │     ├── reconcile exact legacy customer duplicates safely
+  │     ├── reconcile exact and ambiguous legacy customer-phone duplicates safely
   │     ├── restore Customer, Room, Booking, RoomMaintenance, and Invoice
   │     │   into a temporary HotelManager
   │     └── replace the live HotelManager only after all rows are valid
@@ -126,6 +126,16 @@ main.cpp
 ```
 
 `loadAll()` never skips an invalid row. A failed load leaves the active in-memory manager unchanged, preventing a later full save from silently deleting data that was not loaded.
+
+### Customer list interaction
+
+`CustomerPageWidget` keeps list presentation separate from customer rules. It can
+search by name, document number/internal identity, or phone; filter active versus
+archived records, document type, and issuing country; and sort supported table
+columns from their headers. The compact table exposes document number and document
+type, while issuing country remains a filter to preserve horizontal space. These
+controls only select and order rows; `CustomerService` remains the authority for
+identity and normalized-phone collision decisions.
 
 ### Create a reservation from Room Status
 

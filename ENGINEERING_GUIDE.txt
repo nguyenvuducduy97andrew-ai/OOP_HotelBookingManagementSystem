@@ -72,7 +72,8 @@ Source folders:
       Icons and Qt resource bundle.
 
 CMake uses file(GLOB_RECURSE ... CONFIGURE_DEPENDS). New source under src is
-included after CMake reconfiguration. This is convenient for a class project, but
+included after CMake reconfiguration, except `bookingdialog.*`, which is explicitly
+excluded as superseded legacy source. This is convenient for a class project, but
 an explicit source list is usually preferable in production because the build
 input remains visible during review.
 
@@ -88,6 +89,8 @@ Exact execution path in main.cpp:
 3. resolveDatabasePath() uses Qt AppLocalDataLocation, so the database location is
    independent of the executable's working directory. On a developer machine it
    copies the former <project>/data/hotel_data.db once when that legacy file exists.
+   Therefore a clean first-run database requires that no legacy file be present;
+   this is migration behavior, not demo-data seeding.
 4. DataManager::getInstance().loadAll(hotelManager, databasePath) opens SQLite,
    initializes/migrates schema, reconciles legacy duplicate data, and restores
    all valid data into HotelManager. On failure main shows a critical error and
@@ -458,7 +461,9 @@ completeBooking:
 - Requires ACTIVE state.
 - Requires actual checkout > actual check-in and <= current date.
 - Sets checkedOut, actualCheckOutDate and updatedAt.
-- Does not record payment.
+- Requires one positive, staff-confirmed payment method, amount and received date.
+- Creates the invoice with that payment fact; a partial amount is retained as an
+  outstanding balance rather than being treated as paid in full.
 
 cancelBooking:
 - Requires UPCOMING and current date before planned arrival.
@@ -655,7 +660,9 @@ Occupied from that fact.
 Checkout:
 Staff can complete only ACTIVE booking. Actual departure must follow actual
 arrival and not be future. Completion is followed by invoice creation using
-actual duration and quote snapshot. Invoice issuance is not payment collection.
+actual duration and quote snapshot. Checkout also requires one positive recorded
+payment method, amount and received date. An invoice issue date is not evidence
+that its balance is paid in full: inspect payment amount and outstanding balance.
 
 Cancellation/no-show:
 Cancellation is only before planned arrival. No-show is only on/after planned
@@ -715,7 +722,10 @@ ReservationDialog
 - Getters transfer input; service remains final authority.
 
 CustomerPageWidget and CustomerDialog
-- Page supplies search/filter, add/edit/archive/delete and conflict highlight.
+- Page supplies expanding search, active/archive and identity filters, sortable
+  headers, add/edit/archive/delete and conflict highlight.
+- The table deliberately displays document number and document type; issuing
+  country remains filterable without consuming another narrow table column.
 - HoverRowDelegate only paints rows.
 - Dialog setup/populate/validate provides friendly input handling.
 - CustomerService remains authoritative for collision rules.
@@ -727,7 +737,9 @@ RoomPageWidget and RoomDialog
   do not directly persist anything.
 
 Legacy and helper views
-- bookingdialog.* is an older dialog path. ReservationDialog is current path.
+- bookingdialog.* remains only as legacy source and is explicitly excluded from
+  the CMake target. ReservationDialog is the only active booking-dialog path.
+- Do not re-enable bookingdialog.* or create a second reservation workflow.
 - CustomConfirmDialog, CustomSuccessDialog and InvoiceDialog are display helpers.
 - Do not hide business mutation or database writes inside UI helpers.
 
@@ -735,21 +747,24 @@ Legacy and helper views
 10. RISK REGISTER
 ===============================================================================
 
-HIGH: Payment/folio is absent.
-Invoice means an amount was issued, not collected. There is no method, deposit,
-partial payment, balance, refund, discount or surcharge. Correct future model:
-Folio per booking, immutable Payment events, derived balance, explicit checkout
-policy for paid-in-full versus open balance.
+MEDIUM: Payment/folio is intentionally limited.
+Checkout now requires one method, positive received amount and received date; the
+invoice separately exposes any remaining balance. It is still not a true folio:
+there are no deposits, multiple payment events, refunds, discounts, surcharges or
+provider settlement. A future model should use a Folio per booking, immutable
+one-to-many Payment events, derived balance and explicit paid-in-full policy.
 
 HIGH: Authentication and audit are incomplete.
 Bootstrap login is not authorization. Add Staff records, per-user strong password
 hashes, role checks at service boundary and immutable AuditLog (actor, action,
 entity, time, before/after summary, correlation ID).
 
-HIGH: Snapshot persistence is not multi-user safe.
-Two terminals or copied DB files can diverge and local counters can collide.
-Scale through shared server DB/API, targeted transactional repository commands,
-row versions and overlap protection inside the transaction.
+MEDIUM: Multi-terminal collaboration is limited.
+The snapshot `DataVersion` and SQLite busy timeout prevent a stale application
+instance from silently overwriting a newer snapshot, but they reject rather than
+merge concurrent work. Two terminals or copied DB files can still require manual
+resolution. Scale through a shared server DB/API, targeted transactional repository
+commands, row versions and overlap protection inside the transaction.
 
 HIGH: Simulated notice is not delivery.
 The log intentionally does not claim email delivery. A real provider integration
@@ -769,9 +784,9 @@ MEDIUM: Privacy/security controls are limited.
 SQLite contains ID/phone data. Add access control, secure backup, retention,
 anonymization, export minimization and encryption-at-rest when required.
 
-MEDIUM: Legacy UI can drift.
-bookingdialog.* and ReservationDialog must not become two independent workflows.
-Remove/archive the legacy path once references are confirmed.
+LOW: Legacy booking-dialog source remains in the repository.
+It is excluded from the target, so it cannot currently drift at runtime. Remove or
+archive it once the team confirms no external project reference still needs it.
 
 ===============================================================================
 11. CHANGE IMPACT AND DEVELOPMENT PLAYBOOK

@@ -11,9 +11,11 @@ rooms, customers, reservations, real check-in/check-out facts, invoices,
 maintenance schedules, dashboard data and PDF reports in a local SQLite database.
 
 It is not a public guest booking website. It does not send real email/SMS, process
-cash/card payment, replace an accounting system, or yet provide production staff
-permissions. Customer ID and phone data are personal information; do not casually
-share screenshots, PDFs or database files.
+payments through a bank/card provider, replace an accounting system, or yet provide
+production staff permissions. Checkout records one staff-confirmed payment method,
+amount and received date, but it is not a full folio or payment-processing system.
+Customer ID and phone data are personal information; do not casually share
+screenshots, PDFs or database files.
 
 ===============================================================================
 2. SIGN IN, OPENING, AND CLOSING
@@ -24,7 +26,8 @@ share screenshots, PDFs or database files.
 3. Current bootstrap account:
    Username: admin
    Password: adminadmin
-4. Select Sign in, or press Enter in the Password field.
+4. Select Sign in, or press Enter in the Password field. Use the eye button in the
+   Password field only when you need to verify what was entered.
 5. If sign-in fails, confirm both fields are completed and password casing is
    correct.
 
@@ -35,6 +38,12 @@ Close the application normally with the window Close button. The application tri
 to save data on exit. Do not force-close the program, power off the computer, or
 remove storage while it is saving. Do not delete hotel_data.db from the application
 data folder to solve an ordinary mistake without a backup and authorization.
+
+Installer/developer note: if `data/hotel_data.db` remains in the project folder,
+the first run can copy that legacy file into the application-data folder to migrate
+existing work. This is not demo-data seeding. A deliberately clean first database
+requires the legacy file to be handled before that first launch, following the
+team's backup procedure.
 
 ===============================================================================
 3. STATES YOU MUST UNDERSTAND
@@ -75,14 +84,15 @@ incorrect.
 5. CUSTOMER MANAGEMENT
 ===============================================================================
 
-The Customer page shows Customer ID, name, phone and reservation counts. Search
-before adding a record to reduce duplicates.
+The Customer page shows Document Number, Document Type, name, phone and reservation
+counts. Use Search, Active/Archived, document-type and issuing-country filters before
+adding a record. Click a table header to sort; its arrow shows the active direction.
 
 Adding a customer:
 1. Select Add Customer.
-2. Select the Customer ID country. The nearby hint gives an accepted sample or
-   length, such as “12 digits” or “e.g. S1234567A”.
-3. Enter the identity document exactly for the selected country.
+2. Select Document Type and issuing country. The nearby hint gives an accepted
+   sample or length, such as “12 digits” or “e.g. S1234567A”.
+3. Enter the identity document exactly for the selected type and country.
 4. Enter the guest's name consistently with their document.
 5. Select phone country. Enter the local number only; do not repeat a calling code
    already shown by the selector.
@@ -209,10 +219,11 @@ Check out and invoice:
    locked rate/tax and actual nights.
 5. Verify Booking History for the selected reporting period.
 
-Financial warning: the invoice does not record payment, balance, deposit, payment
-method, discount, surcharge or refund. Invoice issue date is not evidence that
-the guest paid. Use approved accounting/payment procedure until Folio/Payment
-features exist.
+Financial warning: checkout requires one positive payment method, amount and received
+date. A partial amount is recorded and the invoice shows its outstanding balance.
+The current scope has no deposits, multiple payments, payment-provider integration,
+discounts, surcharges or refunds. Invoice issue date is not evidence of payment in
+full; inspect the recorded amount and balance, then use approved accounting procedure.
 
 ===============================================================================
 9. DASHBOARD, HISTORY, AND PDF
@@ -246,7 +257,7 @@ Do not:
 - confirm maintenance while conflicting bookings remain;
 - check in a guest before arrival or check out with a future date;
 - cancel on/after arrival when the correct state is no-show;
-- assume an invoice means payment was received;
+- assume an invoice means the balance was paid in full;
 - rely on an old screenshot/report instead of refreshing the page;
 - force-close the app while saving or copy live DB during a write;
 - share bootstrap credential or guest personal information.
@@ -308,14 +319,15 @@ Guest does not arrive:
 1. Confirm reservation is Upcoming and today is planned arrival or later.
 2. Mark No-show with a useful reason.
 3. Do not Cancel on/after arrival.
-4. Apply any charge/penalty through external accounting because this app has no
-   payment model.
+4. Apply any penalty or follow-up payment through approved accounting because the
+   current invoice supports only its one checkout payment entry.
 
 Guest departs:
 1. Confirm Active state.
 2. Record actual checkout.
 3. Confirm invoice/history.
-4. Record payment through approved external process.
+4. Enter only the amount actually received in the checkout payment dialog; process
+   any later payment through approved accounting.
 
 Maintenance overlaps booking:
 1. Schedule exact dates with a useful note.
@@ -326,7 +338,7 @@ Maintenance overlaps booking:
 
 Ask a manager/developer before early check-in, late checkout, same-day day-use,
 moving an Active guest, group bookings, deleting completed booking/invoice,
-payments/refunds/discounts, claiming real message delivery, changing existing
+additional payments/refunds/discounts, claiming real message delivery, changing existing
 Customer ID, deleting/importing DB, or operating multiple copied databases.
 
 Handover:
