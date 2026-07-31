@@ -44,7 +44,7 @@ Root files:
   ENGINEERING_GUIDE.txt       This detailed guide.
   USER_GUIDE.txt              Vietnamese staff manual.
   USER_GUIDE_EN.txt           English staff manual.
-  <AppLocalData>/hotel_data.db Per-user runtime SQLite database; an old project data file migrates once.
+  data/hotel_data.db         The single project-local runtime SQLite database; SQLite creates it empty when absent.
 
 Source folders:
   src/main.cpp
@@ -86,11 +86,11 @@ Exact execution path in main.cpp:
 1. QApplication app(argc, argv) is constructed.
 2. HotelManager hotelManager is created on the stack. It outlives MainWindow and
    every child widget, so it is the single live in-memory hotel aggregate.
-3. resolveDatabasePath() uses Qt AppLocalDataLocation, so the database location is
-   independent of the executable's working directory. On a developer machine it
-   copies the former <project>/data/hotel_data.db once when that legacy file exists.
-   Therefore a clean first-run database requires that no legacy file be present;
-   this is migration behavior, not demo-data seeding.
+3. resolveProjectDatabasePath() searches upward from the working directory for the
+   project root (`CMakeLists.txt` and `src`), creates `<project>/data` when needed,
+   and returns only `<project>/data/hotel_data.db`. SQLite creates a new empty
+   database at that exact path when it does not exist. No AppData database or
+   automatic legacy-file copy is used.
 4. DataManager::getInstance().loadAll(hotelManager, databasePath) opens SQLite,
    initializes/migrates schema, reconciles legacy duplicate data, and restores
    all valid data into HotelManager. On failure main shows a critical error and
@@ -459,7 +459,8 @@ checkInBooking:
 
 completeBooking:
 - Requires ACTIVE state.
-- Requires actual checkout > actual check-in and <= current date.
+- Requires actual checkout >= actual check-in and <= current date.
+- Same-day check-in/check-out is a valid one-billable-night stay.
 - Sets checkedOut, actualCheckOutDate and updatedAt.
 - Requires one positive, staff-confirmed payment method, amount and received date.
 - Creates the invoice with that payment fact; a partial amount is retained as an
@@ -525,6 +526,20 @@ updateCustomer excludes the record currently being edited before collision check
 Do not duplicate these rules only in CustomerDialog because future import/API paths
 would bypass UI validation.
 
+Reservation customer picker:
+- ReservationDialog lists active customers as `document number — legal name — phone`
+  and its editable completer matches document number, name, or phone text.
+- Selecting an entry saves its stored `customerId` in `m_selectedCustomerId`, fills
+  the identity/contact controls, locks those copied fields, and returns the stored
+  key/name/phone through the dialog getters. This works for legacy customer IDs as
+  well as composite international identity keys.
+- Selecting `New customer — enter details manually` clears the selected key and
+  re-enables manual customer input. Only this explicit branch composes
+  `customerIdentityKey(...)` and can invoke customer registration.
+- `resolveCustomerForBooking` remains the final authority: it still rejects an
+  archived customer or an invalid manual customer. Do not weaken unique-phone
+  validation to solve a picker or legacy-data issue.
+
 6.6 RoomManager and RoomService
 
 RoomManager delegates registerRoom, setAvailability, scheduleMaintenance,
@@ -538,7 +553,7 @@ or in a dedicated domain service, not as direct widget mutations.
 
 Report DTOs:
 - ReportRoomEntry: roomNumber, type, bookingCount.
-- ReportBookingEntry: booking/customer/room/status/check-in/check-out display data.
+- ReportBookingEntry: booking/customer/room/status/check-in/check-out display data plus the persisted cancellation/no-show reason.
 - DashboardReportData: range, timestamps, counts, room-night denominators,
   occupancy values, invoice KPIs and sorted report lists.
 
@@ -658,8 +673,9 @@ check-in on current date. The state becomes ACTIVE and Room Status derives
 Occupied from that fact.
 
 Checkout:
-Staff can complete only ACTIVE booking. Actual departure must follow actual
-arrival and not be future. Completion is followed by invoice creation using
+Staff can complete only ACTIVE booking. Actual departure cannot precede actual
+arrival and cannot be future. A same-day stay is billed as one night. Completion
+is followed by invoice creation using
 actual duration and quote snapshot. Checkout also requires one positive recorded
 payment method, amount and received date. An invoice issue date is not evidence
 that its balance is paid in full: inspect payment amount and outstanding balance.
@@ -673,7 +689,12 @@ Reporting:
 Dashboard and PDF use ReportService snapshot. Current occupancy is point-in-time;
 period occupancy is actual room-nights to date. Revenue/ADR/RevPAR are invoice
 metrics. Booking History uses actual checkout in selected period and paginates
-seven records per page.
+seven records per page. PDF no-show rows render the stored staff reason after
+the `No-show:` lifecycle prefix is removed for display, in a dedicated `Reason`
+column (cancelled rows use the same audit column). The PDF exporter measures each
+logical HTML section before drawing it rather than relying on Qt CSS page-break
+avoidance. A section that fits on one page is moved intact to the next page when
+needed; only a section taller than a physical page is continued across pages.
 
 ===============================================================================
 9. VIEW-LEVEL CLASS CATALOG
@@ -770,6 +791,12 @@ HIGH: Simulated notice is not delivery.
 The log intentionally does not claim email delivery. A real provider integration
 needs an adapter, outbox, retries, idempotency, delivery/failure status, consent
 and PII policy.
+
+MEDIUM: Project-local database is a deliberate deployment constraint.
+The app now uses only `<project>/data/hotel_data.db`, which supports a clean
+coursework workspace but requires the current working directory to be inside the
+project tree. An installed desktop deployment needs a configurable managed data
+location or server database, protected backup and access policy.
 
 MEDIUM: Housekeeping state machine is absent.
 Do not overload Room::isAvailable. Add separate Dirty, Cleaning, Inspected and

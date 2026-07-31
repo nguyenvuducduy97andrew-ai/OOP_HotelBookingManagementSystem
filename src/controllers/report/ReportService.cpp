@@ -177,11 +177,13 @@ DashboardReportData ReportService::buildDashboardReport(int rangeIndex, const QS
         const ReportBookingEntry entry{
             QString::fromStdString(booking->getBookingId()),
             invoice ? QString::fromStdString(invoice->getCustomerNameSnapshot()) : (customer ? QString::fromStdString(customer->getName()) : QStringLiteral("Guest not available")),
-            invoice ? QString::fromStdString(invoice->getCustomerIdSnapshot()) : (customer ? QString::fromStdString(customer->getCustomerId()) : QStringLiteral("—")),
+            // Modified: Report the guest-facing document number instead of exposing the internal composite customer key.
+            invoice ? QString::fromStdString(invoice->getCustomerIdSnapshot()) : (customer ? QString::fromStdString(customer->getDocumentNumber()) : QStringLiteral("—")),
             invoice ? QString::fromStdString(invoice->getCustomerPhoneSnapshot()) : (customer ? QString::fromStdString(customer->getPhoneNumber()) : QStringLiteral("—")),
             invoice ? QString::fromStdString(invoice->getRoomNumberSnapshot()) : (room ? QString::fromStdString(room->getRoomNumber()) : QStringLiteral("—")),
             invoice ? QString::fromStdString(invoice->getRoomTypeSnapshot()) : (room ? QString::fromStdString(room->getRoomTypeName()) : QStringLiteral("—")),
             statusText(state),
+            QString::fromStdString(booking->getCancellationReason()),
             checkIn,
             checkOut
         };

@@ -1,6 +1,7 @@
 #include "ReservationDialog.h"
 #include "CountryInputRules.h"
 #include "CustomerIdentity.h"
+#include "Customer.h"
 #include "StandardRoom.h"
 #include "DeluxeRoom.h"
 #include "SuiteRoom.h"
@@ -11,6 +12,7 @@
 #include <QPushButton>
 #include <QMessageBox>
 #include <QRegularExpression>
+#include <QCompleter>
 
 ReservationDialog::ReservationDialog(HotelManager* manager, QWidget *parent)
     : QDialog(parent), m_manager(manager), m_editingBookingId("") {
@@ -107,6 +109,19 @@ void ReservationDialog::setupUI() {
     auto* formLayout = new QFormLayout();
     formLayout->setSpacing(12);
 
+    // Modified: Let reservations reuse the stored customer key instead of re-registering a known guest from manually retyped fields.
+    m_existingCustomerCombo = new QComboBox(this);
+    m_existingCustomerCombo->setEditable(true);
+    m_existingCustomerCombo->setInsertPolicy(QComboBox::NoInsert);
+    m_existingCustomerCombo->lineEdit()->setPlaceholderText("Search document number, name, or phone...");
+    if (auto* completer = m_existingCustomerCombo->completer()) {
+        completer->setCaseSensitivity(Qt::CaseInsensitive);
+        completer->setFilterMode(Qt::MatchContains);
+        completer->setCompletionMode(QCompleter::PopupCompletion);
+    }
+    populateExistingCustomerPicker();
+    formLayout->addRow("Existing customer:", m_existingCustomerCombo);
+
     // Modified: Keep reservation document validation consistent with Customer Management.
     auto* idRow = new QHBoxLayout();
     idRow->setSpacing(8);
@@ -189,6 +204,14 @@ void ReservationDialog::setupUI() {
     connect(m_customerIdCountry, &QComboBox::currentIndexChanged, this, &ReservationDialog::updateIdPlaceholder);
     connect(m_customerPhoneCode, &QComboBox::currentIndexChanged, this, [this]() { updatePhonePlaceholder(); normalizePhoneInput(); });
     connect(m_customerPhoneLocalEdit, &QLineEdit::textChanged, this, &ReservationDialog::normalizePhoneInput);
+    connect(m_existingCustomerCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &ReservationDialog::applyExistingCustomerSelection);
+    connect(m_existingCustomerCombo->lineEdit(), &QLineEdit::textEdited, this, [this]() {
+        if (!m_selectedCustomerId.isEmpty()) {
+            // Modified: Return to explicit manual entry if staff changes a selected customer's search text.
+            m_selectedCustomerId.clear();
+            setCustomerFieldsEnabled(true);
+        }
+    });
     connect(cancelBtn, &QPushButton::clicked, this, &QDialog::reject);
     connect(saveBtn, &QPushButton::clicked, this, &ReservationDialog::onAccept);
 }
@@ -199,6 +222,96 @@ void ReservationDialog::updateIdPlaceholder() {
     m_customerIdEdit->setPlaceholderText(documentNumberHint(documentType, rule.key));
     m_customerIdEdit->setMaxLength(documentType.compare("Passport", Qt::CaseInsensitive) == 0 ? 20
         : (documentType.compare("Other", Qt::CaseInsensitive) == 0 ? 30 : rule.idMaxLength));
+}
+
+void ReservationDialog::populateExistingCustomerPicker()
+{
+    m_existingCustomerCombo->clear();
+    m_existingCustomerCombo->addItem("New customer — enter details manually", QString());
+    if (!m_manager) {
+        return;
+    }
+
+    for (const auto& customer : m_manager->getCustomers()) {
+        if (!customer || customer->isArchived()) {
+            continue;
+        }
+        const QString documentNumber = QString::fromStdString(customer->getDocumentNumber());
+        const QString name = QString::fromStdString(customer->getName());
+        const QString phone = QString::fromStdString(customer->getPhoneNumber());
+        const QString label = QString("%1 — %2 — %3").arg(documentNumber, name, phone);
+        m_existingCustomerCombo->addItem(label, QString::fromStdString(customer->getCustomerId()));
+    }
+}
+
+void ReservationDialog::setCustomerFieldsEnabled(bool enabled)
+{
+    m_customerDocumentType->setEnabled(enabled);
+    m_customerIdCountry->setEnabled(enabled);
+    m_customerIdEdit->setEnabled(enabled);
+    m_customerNameEdit->setEnabled(enabled);
+    m_customerPhoneCode->setEnabled(enabled);
+    m_customerPhoneLocalEdit->setEnabled(enabled);
+}
+
+void ReservationDialog::applyExistingCustomerSelection(int index)
+{
+    const QString selectedId = m_existingCustomerCombo->itemData(index).toString();
+    if (selectedId.isEmpty()) {
+        // Modified: Make manual registration an explicit clean branch after staff leaves an existing customer selection.
+        m_selectedCustomerId.clear();
+        setCustomerFieldsEnabled(true);
+        m_customerDocumentType->setCurrentIndex(0);
+        m_customerIdCountry->setCurrentIndex(0);
+        m_customerIdEdit->clear();
+        m_customerNameEdit->clear();
+        m_customerPhoneCode->setCurrentIndex(0);
+        m_customerPhoneLocalEdit->clear();
+        return;
+    }
+    if (!m_manager) {
+        return;
+    }
+
+    const auto customer = m_manager->findCustomerById(selectedId.toStdString());
+    if (!customer || customer->isArchived()) {
+        QMessageBox::warning(this, "Customer unavailable", "The selected customer is no longer available for a reservation.");
+        m_existingCustomerCombo->setCurrentIndex(0);
+        m_selectedCustomerId.clear();
+        setCustomerFieldsEnabled(true);
+        return;
+    }
+
+    m_selectedCustomerId = selectedId;
+    const int documentTypeIndex = m_customerDocumentType->findText(QString::fromStdString(customer->getDocumentType()));
+    if (documentTypeIndex >= 0) {
+        m_customerDocumentType->setCurrentIndex(documentTypeIndex);
+    }
+    const int countryIndex = m_customerIdCountry->findData(QString::fromStdString(customer->getIssuingCountry()));
+    if (countryIndex >= 0) {
+        m_customerIdCountry->setCurrentIndex(countryIndex);
+    }
+    m_customerIdEdit->setText(QString::fromStdString(customer->getDocumentNumber()));
+    m_customerNameEdit->setText(QString::fromStdString(customer->getName()));
+
+    const QString existingPhone = QString::fromStdString(customer->getPhoneNumber());
+    int phoneCountryIndex = -1;
+    int matchedCodeLength = -1;
+    for (int i = 0; i < m_customerPhoneCode->count(); ++i) {
+        const auto& rule = countryInputRule(m_customerPhoneCode->itemData(i).toString());
+        if (existingPhone.startsWith(rule.callingCode) && rule.callingCode.size() > matchedCodeLength) {
+            phoneCountryIndex = i;
+            matchedCodeLength = rule.callingCode.size();
+        }
+    }
+    if (phoneCountryIndex >= 0) {
+        const auto& rule = countryInputRule(m_customerPhoneCode->itemData(phoneCountryIndex).toString());
+        m_customerPhoneCode->setCurrentIndex(phoneCountryIndex);
+        m_customerPhoneLocalEdit->setText(existingPhone.mid(rule.callingCode.size()));
+    } else {
+        m_customerPhoneLocalEdit->setText(existingPhone);
+    }
+    setCustomerFieldsEnabled(false);
 }
 
 void ReservationDialog::updatePhonePlaceholder() {
@@ -242,6 +355,7 @@ void ReservationDialog::updateAvailableRooms() {
 }
 
 void ReservationDialog::onAccept() {
+    const bool usingExistingCustomer = !m_selectedCustomerId.isEmpty();
     const auto& idRule = countryInputRule(m_customerIdCountry->currentData().toString());
     const QString documentType = getDocumentType();
     const auto& phoneRule = countryInputRule(m_customerPhoneCode->currentData().toString());
@@ -255,28 +369,28 @@ void ReservationDialog::onAccept() {
     m_customerNameEdit->setText(customerName);
     m_customerPhoneLocalEdit->setText(phoneLocal);
 
-    if (m_editingBookingId.empty() && !isValidDocumentNumber(documentType, idRule.key, customerId)) {
+    if (!usingExistingCustomer && m_editingBookingId.empty() && !isValidDocumentNumber(documentType, idRule.key, customerId)) {
         QMessageBox::warning(this, "Invalid identity document", QString("%1 for %2 must be %3.").arg(documentType, idRule.name, documentNumberHint(documentType, idRule.key)));
         return;
     }
 
-    if (!HotelManager::isValidCustomerNameFormat(customerName.toStdString())) {
+    if (!usingExistingCustomer && !HotelManager::isValidCustomerNameFormat(customerName.toStdString())) {
         QMessageBox::warning(this, "Invalid customer name", "Enter a valid legal name using letters, spaces, apostrophes, hyphens, or initials.");
         return;
     }
 
     static const QRegularExpression digitsPattern(QStringLiteral(R"(^\d+$)"));
-    if (!digitsPattern.match(phoneLocal).hasMatch()) {
+    if (!usingExistingCustomer && !digitsPattern.match(phoneLocal).hasMatch()) {
         QMessageBox::warning(this, "Invalid phone number", "Phone number must contain digits only.");
         return;
     }
 
-    if (phoneLocal.size() < phoneRule.phoneMinDigits || phoneLocal.size() > phoneRule.phoneMaxDigits) {
+    if (!usingExistingCustomer && (phoneLocal.size() < phoneRule.phoneMinDigits || phoneLocal.size() > phoneRule.phoneMaxDigits)) {
         QMessageBox::warning(this, "Invalid phone number", QString("Phone number for %1 must be %2.").arg(phoneRule.name, phoneRule.phoneHint));
         return;
     }
 
-    if (!HotelManager::isValidPhoneNumberFormat(fullPhone.toStdString())) {
+    if (!usingExistingCustomer && !HotelManager::isValidPhoneNumberFormat(fullPhone.toStdString())) {
         QMessageBox::warning(this, "Invalid phone number", "Phone number format is invalid.");
         return;
     }
@@ -306,6 +420,9 @@ QString ReservationDialog::getCustomerId() const {
             return QString::fromStdString(booking->getCustomer()->getCustomerId());
         }
     }
+    if (!m_selectedCustomerId.isEmpty()) {
+        return m_selectedCustomerId;
+    }
     return customerIdentityKey(getDocumentType(), getIssuingCountry(), getDocumentNumber());
 }
 
@@ -314,10 +431,20 @@ QString ReservationDialog::getIssuingCountry() const { return m_customerIdCountr
 QString ReservationDialog::getDocumentNumber() const { return m_customerIdEdit->text().trimmed().toUpper(); }
 
 QString ReservationDialog::getCustomerName() const {
+    if (!m_selectedCustomerId.isEmpty() && m_manager) {
+        if (const auto customer = m_manager->findCustomerById(m_selectedCustomerId.toStdString())) {
+            return QString::fromStdString(customer->getName());
+        }
+    }
     return m_customerNameEdit->text().simplified();
 }
 
 QString ReservationDialog::getCustomerPhone() const {
+    if (!m_selectedCustomerId.isEmpty() && m_manager) {
+        if (const auto customer = m_manager->findCustomerById(m_selectedCustomerId.toStdString())) {
+            return QString::fromStdString(customer->getPhoneNumber());
+        }
+    }
     const auto& rule = countryInputRule(m_customerPhoneCode->currentData().toString());
     return rule.callingCode + normalizeLocalPhoneNumber(m_customerPhoneLocalEdit->text());
 }

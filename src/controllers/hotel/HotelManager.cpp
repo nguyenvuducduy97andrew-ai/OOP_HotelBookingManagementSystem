@@ -1154,7 +1154,8 @@ bool HotelManager::restoreBookingFromDatabase(
         }
         const QDate actualIn = QDate::fromString(QString::fromStdString(actualCheckInDate), Qt::ISODate);
         const QDate actualOut = QDate::fromString(QString::fromStdString(actualCheckOutDate), Qt::ISODate);
-        if (actualOut <= actualIn) {
+        // Modified: Restore same-day completed stays as one-night bookings, matching checkout and invoice validation.
+        if (actualOut < actualIn) {
             errorMessage = "Persisted completed booking has an invalid actual stay duration.";
             return false;
         }

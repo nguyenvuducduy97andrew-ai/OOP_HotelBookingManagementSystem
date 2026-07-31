@@ -1,9 +1,7 @@
 #include <QApplication>
 #include <QCoreApplication>
-#include <QFile>
 #include <QMessageBox>
 #include <QDir>
-#include <QStandardPaths>
 #include <QString>
 #include "mainwindow.h"
 #include "LoginWindow.h"
@@ -11,7 +9,7 @@
 #include "DataManager.h"
 
 namespace {
-QString findLegacyProjectDatabasePath()
+QString resolveProjectDatabasePath()
 {
     QDir searchDir(QDir::currentPath());
 
@@ -29,27 +27,12 @@ QString findLegacyProjectDatabasePath()
         return {};
     }
 
-    return QDir(searchDir.path()).filePath("data/hotel_data.db");
-}
-
-QString resolveDatabasePath()
-{
-    const QString dataDirPath = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
-    if (dataDirPath.isEmpty() || !QDir().mkpath(dataDirPath)) {
+    const QString dataDirPath = QDir(searchDir.path()).filePath("data");
+    if (!QDir().mkpath(dataDirPath)) {
         return {};
     }
-
-    const QString managedDatabasePath = QDir(dataDirPath).filePath("hotel_data.db");
-    const QString legacyDatabasePath = findLegacyProjectDatabasePath();
-    if (!QFile::exists(managedDatabasePath) && !legacyDatabasePath.isEmpty()
-        && QFile::exists(legacyDatabasePath) && legacyDatabasePath != managedDatabasePath) {
-        // Modified: Preserve a developer-run database once while moving runtime storage away from the working directory.
-        if (!QFile::copy(legacyDatabasePath, managedDatabasePath)) {
-            qWarning() << "Could not migrate legacy database to application data:" << legacyDatabasePath;
-        }
-    }
-
-    return managedDatabasePath;
+    // Modified: Use only the project data file; SQLite creates it empty here when no database exists.
+    return QDir(dataDirPath).filePath("hotel_data.db");
 }
 }
 
@@ -61,7 +44,12 @@ int main(int argc, char *argv[]) {
     // Create the HotelManager that owns the hotel's in-memory data.
     HotelManager hotelManager;
 
-    const QString databasePath = resolveDatabasePath();
+    const QString databasePath = resolveProjectDatabasePath();
+    // Modified: Refuse to start outside the project tree instead of opening an unspecified SQLite path.
+    if (databasePath.isEmpty()) {
+        QMessageBox::critical(nullptr, "Database Error", "The project data folder could not be located. Run the application from inside the project tree.");
+        return -1;
+    }
 
     // Load initial hotel database records into the core engine state at startup
     if (!DataManager::getInstance().loadAll(hotelManager, databasePath.toStdString())) {

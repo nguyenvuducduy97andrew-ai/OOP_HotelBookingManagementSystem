@@ -8,6 +8,7 @@ A C++17 / Qt6 desktop application for hotel rooms, customers, reservations, chec
 
 - Polymorphic room portfolio: `StandardRoom`, `DeluxeRoom`, and `SuiteRoom`.
 - Customer management with archive/delete workflows, searchable/filterable/sortable lists, country-aware ID and phone validation, and conflict highlighting in the customer list.
+- Reservation customer picker searches active guests by document number, name, or phone, then reuses their stored identity key without re-registering them.
 - Reservation creation only from Room Status, reservation editing, cancellation, checkout, and invoice generation.
 - Explicit booking lifecycle: staff must record **Check-in** before a room becomes occupied, then record checkout to complete the stay.
 - Reservation occupancy and room capacity validation: every booking stores adult/child counts and is rejected if it exceeds the selected room type's capacity.
@@ -16,7 +17,7 @@ A C++17 / Qt6 desktop application for hotel rooms, customers, reservations, chec
 - Shared availability rules for Reservation and Room Status, including booking dates, active stays, archived rooms, permanent room availability, and maintenance periods.
 - Room Status distinguishes a sellable `Available` room from `Awaiting check-in` (an arrival due today or overdue but not yet checked in), `Occupied`, and `Maintenance`.
 - Dashboard Booking History for completed stays in the selected period, with seven entries per page.
-- A4 landscape PDF export that separates current occupancy from selected-period-to-date room-night occupancy, alongside invoice-based KPIs, room inventory, actual-arrival top rooms, open bookings, cancellations/no-shows, and completed stays.
+- A4 landscape PDF export with measured, whole-section pagination, a distinct reporting-period badge, balanced data columns, invoice-based KPIs, room inventory, actual-arrival top rooms, open bookings, completed stays, and a dedicated reason column for cancelled/no-show reservations.
 - SQLite schema migration, immutable invoice snapshots, staged loading, duplicate-customer reconciliation, and transactional persistence.
 - A modal sign-in gate that starts a staff session before the operational window is opened, including a password-visibility control and a single validation message per failed sign-in; the current classroom bootstrap account is `admin` and should be replaced by persisted staff accounts before production use.
 
@@ -54,7 +55,7 @@ Upcoming ── explicit check-in ──► Active ── explicit checkout ─�
 - Completed bookings leave the operational Reservations table and appear in Dashboard → Booking History when their actual checkout date is in the selected range.
 - New reservations require a check-in date of today or later and `checkOutDate > checkInDate`.
 - Upcoming bookings cannot be moved into the past. After check-in, the guest, room, and planned arrival cannot be changed through a normal edit.
-- Checkout cannot be on/before the actual check-in date or in the future.
+- Checkout cannot be before the actual check-in date or in the future. A same-day check-in/check-out is accepted and billed as one night.
 - Cancellation requires a reason and is allowed only before planned arrival. Staff can instead mark an unarrived, overdue reservation as a no-show; both outcomes retain their date in the booking audit record. Booking and invoice deletion are blocked to preserve history.
 - A maintenance interval with no affected booking is confirmed immediately. If it overlaps an unfinished booking, the application creates an `Awaiting guest response` case and logs a `Simulated email` notice per affected reservation. The case is a soft hold: it prevents new conflicting bookings but does not present the room as under maintenance until confirmed. Staff must move, reschedule, or cancel each conflict, then explicitly confirm the case. Confirmation rechecks live booking overlap before the room is blocked. This is an internal operational log, not proof that an email was delivered; an external notification provider can replace the simulated channel later.
 
@@ -80,6 +81,7 @@ Checkout and invoice creation are staged together, then persisted through one `D
 - Phone normalization removes punctuation, spaces, and accidental local leading zeroes before storage. Stored values use international form, for example `+84912345678`.
 - Customer name is captured as one required **full legal name**. The validation accepts a one-part legal name, all-uppercase document names, and scripts without uppercase/lowercase; it does not force a Western surname/given-name structure.
 - Customer names are not unique. Customer IDs and normalized phone numbers are protected by the customer workflow and a SQLite unique phone index. The same validation is applied when creating and editing a customer. When a conflict is detected, the conflicting customer is highlighted for the user.
+- Reservation provides an existing-customer picker. Selecting a guest reuses the stored internal customer key and locks the copied identity/contact fields, including legacy records that cannot be reconstructed from the supported country selectors. Staff select `New customer — enter details manually` only when creating a genuinely new customer.
 
 ### Existing database reconciliation
 
@@ -93,8 +95,8 @@ Bookings of a removed exact duplicate are reassigned to the retained customer. I
 
 ## Persistence
 
-- Runtime database: the current user's Qt `AppLocalDataLocation` (on Windows, normally under `AppData\\Local\\VNUHCM-US\\HotelBookingManagement\\hotel_data.db`).
-- A database at the former developer path `data/hotel_data.db` is copied once on first launch when it exists, so running from an IDE does not lose existing operational data.
+- Runtime database: `data/hotel_data.db` in the project root. The application creates the `data` folder and an empty SQLite database there when absent.
+- The application never copies a database to or from the Windows application-data folder; the project file is the single runtime data source.
 - Tables: `Customer`, `Room`, `RoomMaintenance`, `MaintenanceGuestNotice`, `Booking`, and `Invoice`.
 - Migration adds explicit check-in/check-out facts, actual stay dates, booked rate/tax, occupancy, and cancellation-audit columns. Legacy completed rows are backfilled only when an invoice proves checkout; a date alone never activates a stay.
 - Checkout requires one recorded payment with a method, amount, and received date. The invoice stores this payment fact separately from its issue date; a remaining balance is shown when the received amount is partial.
@@ -137,7 +139,7 @@ cmake -S . -B build
 cmake --build build --target HotelBookingManagement
 ```
 
-Run the executable from any directory. On a first launch with no legacy project database, the per-user application-data database is created with an empty schema; rooms, customers, bookings, and invoices are created only through the application. If the former developer file `data/hotel_data.db` exists, it is copied once into the managed location to preserve legacy work. Rename or move that legacy file before the first launch when an intentionally clean database is required.
+Run the executable with its working directory inside the project tree (the root or a build subfolder). The application resolves the project root, then uses only `data/hotel_data.db`. If that file does not exist, SQLite creates an empty schema there; rooms, customers, bookings, and invoices are created only through the application.
 
 ### Windows Qt kit note
 

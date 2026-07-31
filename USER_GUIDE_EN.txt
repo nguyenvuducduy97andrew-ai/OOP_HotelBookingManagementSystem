@@ -36,14 +36,9 @@ real staff accounts are added, each employee should use an individual account.
 
 Close the application normally with the window Close button. The application tries
 to save data on exit. Do not force-close the program, power off the computer, or
-remove storage while it is saving. Do not delete hotel_data.db from the application
-data folder to solve an ordinary mistake without a backup and authorization.
-
-Installer/developer note: if `data/hotel_data.db` remains in the project folder,
-the first run can copy that legacy file into the application-data folder to migrate
-existing work. This is not demo-data seeding. A deliberately clean first database
-requires the legacy file to be handled before that first launch, following the
-team's backup procedure.
+remove storage while it is saving. The application uses only
+`data/hotel_data.db` in the project folder and never copies it elsewhere. Do not
+delete that file to solve an ordinary mistake without a backup and authorization.
 
 ===============================================================================
 3. STATES YOU MUST UNDERSTAND
@@ -113,6 +108,13 @@ Duplicate messages:
 Names alone may match. When a conflict occurs, the existing customer row is
 highlighted. Read it before deciding whether to correct input or use the record.
 
+BOOKING AN EXISTING GUEST: In Reservation, type a document number, name, or phone
+in Existing customer, then select the correct guest from the list. The application
+fills and locks the identity/contact fields and reuses the correct record, including
+a legacy record. Select `New customer — enter details manually` only for a genuinely
+new guest; never change a phone or create another record merely to bypass a duplicate
+warning.
+
 Use Edit to correct name/phone. Treat Customer ID as identity; do not change it
 casually. Use Archive when a customer should not receive new bookings but history
 must remain. Archived customers cannot be used for new/edited reservations. Do not
@@ -167,7 +169,9 @@ New reservations begin from Room Status, not a separate New Reservation button.
 2. Choose filters/dates if available and review room status.
 3. Click an appropriate room to view details.
 4. Choose Book/Reserve. Reservation form opens with that room preselected.
-5. Select or enter the customer using country selectors and format hints.
+5. For an existing guest, search and select Existing customer by document number,
+   name, or phone. For a new guest, select `New customer — enter details manually`
+   and use the country selectors and format hints.
 6. Enter planned check-in/check-out. Checkout must be after check-in. New
    reservations cannot start in the past.
 7. Enter adults and children. At least one adult is required and the total cannot
@@ -214,7 +218,8 @@ stay.
 Check out and invoice:
 1. Confirm the guest is actually departing.
 2. Select the Active reservation and choose Check out.
-3. Actual checkout must be after actual check-in and cannot be future.
+3. Actual checkout cannot be before actual check-in and cannot be future. A
+   same-day checkout is accepted and billed as one night.
 4. Confirm. Booking becomes Completed and the system issues one invoice from
    locked rate/tax and actual nights.
 5. Verify Booking History for the selected reporting period.
@@ -243,15 +248,19 @@ Booking History contains completed stays whose actual checkout is inside selecte
 range. It displays up to seven entries per page; use page buttons for more.
 If a stay seems missing, first check actual checkout date and reporting range.
 
-Export Report creates a landscape PDF. Confirm the range and review personal data
-before printing or sharing.
+Export Report creates a landscape PDF in cohesive blocks: a section heading, note,
+and table remain together when they fit on a page; otherwise the whole block moves
+to the next page. Only a block taller than one physical page continues across pages.
+The Cancelled & no-show table has a dedicated `Reason` column; no-show rows display
+the reason entered by staff. Confirm the range and review personal data before
+printing or sharing.
 
 ===============================================================================
 10. WHAT NOT TO DO
 ===============================================================================
 
 Do not:
-- delete/replace hotel_data.db in the application data folder to resolve an ordinary mistake;
+- delete/replace `data/hotel_data.db` to resolve an ordinary mistake;
 - enter fake ID or phone just to bypass duplicate warnings;
 - mark permanent room unavailability for a short repair; use dated maintenance;
 - confirm maintenance while conflicting bookings remain;
@@ -279,9 +288,9 @@ create an unnecessary duplicate.
 Check computer date/time and actual arrival. Normal reception flow does not permit
 retrospective check-in.
 
-“Checkout date must be after actual check-in”:
-Check that you selected the correct booking and are not using same-day checkout.
-The present workflow does not support day-use stays; ask management/development.
+“Checkout date cannot be before actual check-in”:
+Check that you selected the correct booking and computer date. Same-day checkout
+is allowed and billed as one night; only a departure before arrival is rejected.
 
 Maintenance conflict or rejected confirmation:
 A live booking still overlaps. Move/reschedule/cancel it through approved process,
@@ -289,7 +298,7 @@ then confirm again. A simulated notice is not conflict resolution.
 
 Database error at startup:
 Close the app. Do not repeatedly overwrite/delete the DB. If possible copy
-hotel_data.db from the application data folder as a backup and give the exact message to a developer.
+`data/hotel_data.db` from the project folder as a backup and give the exact message to a developer.
 
 ===============================================================================
 12. SCENARIO PLAYBOOK AND HANDOVER
@@ -336,7 +345,7 @@ Maintenance overlaps booking:
 4. Resolve bookings, then confirm schedule.
 5. If rejected, a live overlap remains; do not force it.
 
-Ask a manager/developer before early check-in, late checkout, same-day day-use,
+Ask a manager/developer before early check-in or late checkout outside hotel policy,
 moving an Active guest, group bookings, deleting completed booking/invoice,
 additional payments/refunds/discounts, claiming real message delivery, changing existing
 Customer ID, deleting/importing DB, or operating multiple copied databases.

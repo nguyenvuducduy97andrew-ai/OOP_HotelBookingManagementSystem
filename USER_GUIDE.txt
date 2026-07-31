@@ -34,13 +34,9 @@ Login hiện chỉ dành cho đồ án. Không chia sẻ password. Khi nhóm có
 thật, mỗi người phải dùng account riêng để audit được thao tác.
 
 Để tắt app, dùng nút Close cửa sổ bình thường. Ứng dụng cố lưu data khi đóng.
-Không force-close, tắt máy hoặc rút ổ đĩa khi app đang lưu. Không xóa file database
-hotel_data.db trong thư mục dữ liệu ứng dụng nếu chưa backup và chưa có hướng dẫn.
-
-Lưu ý cho người cài đặt/developer: nếu ở thư mục dự án còn `data/hotel_data.db`,
-lần chạy đầu có thể copy file cũ này vào thư mục dữ liệu ứng dụng để migrate dữ
-liệu. Đây không phải demo data. Muốn một database hoàn toàn mới phải xử lý file
-cũ trước lần mở đầu, theo quy trình backup của nhóm.
+Không force-close, tắt máy hoặc rút ổ đĩa khi app đang lưu. App chỉ dùng file
+`data/hotel_data.db` trong folder project; không copy database sang nơi khác. Không
+xóa file này nếu chưa backup và chưa có hướng dẫn.
 
 ===============================================================================
 3. CÁC TRẠNG THÁI CẦN HIỂU TRƯỚC KHI THAO TÁC
@@ -114,6 +110,12 @@ ID là field nhận diện mạnh.
 Khi conflict, row khách đang trùng được highlight. Hãy đọc row đó trước khi quyết
 định sửa input hay sử dụng customer đã tồn tại.
 
+ĐẶT PHÒNG CHO KHÁCH CŨ: Trong Reservation, gõ Document Number, tên hoặc phone ở
+ô Existing customer rồi chọn đúng khách trong danh sách. App tự điền và khóa thông
+tin nhận diện để sử dụng đúng record, kể cả legacy record. Chỉ chọn `New customer
+— enter details manually` khi thực sự tạo khách mới; không đổi phone hoặc tạo một
+record khác chỉ để né duplicate warning.
+
 5.3 Edit, archive và delete
 
 Dùng Edit để sửa name/phone khi cần. Customer ID là identity, không nên thay đổi
@@ -179,7 +181,9 @@ Reservations page.
 2. Chọn date/guest filter nếu màn có hỗ trợ, xem trạng thái room.
 3. Click room phù hợp để xem details.
 4. Chọn Book/Reserve. Reservation form mở với room đã preselect.
-5. Chọn/nhập Customer. Tuân theo country selector và format hint.
+5. Với khách cũ, tìm và chọn ở Existing customer bằng document number, tên hoặc
+   phone. Với khách mới, chọn `New customer — enter details manually` rồi nhập
+   thông tin theo country selector và format hint.
 6. Nhập planned Check-in/Check-out. Check-out phải sau Check-in; booking mới
    không được có planned check-in quá khứ.
 7. Nhập Adults/Children. Phải có ít nhất một adult; tổng không vượt capacity
@@ -233,7 +237,8 @@ Active booking hoặc trước arrival date.
 
 1. Xác nhận khách thực sự rời đi.
 2. Chọn Active booking, chọn Check out.
-3. Actual checkout phải sau actual check-in và không ở tương lai.
+3. Actual checkout không được trước actual check-in và không ở tương lai. Nếu
+   checkout cùng ngày check-in, hệ thống tính một đêm.
 4. Confirm. Booking thành Completed và hệ thống issue một invoice từ locked rate,
    tax và actual number of nights.
 5. Kiểm tra Dashboard Booking History theo selected period.
@@ -262,15 +267,18 @@ chỉ có completed stay whose actual checkout nằm trong selected range. Có t
 7 stay/page; dùng page button để xem trang sau. Nếu thiếu stay, kiểm tra actual
 checkout date và selected range trước.
 
-Export Report tạo PDF landscape. Xác nhận selected period, đọc lại data và cẩn
-thận PII trước khi share/in.
+Export Report tạo PDF landscape theo các khối đồng bộ; tiêu đề, mô tả và bảng của
+một mục sẽ đi cùng nhau nếu vừa trang, nếu không vừa thì cả khối qua trang kế.
+Chỉ khối dài hơn chính một trang mới bị tiếp tục sang trang khác. Bảng Cancelled &
+no-show có cột `Reason`; No-show hiển thị lý do staff đã nhập khi đánh dấu no-show.
+Xác nhận selected period, đọc lại data và cẩn thận PII trước khi share/in.
 
 ===============================================================================
 10. NHỮNG ĐIỀU CẦN TRÁNH
 ===============================================================================
 
 Không:
-- Xóa/thay file hotel_data.db trong thư mục dữ liệu ứng dụng để xử lý một mistake thông thường.
+- Xóa/thay file `data/hotel_data.db` để xử lý một mistake thông thường.
 - Nhập phone/ID giả để vượt duplicate warning.
 - Set permanent unavailable cho sửa chữa vài ngày; dùng dated maintenance.
 - Confirm maintenance khi booking conflict còn live.
@@ -297,9 +305,9 @@ Restore đúng record theo policy hoặc chọn record active. Không tạo dupl
 Kiểm tra PC date/time và actual arrival. App không cho retrospective check-in
 trong normal reception flow.
 
-“Checkout date must be after actual check-in”:
-Kiểm tra booking đúng, không checkout cùng ngày checkin. Nếu khách sạn có day-use
-policy, hiện workflow chưa hỗ trợ loại stay này; hỏi quản lý/developer.
+“Checkout date cannot be before actual check-in”:
+Kiểm tra đúng booking và ngày hệ thống. Checkout cùng ngày check-in được phép và
+được tính một đêm; chỉ ngày checkout trước ngày check-in mới bị từ chối.
 
 “Maintenance conflict” hoặc confirm bị từ chối:
 Live booking còn trùng. Move/reschedule/cancel theo chính sách, sau đó confirm lại.
@@ -443,7 +451,7 @@ Invoice đã issue                                 Xem payment amount/balance, k
 ===============================================================================
 
 Hỏi quản lý hoặc developer trước khi thao tác nếu:
-- cần check-in sớm, check-out muộn, hoặc day-use cùng ngày;
+- cần check-in sớm hoặc check-out muộn ngoài chính sách khách sạn;
 - cần chuyển phòng cho khách đang Active;
 - cần gộp/tách/group booking;
 - cần hủy completed booking hoặc invoice;

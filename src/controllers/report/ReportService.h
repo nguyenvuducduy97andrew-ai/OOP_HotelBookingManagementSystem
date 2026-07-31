@@ -24,6 +24,7 @@ struct ReportBookingEntry
     QString roomNumber;
     QString roomType;
     QString status;
+    QString operationalReason;
     QDate checkIn;
     QDate checkOut;
 };

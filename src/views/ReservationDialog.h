@@ -33,13 +33,18 @@ private slots:
 
 private:
     void setupUI();
+    void populateExistingCustomerPicker();
+    void applyExistingCustomerSelection(int index);
+    void setCustomerFieldsEnabled(bool enabled);
     void updateIdPlaceholder();
     void updatePhonePlaceholder();
     void normalizePhoneInput();
 
     HotelManager* m_manager;
     std::string m_editingBookingId;
+    QString m_selectedCustomerId;
 
+    QComboBox* m_existingCustomerCombo;
     QComboBox* m_customerDocumentType;
     QComboBox* m_customerIdCountry;
     QLineEdit* m_customerIdEdit;

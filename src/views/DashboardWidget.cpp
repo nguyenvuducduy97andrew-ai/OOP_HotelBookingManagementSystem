@@ -19,20 +19,30 @@
 #include <QTextBrowser>
 #include <QTextStream>
 #include <QFont>
+#include <QStringList>
 #include <QPageSize>
 #include <QPageLayout>
 #include <QFileInfo>
+#include <QPainter>
 #include <QScrollBar>
 #include <QUrl>
 #include <vector>
 #include <map>
 #include <unordered_set>
 #include <algorithm>
+#include <cmath>
 
 namespace {
+const QString kReportSectionMarker = QStringLiteral("<!-- REPORT-SECTION -->");
+
 QString escapeHtml(const QString& text)
 {
     return text.toHtmlEscaped();
+}
+
+QString escapeHtmlNoWrap(const QString& text)
+{
+    return escapeHtml(text).replace(QLatin1Char(' '), QStringLiteral("&nbsp;"));
 }
 
 }
@@ -935,49 +945,52 @@ QString DashboardWidget::buildReportHtml() const
 
     QString html;
     QTextStream stream(&html);
-    // Modified and optimized performance: define print-safe wrapper classes so compact report sections remain cohesive across PDF page boundaries.
+    // Modified: define compact, balanced report styles for predictable PDF tables and pagination.
     stream << "<html><head><meta charset='utf-8'>"
            << "<style>"
-            << "body{font-family:'Segoe UI',Arial,sans-serif;color:#24324A;font-size:9pt;line-height:1.42;margin:0;padding:0;}"
-            << "h1{color:#142A5E;margin:0;font-size:24pt;font-weight:800;letter-spacing:.2px;}"
-            << "h2{color:#142A5E;margin:0 0 7px;font-size:14pt;font-weight:750;}"
+            << "body{font-family:'Segoe UI',Arial,sans-serif;color:#24324A;font-size:8.4pt;line-height:1.3;margin:0;padding:0;}"
+            << "h1{color:#142A5E;margin:0;font-size:22pt;font-weight:800;letter-spacing:.2px;}"
+            << "h2{color:#142A5E;margin:0 0 5px;font-size:12.5pt;font-weight:750;}"
             << "table{border-collapse:collapse;width:100%;}"
-            << ".header{background:#F4F7FE;border:1px solid #DCE6F5;border-radius:12px;padding:18px 20px;}"
+            << ".header{background:#F4F7FE;border:1px solid #DCE6F5;border-radius:12px;padding:15px 18px;}"
+            << ".header-table{width:100%;table-layout:fixed;}"
+            << ".header-title{width:76%;vertical-align:middle;}"
+            << ".header-range{width:24%;text-align:right;vertical-align:middle;}"
             << ".eyebrow{color:#2B6DEF;font-size:8pt;font-weight:800;letter-spacing:1.2px;margin-bottom:4px;}"
-            << ".meta{color:#6F819D;font-size:8.5pt;margin-top:7px;}"
-            << ".range-badge{background:#E7F0FF;color:#1F5FD6;border:1px solid #CFE0FF;border-radius:8px;padding:6px 10px;font-size:8.5pt;font-weight:700;}"
-            << ".section-note{color:#7B8BA5;font-size:8.5pt;margin:0 0 10px;}"
-            << ".report-section{margin-top:22px;}"
+            << ".meta{color:#6F819D;font-size:8pt;margin-top:6px;}"
+            << ".range-badge{background:#E7F0FF;color:#1F5FD6;border:1px solid #CFE0FF;border-radius:9px;padding:8px 13px;font-size:12pt;font-weight:800;}"
+            << ".section-note{color:#7B8BA5;font-size:7.5pt;margin:0 0 7px;}"
+            << ".report-section{margin-top:14px;}"
             << ".report-section.compact{page-break-inside:avoid;}"
             << ".section-heading{page-break-after:avoid;}"
-            << ".overview-grid,.compact-shell{margin-top:22px;border-collapse:separate;border-spacing:9px 0;page-break-inside:avoid;}"
-            << ".detail-shell{margin-top:22px;page-break-inside:avoid;}"
-            << ".page-break-before{page-break-before:always;}"
+            << ".overview-grid,.compact-shell,.detail-shell{margin-top:14px;border-collapse:separate;border-spacing:6px 0;}"
             << ".overview-grid td{width:50%;vertical-align:top;}"
-            << ".small-card{border:1px solid #DFE8F5;border-radius:10px;padding:12px;background:#FFFFFF;}"
+            << ".small-card{border:1px solid #DFE8F5;border-radius:10px;padding:9px;background:#FFFFFF;}"
             << ".small-card h2{margin-top:0;}"
-            << ".summary{border-collapse:separate;border-spacing:8px 0;margin-top:14px;}"
-            << ".summary td{border:1px solid #DFE8F5;border-radius:10px;padding:12px 14px;background:#FFFFFF;width:16.66%;}"
-            << ".metric-label{font-size:8pt;color:#7B8BA5;font-weight:650;}"
-            << ".metric-value{font-size:19pt;font-weight:800;color:#1B3F83;margin-top:3px;}"
-            << ".data-table{border:1px solid #DDE6F2;margin-top:8px;}"
-            << ".data-table th{background:#EEF4FF;color:#25477D;font-size:8pt;font-weight:800;padding:8px 9px;text-align:left;border:1px solid #DDE6F2;}"
-            << ".data-table td{padding:8px 9px;border:1px solid #E5ECF5;vertical-align:top;font-size:8.3pt;}"
+            << ".summary{border-collapse:separate;border-spacing:6px 0;margin-top:11px;page-break-inside:avoid;break-inside:avoid;}"
+            << ".summary td{border:1px solid #DFE8F5;border-radius:10px;padding:9px 10px;background:#FFFFFF;width:16.66%;}"
+            << ".metric-label{font-size:7.3pt;color:#7B8BA5;font-weight:650;}"
+            << ".metric-value{font-size:16pt;font-weight:800;color:#1B3F83;margin-top:2px;}"
+            << ".data-table{border:1px solid #DDE6F2;margin-top:6px;table-layout:fixed;}"
+            << ".data-table th{background:#EEF4FF;color:#25477D;font-size:7.3pt;font-weight:800;padding:6px 7px;text-align:left;border:1px solid #DDE6F2;white-space:nowrap;}"
+            << ".data-table td{padding:6px 7px;border:1px solid #E5ECF5;vertical-align:top;font-size:7.5pt;white-space:nowrap;}"
             << ".data-table tr:nth-child(even) td{background:#FAFCFF;}"
             << ".status{font-weight:750;color:#2A5FC5;}"
-            << ".empty{border:1px dashed #C9D6E8;color:#7B8BA5;background:#FBFCFE;padding:13px;text-align:center;font-size:8.5pt;}"
-            << ".footer{margin-top:22px;padding-top:9px;border-top:1px solid #E2EAF4;color:#8A99B0;font-size:7.5pt;}"
+            << ".reason-cell{color:#5F718F;font-size:7pt;white-space:normal!important;word-wrap:break-word;}"
+            << ".empty{border:1px dashed #C9D6E8;color:#7B8BA5;background:#FBFCFE;padding:10px;text-align:center;font-size:7.5pt;}"
+            << ".footer{margin-top:14px;padding-top:7px;border-top:1px solid #E2EAF4;color:#8A99B0;font-size:7pt;}"
             << ".compact .data-table{page-break-inside:avoid;}"
-            << "tr{page-break-inside:avoid;}"
            << "</style></head><body>";
 
+    // Modified: mark complete report sections so the exporter can move a full block to the next page instead of splitting it.
+    stream << kReportSectionMarker;
     // Modified and optimized performance: render a print-first report with full operational booking data instead of embedding the interactive dashboard card.
-    stream << "<div class='header'><table><tr><td>"
+    stream << "<div class='header'><table class='header-table'><tr><td class='header-title' width='76%'>"
            << "<div class='eyebrow'>HOTEL OPERATIONS REPORT</div>"
            << "<h1>Booking Management Dashboard</h1>"
            << "<div class='meta'>Generated " << escapeHtml(now.toString("dd MMM yyyy, HH:mm"))
            << " &nbsp;•&nbsp; Reporting period: " << escapeHtml(rangeLabel) << "</div>"
-           << "</td><td align='right' valign='middle'><span class='range-badge'>" << escapeHtml(rangeName) << "</span></td></tr></table></div>";
+           << "</td><td class='header-range' width='24%' align='right' valign='middle'><span class='range-badge'>" << escapeHtml(rangeName) << "</span></td></tr></table></div>";
 
     stream << "<table class='summary'><tr>";
     stream << "<td><div class='metric-label'>Total rooms</div><div class='metric-value'>" << totalRooms << "</div></td>";
@@ -990,6 +1003,7 @@ QString DashboardWidget::buildReportHtml() const
     stream << "<td><div class='metric-label'>Completed stays</div><div class='metric-value'>" << completedCount << "</div></td>";
     stream << "</tr></table>";
 
+    stream << kReportSectionMarker;
     // Modified and optimized performance: use one-row wrapper tables for compact report blocks so Qt keeps their title and content on the same PDF page.
     stream << "<table class='overview-grid'><tr><td><div class='small-card'><h2>Portfolio overview</h2><div class='section-note'>Current operational status and booking volume.</div>";
     stream << "<table class='data-table'><tr><th>Upcoming</th><th>Active</th><th>Completed</th><th>Cancelled</th><th>No-show</th><th>Check-ins this month</th><th>Check-ins this year</th></tr>";
@@ -998,12 +1012,14 @@ QString DashboardWidget::buildReportHtml() const
     stream << "<table class='data-table'><tr><th>Standard</th><th>Deluxe</th><th>Suite</th></tr>";
     stream << "<tr><td>" << standardCount << "</td><td>" << deluxeCount << "</td><td>" << suiteCount << "</td></tr></table></div></td></tr></table>";
 
+    stream << kReportSectionMarker;
     stream << "<table class='compact-shell'><tr><td><div class='small-card'><h2>Revenue indicators (period to date)</h2><div class='section-note'>Based on issued invoices for completed stays, not payment settlement. RevPAR uses the selected period's elapsed room-nights.</div>";
     stream << "<table class='data-table'><tr><th>Invoiced revenue</th><th>ADR</th><th>RevPAR</th></tr>";
     stream << "<tr><td>" << QString::number(invoicedRevenue, 'f', 0) << " VND</td><td>" << QString::number(averageDailyRate, 'f', 0) << " VND</td><td>" << QString::number(revenuePerAvailableRoom, 'f', 0) << " VND</td></tr></table></div></td></tr></table>";
 
-    // Modified and optimized performance: begin the top-room summary on a fresh page so its heading and table always remain one cohesive PDF block.
-    stream << "<table class='compact-shell page-break-before'><tr><td><div class='small-card'><h2>Top rooms in selected period</h2><div class='section-note'>Ranked by check-ins during " << escapeHtml(rangeLabel) << ".</div>";
+    stream << kReportSectionMarker;
+    // Modified: Keep the Top Rooms heading, note, and table as one block without forcing a new page when remaining space is sufficient.
+    stream << "<table class='compact-shell'><tr><td><div class='small-card'><h2>Top rooms in selected period</h2><div class='section-note'>Ranked by check-ins during " << escapeHtml(rangeLabel) << ".</div>";
     stream << "<table class='data-table'><tr><th width='8%'>#</th><th width='28%'>Room</th><th width='36%'>Type</th><th width='28%'>Bookings</th></tr>";
     const int topCount = std::min(3, static_cast<int>(popularRooms.size()));
     if (topCount == 0) {
@@ -1016,14 +1032,15 @@ QString DashboardWidget::buildReportHtml() const
     }
     stream << "</table></div></td></tr></table>";
 
+    stream << kReportSectionMarker;
     // Modified and optimized performance: keep each detailed report heading with its table, moving the complete block to the next page when needed.
     stream << "<table class='detail-shell'><tr><td><div class='small-card'><h2>Open booking activity</h2><div class='section-note'>Upcoming and active stays with check-in dates in the selected period.</div>";
-    stream << "<table class='data-table'><tr><th>Booking ID</th><th>Guest</th><th>Customer ID</th><th>Phone</th><th>Room</th><th>Check-in</th><th>Planned check-out</th><th>Status</th></tr>";
+    stream << "<table class='data-table'><tr><th width='11%'>Booking&nbsp;ID</th><th width='18%'>Guest</th><th width='14%'>Customer&nbsp;ID</th><th width='14%'>Phone</th><th width='9%'>Room</th><th width='12%'>Check-in</th><th width='14%'>Planned&nbsp;check-out</th><th width='8%'>Status</th></tr>";
     if (scheduledBookings.empty()) {
         stream << "<tr><td colspan='8' class='empty'>No open bookings in the selected period.</td></tr>";
     } else {
         for (const auto& entry : scheduledBookings) {
-            stream << "<tr><td>" << escapeHtml(entry.bookingId) << "</td><td>" << escapeHtml(entry.customerName)
+            stream << "<tr><td>" << escapeHtml(entry.bookingId) << "</td><td>" << escapeHtmlNoWrap(entry.customerName)
                    << "</td><td>" << escapeHtml(entry.customerId) << "</td><td>" << escapeHtml(entry.phone)
                    << "</td><td>" << escapeHtml(entry.roomNumber) << "<br/><span class='section-note'>" << escapeHtml(entry.roomType)
                    << "</span></td><td>" << escapeHtml(entry.checkIn.toString("dd MMM yyyy"))
@@ -1033,19 +1050,26 @@ QString DashboardWidget::buildReportHtml() const
     }
     stream << "</table></div></td></tr></table>";
 
-    // Modified: Present cancellations and no-shows separately in one audit block so both released-inventory outcomes remain visible.
+    stream << kReportSectionMarker;
+    // Modified: keep cancellation/no-show audit rows together and render their persisted reason in a dedicated column.
     stream << "<table class='compact-shell'><tr><td><div class='small-card'><h2>Cancelled &amp; no-show reservations</h2><div class='section-note'>Reservations with planned check-in dates in the selected period.</div>";
     if (cancelledBookings.empty() && noShowBookings.empty()) {
         stream << "<div class='empty'>No cancelled or no-show reservations in the selected period.</div>";
     } else {
-        stream << "<table class='data-table'><tr><th>Booking ID</th><th>Guest</th><th>Customer ID</th><th>Room</th><th>Check-in</th><th>Planned check-out</th><th>Status</th></tr>";
+        stream << "<table class='data-table'><tr><th width='10%'>Booking&nbsp;ID</th><th width='16%'>Guest</th><th width='13%'>Customer&nbsp;ID</th><th width='8%'>Room</th><th width='13%'>Check-in</th><th width='15%'>Planned&nbsp;check-out</th><th width='9%'>Status</th><th width='16%'>Reason</th></tr>";
         const auto renderReleasedReservation = [&stream](const ReportBookingEntry& entry) {
-            stream << "<tr><td>" << escapeHtml(entry.bookingId) << "</td><td>" << escapeHtml(entry.customerName)
+            QString reason = entry.operationalReason.trimmed();
+            if (entry.status == "No-show" && reason.startsWith("No-show:", Qt::CaseInsensitive)) {
+                reason = reason.mid(QStringLiteral("No-show:").size()).trimmed();
+            }
+            stream << "<tr><td>" << escapeHtml(entry.bookingId) << "</td><td>" << escapeHtmlNoWrap(entry.customerName)
                    << "</td><td>" << escapeHtml(entry.customerId) << "</td><td>" << escapeHtml(entry.roomNumber)
                    << "<br/><span class='section-note'>" << escapeHtml(entry.roomType)
                    << "</span></td><td>" << escapeHtml(entry.checkIn.toString("dd MMM yyyy"))
                    << "</td><td>" << escapeHtml(entry.checkOut.toString("dd MMM yyyy"))
-                   << "</td><td class='status'>" << escapeHtml(entry.status) << "</td></tr>";
+                   << "</td><td class='status'>" << escapeHtml(entry.status)
+                   << "</td><td class='reason-cell'>" << (reason.isEmpty() ? QStringLiteral("—") : escapeHtml(reason))
+                   << "</td></tr>";
         };
         for (const auto& entry : cancelledBookings) {
             renderReleasedReservation(entry);
@@ -1057,14 +1081,15 @@ QString DashboardWidget::buildReportHtml() const
     }
     stream << "</div></td></tr></table>";
 
-    // Modified and optimized performance: begin completed history on a new page so its complete heading, note, and table stay together.
-    stream << "<table class='detail-shell page-break-before'><tr><td><div class='small-card'><h2>Completed booking history</h2><div class='section-note'>Bookings checked out during " << escapeHtml(rangeLabel) << ".</div>";
-    stream << "<table class='data-table'><tr><th>Booking ID</th><th>Guest</th><th>Customer ID</th><th>Phone</th><th>Room</th><th>Check-in</th><th>Checked out</th></tr>";
+    stream << kReportSectionMarker;
+    // Modified: Keep completed-history content together while allowing it to remain on the current page when the full block fits.
+    stream << "<table class='detail-shell'><tr><td><div class='small-card'><h2>Completed booking history</h2><div class='section-note'>Bookings checked out during " << escapeHtml(rangeLabel) << ".</div>";
+    stream << "<table class='data-table'><tr><th width='12%'>Booking&nbsp;ID</th><th width='20%'>Guest</th><th width='16%'>Customer&nbsp;ID</th><th width='15%'>Phone</th><th width='9%'>Room</th><th width='14%'>Check-in</th><th width='14%'>Checked&nbsp;out</th></tr>";
     if (completedStays.empty()) {
         stream << "<tr><td colspan='7' class='empty'>No completed stays in the selected period.</td></tr>";
     } else {
         for (const auto& entry : completedStays) {
-            stream << "<tr><td>" << escapeHtml(entry.bookingId) << "</td><td>" << escapeHtml(entry.customerName)
+            stream << "<tr><td>" << escapeHtml(entry.bookingId) << "</td><td>" << escapeHtmlNoWrap(entry.customerName)
                    << "</td><td>" << escapeHtml(entry.customerId) << "</td><td>" << escapeHtml(entry.phone)
                    << "</td><td>" << escapeHtml(entry.roomNumber) << "<br/><span class='section-note'>" << escapeHtml(entry.roomType)
                    << "</span></td><td>" << escapeHtml(entry.checkIn.toString("dd MMM yyyy"))
@@ -1073,6 +1098,7 @@ QString DashboardWidget::buildReportHtml() const
     }
     stream << "</table></div></td></tr></table>";
 
+    stream << kReportSectionMarker;
     stream << "<div class='footer'>Hotel Booking Management • Internal operational report • Generated automatically</div>";
     stream << "</body></html>";
     return html;
@@ -1100,17 +1126,77 @@ void DashboardWidget::exportReport()
     QPdfWriter writer(finalPath);
     QPageLayout pageLayout(QPageSize(QPageSize::A4), QPageLayout::Landscape, QMarginsF(10, 10, 10, 10));
     writer.setPageLayout(pageLayout);
-    writer.setResolution(300);
+    // Modified: use a predictable point-sized PDF canvas so complete HTML sections can be measured before pagination.
+    writer.setResolution(72);
     writer.setTitle("Booking Management Dashboard Report");
     writer.setCreator("Hotel Booking Management");
 
-    QTextDocument document;
-    document.setDefaultFont(QFont("Segoe UI", 9));
-    document.setDocumentMargin(0);
-    document.setHtml(buildReportHtml());
-    document.setPageSize(QSizeF(pageLayout.paintRectPoints().size()));
+    // Modified: paginate each logical report block manually because QTextDocument does not reliably honor CSS page-break avoidance.
+    const QString reportHtml = buildReportHtml();
+    const QString bodyStartToken = QStringLiteral("</style></head><body>");
+    const int bodyStart = reportHtml.indexOf(bodyStartToken);
+    const int bodyEnd = reportHtml.lastIndexOf(QStringLiteral("</body></html>"));
+    if (bodyStart < 0 || bodyEnd < bodyStart) {
+        QMessageBox::critical(this, "Export Error", "Cannot prepare the report layout for PDF export.");
+        return;
+    }
 
-    document.print(&writer);
+    const QString documentPreamble = reportHtml.left(bodyStart + bodyStartToken.size());
+    const QString documentBody = reportHtml.mid(bodyStart + bodyStartToken.size(), bodyEnd - bodyStart - bodyStartToken.size());
+    const QStringList reportSections = documentBody.split(kReportSectionMarker, Qt::SkipEmptyParts);
+    const QRect printRect = pageLayout.paintRectPixels(writer.resolution());
+
+    QPainter painter(&writer);
+    qreal verticalOffset = 0;
+    constexpr qreal sectionGap = 8;
+
+    const auto startNewPage = [&writer, &verticalOffset]() {
+        writer.newPage();
+        verticalOffset = 0;
+    };
+
+    for (const QString& section : reportSections) {
+        QTextDocument sectionDocument;
+        sectionDocument.setDefaultFont(QFont("Segoe UI", 9));
+        sectionDocument.setDocumentMargin(0);
+        sectionDocument.setHtml(documentPreamble + section + QStringLiteral("</body></html>"));
+        sectionDocument.setTextWidth(printRect.width());
+
+        const qreal sectionHeight = std::ceil(sectionDocument.size().height());
+        if (sectionHeight <= printRect.height()
+            && verticalOffset > 0
+            && verticalOffset + sectionHeight > printRect.height()) {
+            startNewPage();
+        }
+
+        qreal renderedHeight = 0;
+        while (renderedHeight < sectionHeight) {
+            const qreal availableHeight = printRect.height() - verticalOffset;
+            if (availableHeight <= 0) {
+                startNewPage();
+                continue;
+            }
+
+            const qreal sliceHeight = std::min(availableHeight, sectionHeight - renderedHeight);
+            painter.save();
+            painter.setClipRect(QRectF(printRect.left(), printRect.top() + verticalOffset,
+                                      printRect.width(), sliceHeight));
+            painter.translate(printRect.left(), printRect.top() + verticalOffset - renderedHeight);
+            sectionDocument.drawContents(&painter);
+            painter.restore();
+
+            renderedHeight += sliceHeight;
+            verticalOffset += sliceHeight;
+            if (renderedHeight < sectionHeight) {
+                startNewPage();
+            }
+        }
+
+        if (verticalOffset + sectionGap <= printRect.height()) {
+            verticalOffset += sectionGap;
+        }
+    }
+    painter.end();
 
     if (QFileInfo(finalPath).exists() && QFileInfo(finalPath).size() > 0) {
         QMessageBox::information(this, "Export Report", "Dashboard report exported successfully as PDF.");

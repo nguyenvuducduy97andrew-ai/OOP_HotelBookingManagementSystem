@@ -288,9 +288,9 @@ bool BookingService::completeBooking(
         return false;
     }
 
-    // Modified: Keep checkout validation and state mutation in the booking use case instead of the shared data manager.
-    if (actualCheckout <= checkIn) {
-        errorMessage = "Checkout date must be after the actual check-in date.";
+    // Modified: Allow a same-day departure as a one-night stay while rejecting a checkout before the factual arrival.
+    if (actualCheckout < checkIn) {
+        errorMessage = "Checkout date cannot be before the actual check-in date.";
         return false;
     }
     if (actualCheckout > QDate::currentDate()) {

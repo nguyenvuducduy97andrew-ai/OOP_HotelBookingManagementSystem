@@ -40,9 +40,9 @@ models        ── Room hierarchy, RoomMaintenance, MaintenanceGuestNotice,
 ├── README.md
 ├── ARCHITECTURE.md
 ├── data/
-│   └── hotel_data.db                 # Legacy developer database; copied once only when a managed runtime DB is absent
+│   └── hotel_data.db                 # Single project-local runtime SQLite database; created empty when absent
 └── src/
-    ├── main.cpp                      # Startup, sign-in gate, per-user database-path resolution/migration, shutdown safeguard
+    ├── main.cpp                      # Startup, sign-in gate, project-local database-path resolution, shutdown safeguard
     ├── models/                       # Domain objects, StaffSession, and Room hierarchy
     ├── controllers/
     │   ├── hotel/                    # HotelManager in-memory store and facade
@@ -112,8 +112,8 @@ This structure keeps `HotelManager` as an in-memory facade rather than a persist
 ```text
 main.cpp
   │
-  ├── resolve database path → per-user Qt AppLocalDataLocation
-  │     └── copy the former developer `data/hotel_data.db` once when present
+  ├── resolve database path → project-root `data/hotel_data.db`
+  │     └── create the `data` folder when absent; SQLite creates a new empty file
   ├── DataManager::loadAll(hotelManager, path)
   │     ├── open SQLite and create/migrate tables
   │     ├── create query-supporting indexes
@@ -173,7 +173,7 @@ ReservationsPageWidget
   └── DataManager::commitChanges()
 ```
 
-Check-in sets `Booking::checkedIn` and an actual arrival date; only then does the booking become `Active`. Checkout sets `Booking::checkedOut` and an actual departure date while preserving planned dates. The booking then moves out of operational reservations and into Dashboard Booking History. Invoice totals are derived from the locked booking rate/tax and actual duration; completed-stay report identity fields use the immutable invoice snapshot. The UI performs one persistence commit for the checkout-plus-invoice pair.
+Check-in sets `Booking::checkedIn` and an actual arrival date; only then does the booking become `Active`. Checkout sets `Booking::checkedOut` and an actual departure date while preserving planned dates. An actual same-day stay is valid and maps to one billable night; only a departure before arrival is invalid. The booking then moves out of operational reservations and into Dashboard Booking History. Invoice totals are derived from the locked booking rate/tax and actual duration; completed-stay report identity fields use the immutable invoice snapshot. The UI performs one persistence commit for the checkout-plus-invoice pair.
 
 ### Customer creation and conflict handling
 
@@ -188,6 +188,17 @@ CustomerDialog → CustomerPageWidget → HotelManager
 ```
 
 Names are intentionally not unique. The system treats duplicate phone and customer ID values as account conflicts, while allowing different customers to share a name.
+
+### Reservation customer selection
+
+`ReservationDialog` provides an editable existing-customer picker containing active
+guests and searchable by its document number, legal name, or phone. Selecting an
+entry passes its stored `customerId` directly to the booking workflow and fills then
+locks copied identity/contact fields. This prevents a known customer, including a
+legacy identity record, from being reinterpreted as a new customer merely because a
+displayed country/type field cannot reconstruct its internal key. The explicit
+`New customer — enter details manually` option unlocks the input fields and keeps
+the existing customer-registration validation path intact.
 
 ### Availability and maintenance
 
@@ -254,9 +265,9 @@ The application currently saves the complete manager snapshot rather than indivi
 
 ## Reporting and PDF export
 
-`ReportService` builds a `DashboardReportData` value from `HotelManager` without mutating it. The PDF-export workflow separates the real-time occupancy snapshot from selected-period-to-date occupancy, calculated as actual occupied room-nights divided by available room-nights. It also includes room counts, actual-arrival top rooms, open bookings, cancellations/no-shows, completed stays, and invoice-based revenue KPIs (invoiced revenue, ADR, RevPAR). It does not interpret an invoice issue date as proof of payment. Completed stays prefer immutable invoice snapshots; other statuses use the current linked model. It sorts data before `DashboardWidget` renders the PDF.
+`ReportService` builds a `DashboardReportData` value from `HotelManager` without mutating it. The PDF-export workflow separates the real-time occupancy snapshot from selected-period-to-date occupancy, calculated as actual occupied room-nights divided by available room-nights. It also includes room counts, actual-arrival top rooms, open bookings, cancellations/no-shows, completed stays, invoice-based revenue KPIs (invoiced revenue, ADR, RevPAR), and each no-show's persisted staff reason. It does not interpret an invoice issue date as proof of payment. Completed stays prefer immutable invoice snapshots; other statuses use the current linked model. It sorts data before `DashboardWidget` renders the PDF.
 
-`DashboardWidget` owns interactive dashboard presentation, including its own live card, chart, popular-room, and booking-history aggregation over `HotelManager`. It also renders the PDF HTML, but delegates PDF report aggregation to `ReportService`. PDF export uses A4 landscape pages and print-safe wrapper blocks so each heading stays with its related table; Top Rooms and Completed Booking History begin on new pages.
+`DashboardWidget` owns interactive dashboard presentation, including its own live card, chart, popular-room, and booking-history aggregation over `HotelManager`. It also renders the PDF HTML, but delegates PDF report aggregation to `ReportService`. PDF export uses A4 landscape pages and measures each logical HTML section before drawing it. A section that fits on one page is kept intact; if the remaining space is insufficient, the full section moves to the next page. A section larger than one page is clipped and continued only because it cannot physically fit as one block. Detailed tables use fixed balanced widths and non-wrapping identity/date headings; the cancellation/no-show audit has a separate `Reason` column instead of mixing reason text into the status value.
 
 ## Dependency rules
 

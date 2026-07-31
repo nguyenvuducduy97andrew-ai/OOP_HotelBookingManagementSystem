@@ -66,12 +66,16 @@ bool InvoiceService::createInvoice(
 
     const QDate actualCheckIn = QDate::fromString(QString::fromStdString(booking->getActualCheckInDate()), Qt::ISODate);
     const QDate actualCheckOut = QDate::fromString(QString::fromStdString(booking->getActualCheckOutDate()), Qt::ISODate);
-    const int derivedNights = actualCheckIn.daysTo(actualCheckOut);
-    // Modified: Derive invoice nights and tax from the confirmed booking snapshot rather than accepting UI-supplied billing values.
-    if (!actualCheckIn.isValid() || !actualCheckOut.isValid() || derivedNights <= 0) {
+    // Modified: Treat a same-day check-in/check-out as the agreed one billable night while rejecting reversed dates.
+    if (!actualCheckIn.isValid() || !actualCheckOut.isValid() || actualCheckOut < actualCheckIn) {
         errorMessage = "The completed booking has an invalid actual stay duration.";
         return false;
     }
+    const int derivedNights = actualCheckIn == actualCheckOut
+        ? 1
+        : static_cast<int>(actualCheckIn.daysTo(actualCheckOut));
+
+    // Modified: Derive invoice nights and tax from the confirmed booking snapshot rather than accepting UI-supplied billing values.
 
     auto invoice = std::make_shared<Invoice>();
     invoice->setInvoiceId(invoiceId);

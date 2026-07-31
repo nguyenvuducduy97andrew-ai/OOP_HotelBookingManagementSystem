@@ -94,7 +94,24 @@ bool requestCheckoutPayment(QWidget* parent, double total, QString& method, doub
     QDialog dialog(parent);
     dialog.setWindowTitle("Record checkout payment");
     dialog.setModal(true);
+    dialog.setMinimumWidth(420);
+    // Modified: Give the checkout-payment dialog explicit colors so inherited page styles cannot render its controls white on white.
+    dialog.setStyleSheet(
+        "QDialog { background: #FFFFFF; }"
+        "QLabel { color: #2B3674; font-size: 13px; font-weight: 600; }"
+        "QComboBox, QDoubleSpinBox { color: #2B3674; background: #F4F7FE;"
+        " border: 1px solid #D9E2F2; border-radius: 8px; padding: 7px 10px; min-height: 22px; }"
+        "QComboBox:focus, QDoubleSpinBox:focus { border: 1px solid #005BFE; }"
+        "QComboBox QAbstractItemView { color: #2B3674; background: #FFFFFF;"
+        " selection-color: #FFFFFF; selection-background-color: #005BFE; }"
+        "QPushButton { min-width: 96px; padding: 8px 14px; border-radius: 8px; font-weight: 700; }"
+        "QPushButton#checkoutPaymentCancel { color: #2B3674; background: #E9EDF7; border: none; }"
+        "QPushButton#checkoutPaymentConfirm { color: #FFFFFF; background: #005BFE; border: none; }"
+        "QPushButton#checkoutPaymentConfirm:hover { background: #2B7BFF; }"
+    );
     auto* layout = new QVBoxLayout(&dialog);
+    layout->setContentsMargins(24, 22, 24, 20);
+    layout->setSpacing(10);
     layout->addWidget(new QLabel(QString("Invoice total: %1 VND").arg(QString::number(total, 'f', 0)), &dialog));
     auto* methodBox = new QComboBox(&dialog);
     methodBox->addItems({"Cash", "Card", "Bank transfer", "Other"});
@@ -110,6 +127,8 @@ bool requestCheckoutPayment(QWidget* parent, double total, QString& method, doub
     auto* buttons = new QHBoxLayout();
     auto* cancel = new QPushButton("Cancel", &dialog);
     auto* confirm = new QPushButton("Record payment", &dialog);
+    cancel->setObjectName("checkoutPaymentCancel");
+    confirm->setObjectName("checkoutPaymentConfirm");
     buttons->addStretch(); buttons->addWidget(cancel); buttons->addWidget(confirm); layout->addLayout(buttons);
     QObject::connect(cancel, &QPushButton::clicked, &dialog, &QDialog::reject);
     QObject::connect(confirm, &QPushButton::clicked, &dialog, &QDialog::accept);
@@ -730,12 +749,15 @@ void ReservationsPageWidget::onTableActionClicked() {
             std::string todayStr = today.toString("yyyy-MM-dd").toStdString();
 
             const QDate actualCheckIn = QDate::fromString(QString::fromStdString(booking->getActualCheckInDate()), Qt::ISODate);
-            const int nights = actualCheckIn.daysTo(today);
+            // Modified: Quote one billable night for an approved same-day checkout instead of silently ending the workflow.
+            const int nights = actualCheckIn == today
+                ? 1
+                : static_cast<int>(actualCheckIn.daysTo(today));
             const double invoiceTotal = nights * booking->getQuotedUnitPrice() * (1.0 + booking->getQuotedTaxRate());
             QString paymentMethod;
             double paymentAmount = 0.0;
             // Modified: Require a real payment entry before checkout can complete and issue an invoice.
-            if (nights <= 0 || !requestCheckoutPayment(this, invoiceTotal, paymentMethod, paymentAmount)) {
+            if (!requestCheckoutPayment(this, invoiceTotal, paymentMethod, paymentAmount)) {
                 return;
             }
 
