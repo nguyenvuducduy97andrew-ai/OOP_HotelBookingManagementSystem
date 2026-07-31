@@ -15,6 +15,10 @@
 #include <QPainter>
 #include <QMouseEvent>
 #include <QEvent>
+#include <QSplitter>
+#include <QFrame>
+#include <QDate>
+#include <algorithm>
 
 namespace {
 class ExpandableSearchEdit : public QLineEdit {
@@ -120,6 +124,36 @@ private:
     QTableWidget* m_table;
     int m_hoveredRow = -1;
 };
+
+QString bookingStateLabel(BookingState state)
+{
+    switch (state) {
+    case BookingState::UPCOMING: return QStringLiteral("Upcoming");
+    case BookingState::ACTIVE: return QStringLiteral("Active");
+    case BookingState::COMPLETED: return QStringLiteral("Completed");
+    case BookingState::CANCELLED: return QStringLiteral("Cancelled");
+    case BookingState::NO_SHOW: return QStringLiteral("No-show");
+    }
+    return QStringLiteral("Unknown");
+}
+
+QColor bookingStateColor(BookingState state)
+{
+    switch (state) {
+    case BookingState::UPCOMING: return QColor("#2563EB");
+    case BookingState::ACTIVE: return QColor("#D97706");
+    case BookingState::COMPLETED: return QColor("#059669");
+    case BookingState::CANCELLED: return QColor("#DC2626");
+    case BookingState::NO_SHOW: return QColor("#7E22CE");
+    }
+    return QColor("#64748B");
+}
+
+QString displayBookingDate(const std::string& isoDate)
+{
+    const QDate date = QDate::fromString(QString::fromStdString(isoDate), Qt::ISODate);
+    return date.isValid() ? date.toString("dd MMM yyyy") : QString::fromStdString(isoDate);
+}
 }
 
 CustomerPageWidget::CustomerPageWidget(HotelManager* manager, QWidget *parent)
@@ -286,6 +320,31 @@ void CustomerPageWidget::setupStyle() {
             padding: 12px 8px;
             font-size: 12px;
         }
+        QFrame#customerBookingHistoryPanel {
+            background-color: #F8FAFC;
+            border: 1px solid #E0E8F5;
+            border-radius: 14px;
+        }
+        QLabel#customerBookingHistoryTitle {
+            color: #2B3674;
+            font-size: 16px;
+            font-weight: 800;
+        }
+        QLabel#customerBookingHistorySubtitle {
+            color: #7B8BA5;
+            font-size: 12px;
+        }
+        QTableWidget#customerBookingHistoryTable {
+            background-color: #FFFFFF;
+            border: 1px solid #E7EDF6;
+            border-radius: 10px;
+            gridline-color: #EEF2F7;
+            color: #2B3674;
+            font-size: 12px;
+        }
+        QTableWidget#customerBookingHistoryTable::item {
+            padding: 7px 9px;
+        }
     )");
 }
 
@@ -383,7 +442,47 @@ void CustomerPageWidget::setupUI() {
     m_tableWidget->setShowGrid(true);
     m_tableWidget->setItemDelegate(new HoverRowDelegate(m_tableWidget));
 
-    mainLayout->addWidget(m_tableWidget);
+    // Modified: place the customer list and the selected customer's booking history in a resizable master-detail view.
+    m_contentSplitter = new QSplitter(Qt::Vertical, this);
+    m_contentSplitter->setChildrenCollapsible(false);
+    m_contentSplitter->addWidget(m_tableWidget);
+
+    m_bookingHistoryPanel = new QFrame(m_contentSplitter);
+    m_bookingHistoryPanel->setObjectName("customerBookingHistoryPanel");
+    auto* bookingHistoryLayout = new QVBoxLayout(m_bookingHistoryPanel);
+    bookingHistoryLayout->setContentsMargins(14, 12, 14, 14);
+    bookingHistoryLayout->setSpacing(5);
+
+    m_bookingHistoryTitle = new QLabel("Customer reservations", m_bookingHistoryPanel);
+    m_bookingHistoryTitle->setObjectName("customerBookingHistoryTitle");
+    m_bookingHistorySubtitle = new QLabel(m_bookingHistoryPanel);
+    m_bookingHistorySubtitle->setObjectName("customerBookingHistorySubtitle");
+    m_bookingHistoryTable = new QTableWidget(m_bookingHistoryPanel);
+    m_bookingHistoryTable->setObjectName("customerBookingHistoryTable");
+    m_bookingHistoryTable->setColumnCount(7);
+    m_bookingHistoryTable->setHorizontalHeaderLabels({
+        "Booking ID", "Room", "Planned check-in", "Planned check-out", "Actual check-out", "Status", "Reason"
+    });
+    m_bookingHistoryTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    m_bookingHistoryTable->setSelectionMode(QAbstractItemView::NoSelection);
+    m_bookingHistoryTable->setAlternatingRowColors(true);
+    m_bookingHistoryTable->verticalHeader()->setVisible(false);
+    m_bookingHistoryTable->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
+    m_bookingHistoryTable->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
+    m_bookingHistoryTable->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
+    m_bookingHistoryTable->horizontalHeader()->setSectionResizeMode(3, QHeaderView::ResizeToContents);
+    m_bookingHistoryTable->horizontalHeader()->setSectionResizeMode(4, QHeaderView::ResizeToContents);
+    m_bookingHistoryTable->horizontalHeader()->setSectionResizeMode(5, QHeaderView::ResizeToContents);
+    m_bookingHistoryTable->horizontalHeader()->setSectionResizeMode(6, QHeaderView::Stretch);
+
+    bookingHistoryLayout->addWidget(m_bookingHistoryTitle);
+    bookingHistoryLayout->addWidget(m_bookingHistorySubtitle);
+    bookingHistoryLayout->addWidget(m_bookingHistoryTable, 1);
+    m_contentSplitter->addWidget(m_bookingHistoryPanel);
+    m_contentSplitter->setStretchFactor(0, 3);
+    m_contentSplitter->setStretchFactor(1, 2);
+    m_bookingHistoryPanel->hide();
+    mainLayout->addWidget(m_contentSplitter, 1);
 
     // Modified: label every sortable header and show the active ascending or descending direction explicitly.
     auto* horizontalHeader = m_tableWidget->horizontalHeader();
@@ -413,7 +512,8 @@ void CustomerPageWidget::setupUI() {
     connect(m_editCustomerBtn, &QPushButton::clicked, this, &CustomerPageWidget::onEditCustomerClicked);
     connect(m_archiveCustomerBtn, &QPushButton::clicked, this, &CustomerPageWidget::onArchiveCustomerClicked);
     connect(m_deleteCustomerBtn, &QPushButton::clicked, this, &CustomerPageWidget::onDeleteCustomerClicked);
-    connect(m_tableWidget, &QTableWidget::itemSelectionChanged, this, &CustomerPageWidget::updateActionButtons);
+    connect(m_tableWidget, &QTableWidget::itemSelectionChanged,
+            this, &CustomerPageWidget::onCustomerSelectionChanged);
 
     updateActionButtons();
 }
@@ -594,6 +694,117 @@ void CustomerPageWidget::updateActionButtons() {
     }
 }
 
+void CustomerPageWidget::onCustomerSelectionChanged()
+{
+    updateActionButtons();
+    if (m_tableWidget->selectedItems().isEmpty()) {
+        clearCustomerBookingHistory();
+        return;
+    }
+
+    const int currentRow = m_tableWidget->currentRow();
+    const auto* documentItem = currentRow >= 0 ? m_tableWidget->item(currentRow, 0) : nullptr;
+    if (!documentItem) {
+        clearCustomerBookingHistory();
+        return;
+    }
+
+    // Modified: load every non-deleted booking for the selected customer through the existing manager query.
+    showCustomerBookingHistory(documentItem->data(Qt::UserRole).toString());
+}
+
+void CustomerPageWidget::clearCustomerBookingHistory()
+{
+    if (!m_bookingHistoryPanel) {
+        return;
+    }
+
+    m_bookingHistoryTable->setRowCount(0);
+    m_bookingHistoryPanel->hide();
+}
+
+void CustomerPageWidget::showCustomerBookingHistory(const QString& customerId)
+{
+    if (!m_manager || customerId.isEmpty()) {
+        clearCustomerBookingHistory();
+        return;
+    }
+
+    const auto customer = m_manager->findCustomerById(customerId.toStdString());
+    if (!customer) {
+        clearCustomerBookingHistory();
+        return;
+    }
+
+    auto bookings = m_manager->getBookingsForCustomer(customer->getCustomerId());
+    std::sort(bookings.begin(), bookings.end(), [](const std::shared_ptr<Booking>& left,
+                                                    const std::shared_ptr<Booking>& right) {
+        if (!left || !right) {
+            return static_cast<bool>(left);
+        }
+        return left->getCheckInDate() > right->getCheckInDate();
+    });
+
+    const bool panelWasHidden = m_bookingHistoryPanel->isHidden();
+    m_bookingHistoryTable->setRowCount(0);
+    int row = 0;
+    for (const auto& booking : bookings) {
+        if (!booking || booking->isDeleted()) {
+            continue;
+        }
+
+        const auto room = booking->getRoom();
+        const BookingState state = m_manager->getBookingState(*booking);
+        QString reason = QString::fromStdString(booking->getCancellationReason()).trimmed();
+        if (state == BookingState::NO_SHOW && reason.startsWith("No-show:", Qt::CaseInsensitive)) {
+            reason = reason.mid(QStringLiteral("No-show:").size()).trimmed();
+        }
+
+        m_bookingHistoryTable->insertRow(row);
+        m_bookingHistoryTable->setItem(row, 0, new QTableWidgetItem(QString::fromStdString(booking->getBookingId())));
+        m_bookingHistoryTable->setItem(row, 1, new QTableWidgetItem(room
+            ? QString::fromStdString(room->getRoomNumber()) + " — " + QString::fromStdString(room->getRoomTypeName())
+            : QStringLiteral("Unavailable room")));
+        m_bookingHistoryTable->setItem(row, 2, new QTableWidgetItem(displayBookingDate(booking->getCheckInDate())));
+        m_bookingHistoryTable->setItem(row, 3, new QTableWidgetItem(displayBookingDate(booking->getCheckOutDate())));
+        m_bookingHistoryTable->setItem(row, 4, new QTableWidgetItem(booking->isCheckedOut()
+            ? displayBookingDate(booking->getActualCheckOutDate()) : QStringLiteral("—")));
+
+        auto* statusItem = new QTableWidgetItem(bookingStateLabel(state));
+        statusItem->setForeground(bookingStateColor(state));
+        QFont statusFont = statusItem->font();
+        statusFont.setBold(true);
+        statusItem->setFont(statusFont);
+        m_bookingHistoryTable->setItem(row, 5, statusItem);
+        m_bookingHistoryTable->setItem(row, 6, new QTableWidgetItem(reason.isEmpty() ? QStringLiteral("—") : reason));
+        ++row;
+    }
+
+    // Modified: expose the selected customer's complete operational history without moving booking actions out of Reservation Management.
+    // Modified: distinguish the customer's all-status reservation record from Dashboard Booking History for completed stays.
+    m_bookingHistoryTitle->setText(QString("Customer reservations — %1").arg(QString::fromStdString(customer->getName())));
+    // Modified: use natural English singular/plural labels instead of an ambiguous optional-suffix form.
+    const QString bookingCountLabel = row == 1 ? QStringLiteral("booking") : QStringLiteral("bookings");
+    m_bookingHistorySubtitle->setText(QString("%1 • %2 • %3 %4")
+        .arg(QString::fromStdString(customer->getDocumentType()),
+             QString::fromStdString(customer->getDocumentNumber()),
+             QString::number(row), bookingCountLabel));
+
+    if (row == 0) {
+        m_bookingHistoryTable->setRowCount(1);
+        auto* emptyItem = new QTableWidgetItem("No booking history for this customer.");
+        emptyItem->setTextAlignment(Qt::AlignCenter);
+        emptyItem->setForeground(QColor("#7B8BA5"));
+        m_bookingHistoryTable->setItem(0, 0, emptyItem);
+        m_bookingHistoryTable->setSpan(0, 0, 1, m_bookingHistoryTable->columnCount());
+    }
+
+    m_bookingHistoryPanel->show();
+    if (panelWasHidden) {
+        m_contentSplitter->setSizes({440, 300});
+    }
+}
+
 void CustomerPageWidget::refreshData() {
     refreshDataInternal();
 }
@@ -646,8 +857,12 @@ void CustomerPageWidget::highlightConflictingCustomer(const QString& customerId)
 void CustomerPageWidget::refreshDataInternal() {
     if (!m_manager) {
         m_tableWidget->setRowCount(0);
+        clearCustomerBookingHistory();
         return;
     }
+
+    // Modified: clear the detail panel during list rebuilds so it never describes a customer excluded by the active filters.
+    clearCustomerBookingHistory();
 
     const QString searchText = m_searchEdit->text().trimmed();
     const QString documentTypeFilter = m_documentTypeFilter->currentData().toString();

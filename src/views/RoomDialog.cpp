@@ -348,7 +348,10 @@ void RoomDialog::setExistingMaintenanceSchedules(const std::vector<RoomMaintenan
             .arg(QString::fromStdString(maintenance.getStartDate()))
             .arg(QString::fromStdString(maintenance.getEndDate()));
         if (noticeCount > 0) {
-            label += QString(" | Simulated email logged for %1 booking(s)").arg(noticeCount);
+            // Modified: render maintenance-notice counts with a real singular or plural booking label.
+            label += QString(" | Simulated email logged for %1 %2")
+                .arg(noticeCount)
+                .arg(noticeCount == 1 ? QStringLiteral("booking") : QStringLiteral("bookings"));
         }
         if (!maintenance.getNote().empty()) {
             label += QString(" — %1").arg(QString::fromStdString(maintenance.getNote()));

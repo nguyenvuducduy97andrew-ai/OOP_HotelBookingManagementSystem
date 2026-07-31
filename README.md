@@ -7,7 +7,7 @@ A C++17 / Qt6 desktop application for hotel rooms, customers, reservations, chec
 ## Current capabilities
 
 - Polymorphic room portfolio: `StandardRoom`, `DeluxeRoom`, and `SuiteRoom`.
-- Customer management with archive/delete workflows, searchable/filterable/sortable lists, country-aware ID and phone validation, and conflict highlighting in the customer list.
+- Customer management with archive/delete workflows, searchable/filterable/sortable lists, country-aware ID and phone validation, conflict highlighting, and a selected-customer booking-history panel.
 - Reservation customer picker searches active guests by document number, name, or phone, then reuses their stored identity key without re-registering them.
 - Reservation creation only from Room Status, reservation editing, cancellation, checkout, and invoice generation.
 - Explicit booking lifecycle: staff must record **Check-in** before a room becomes occupied, then record checkout to complete the stay.
@@ -82,6 +82,7 @@ Checkout and invoice creation are staged together, then persisted through one `D
 - Customer name is captured as one required **full legal name**. The validation accepts a one-part legal name, all-uppercase document names, and scripts without uppercase/lowercase; it does not force a Western surname/given-name structure.
 - Customer names are not unique. Customer IDs and normalized phone numbers are protected by the customer workflow and a SQLite unique phone index. The same validation is applied when creating and editing a customer. When a conflict is detected, the conflicting customer is highlighted for the user.
 - Reservation provides an existing-customer picker. Selecting a guest reuses the stored internal customer key and locks the copied identity/contact fields, including legacy records that cannot be reconstructed from the supported country selectors. Staff select `New customer — enter details manually` only when creating a genuinely new customer.
+- Selecting a customer row opens `Customer reservations` directly below the list. This read-only all-status customer-profile view is distinct from Dashboard Booking History, which contains completed stays in the selected reporting period. It contains planned/actual departure facts, room, lifecycle status, and cancellation/no-show reason; booking mutations remain in Reservation Management.
 
 ### Existing database reconciliation
 

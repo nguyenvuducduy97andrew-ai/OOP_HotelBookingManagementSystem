@@ -83,6 +83,13 @@ The Customer page shows Document Number, Document Type, name, phone and reservat
 counts. Use Search, Active/Archived, document-type and issuing-country filters before
 adding a record. Click a table header to sort; its arrow shows the active direction.
 
+Select a customer row to show Customer reservations below the list. It contains every
+non-deleted booking for that guest: Upcoming, Active, Completed, Cancelled, and
+No-show. The table shows room, planned dates, actual checkout where applicable,
+status, and the recorded reason. This differs from Dashboard Booking History, which
+only contains completed stays for the selected reporting period. This is a lookup view; use Reservation Management
+for check-in, checkout, cancellation, or editing.
+
 Adding a customer:
 1. Select Add Customer.
 2. Select Document Type and issuing country. The nearby hint gives an accepted

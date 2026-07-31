@@ -137,6 +137,13 @@ type, while issuing country remains a filter to preserve horizontal space. These
 controls only select and order rows; `CustomerService` remains the authority for
 identity and normalized-phone collision decisions.
 
+Selecting a customer also invokes `HotelManager::getBookingsForCustomer()` and
+renders a read-only master-detail `Customer reservations` panel. The panel includes every
+non-deleted booking for that customer, including completed, cancelled, and no-show
+records. It uses the manager's lifecycle state and persisted actual checkout/cancellation
+facts; it does not duplicate booking mutation logic, which remains in
+`ReservationsPageWidget` and `BookingService`.
+
 ### Create a reservation from Room Status
 
 ```text

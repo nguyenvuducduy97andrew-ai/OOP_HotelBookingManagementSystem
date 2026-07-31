@@ -169,7 +169,8 @@ std::string Invoice::generateInvoiceDetails() const {
     details << "<b>Price per Night:</b> " << formatMoney(unitPrice) << " VND<br>";
     details << "<b>Check-in Date:</b> " << checkInDateSnapshot << "<br>";
     details << "<b>Check-out Date:</b> " << checkOutDateSnapshot << "<br>";
-    details << "<b>Duration:</b> " << nights << " night(s)<br>";
+    // Modified: render invoice duration with a real singular or plural night label.
+    details << "<b>Duration:</b> " << nights << (nights == 1 ? " night" : " nights") << "<br>";
 
     // Billing breakdown
     double subtotal = calculateSubtotal();

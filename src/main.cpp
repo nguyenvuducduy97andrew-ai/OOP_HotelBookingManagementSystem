@@ -9,6 +9,59 @@
 #include "DataManager.h"
 
 namespace {
+QString applicationScrollBarStyleSheet()
+{
+    return QStringLiteral(R"(
+        QScrollBar:vertical {
+            background: transparent;
+            width: 12px;
+            margin: 5px 3px 5px 0;
+        }
+        QScrollBar::handle:vertical {
+            background: #C7D3E3;
+            border: 2px solid transparent;
+            border-radius: 5px;
+            min-height: 34px;
+        }
+        QScrollBar::handle:vertical:hover {
+            background: #94A9C2;
+        }
+        QScrollBar::handle:vertical:pressed {
+            background: #6E86A3;
+        }
+        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+            height: 0px;
+        }
+        QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+            background: transparent;
+        }
+        QScrollBar:horizontal {
+            background: transparent;
+            height: 12px;
+            margin: 0 5px 3px 5px;
+        }
+        QScrollBar::handle:horizontal {
+            background: #C7D3E3;
+            border: 2px solid transparent;
+            border-radius: 5px;
+            min-width: 34px;
+        }
+        QScrollBar::handle:horizontal:hover {
+            background: #94A9C2;
+        }
+        QScrollBar::handle:horizontal:pressed {
+            background: #6E86A3;
+        }
+        QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+            width: 0px;
+        }
+        QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal,
+        QAbstractScrollArea::corner {
+            background: transparent;
+        }
+    )");
+}
+
 QString resolveProjectDatabasePath()
 {
     QDir searchDir(QDir::currentPath());
@@ -39,6 +92,8 @@ QString resolveProjectDatabasePath()
 int main(int argc, char *argv[]) {
     // Initialize the Qt application.
     QApplication app(argc, argv);
+    // Modified: apply the Dashboard-inspired rounded scrollbar treatment globally to every scrollable application control.
+    app.setStyleSheet(applicationScrollBarStyleSheet());
     QCoreApplication::setOrganizationName("VNUHCM-US");
     QCoreApplication::setApplicationName("HotelBookingManagement");
     // Create the HotelManager that owns the hotel's in-memory data.

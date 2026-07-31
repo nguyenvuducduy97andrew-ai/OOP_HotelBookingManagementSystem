@@ -747,6 +747,11 @@ CustomerPageWidget and CustomerDialog
   headers, add/edit/archive/delete and conflict highlight.
 - The table deliberately displays document number and document type; issuing
   country remains filterable without consuming another narrow table column.
+- Selecting a customer uses HotelManager::getBookingsForCustomer and shows a
+  read-only master-detail `Customer reservations` panel. It includes all non-deleted lifecycle
+  records, renders actual checkout separately from planned checkout, and keeps
+  no-show/cancellation reason in its own column. Do not add booking mutations to
+  this panel; Reservation Management remains the operational mutation boundary.
 - HoverRowDelegate only paints rows.
 - Dialog setup/populate/validate provides friendly input handling.
 - CustomerService remains authoritative for collision rules.

@@ -153,7 +153,7 @@ void DashboardWidget::updateDateTime()
 void DashboardWidget::populateData()
 {
     if (!m_manager) {
-        ui->statCard1->setData("Total Room Number", "0", "0 room type", true);
+        ui->statCard1->setData("Total Room Number", "0", "0 room types", true);
         ui->statCard2->setData("Occupancy rate", "0%", "No data available", true);
         ui->statCard3->setData("This month reservation", "0", "No data available", true);
         ui->statCard4->setData("This year reservations", "0", "No data available", true);
@@ -998,7 +998,8 @@ QString DashboardWidget::buildReportHtml() const
     stream << "<td><div class='metric-label'>Current occupancy</div><div class='metric-value'>" << qRound(occupancyRate) << "%</div></td>";
     // Modified: Separate the real-time snapshot from selected-period room-night occupancy so PDF KPI labels cannot imply the same measurement.
     stream << "<td><div class='metric-label'>Period occupancy (to date)</div><div class='metric-value'>" << qRound(periodOccupancyRate) << "%</div><div class='section-note'>"
-           << periodOccupiedRoomNights << " / " << periodAvailableRoomNights << " room-nights across " << periodDaysToDate << " day(s)</div></td>";
+           << periodOccupiedRoomNights << " / " << periodAvailableRoomNights << " room-nights across " << periodDaysToDate
+           << (periodDaysToDate == 1 ? " day" : " days") << "</div></td>";
     stream << "<td><div class='metric-label'>Active bookings</div><div class='metric-value'>" << activeCount << "</div></td>";
     stream << "<td><div class='metric-label'>Completed stays</div><div class='metric-value'>" << completedCount << "</div></td>";
     stream << "</tr></table>";

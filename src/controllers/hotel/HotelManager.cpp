@@ -966,8 +966,11 @@ bool HotelManager::scheduleRoomMaintenanceCore(const std::string& roomNumber,
             maintenanceId, bookingId, "Simulated email", "Awaiting guest response", timestamp);
     }
     if (!affectedBookingIds.empty()) {
+        // Modified: make maintenance conflict messages grammatically accurate for one or multiple bookings.
+        const std::string bookingLabel = affectedBookingIds.size() == 1 ? "booking" : "bookings";
         errorMessage = "Maintenance case created. Simulated guest notifications were logged for "
-            + std::to_string(affectedBookingIds.size()) + " affected booking(s). Resolve them, then confirm the case.";
+            + std::to_string(affectedBookingIds.size()) + " affected " + bookingLabel
+            + ". Resolve them, then confirm the case.";
     }
     return true;
 }

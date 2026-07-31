@@ -80,6 +80,12 @@ reservation. Dùng Search, Active/Archived, document-type và issuing-country fi
 trước khi Add để hạn chế duplicate. Có thể bấm header để sort; mũi tên cho biết
 hướng sort hiện tại.
 
+Khi chọn một row customer, phần Customer reservations ở dưới sẽ hiện toàn bộ booking
+chưa bị xóa của khách đó: Upcoming, Active, Completed, Cancelled và No-show. Bảng
+cho biết phòng, ngày dự kiến, actual check-out (nếu đã checkout), status và Reason.
+Đây khác với Booking History ở Dashboard (chỉ completed stay theo kỳ báo cáo). Đây là
+phần tra cứu; muốn check-in, checkout, cancel hoặc edit thì vào Reservation.
+
 5.1 Thêm khách mới
 
 1. Chọn Add Customer.
