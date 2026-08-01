@@ -5,7 +5,6 @@
 #include "StandardRoom.h"
 #include "DeluxeRoom.h"
 #include "SuiteRoom.h"
-#include "RoomAvailabilityService.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QFormLayout>
@@ -340,8 +339,7 @@ void ReservationDialog::updateAvailableRooms() {
     }
 
     std::string availabilityError;
-    RoomAvailabilityService availability(*m_manager);
-    const auto availableRooms = availability.getAvailableRoomsForDates(
+    const auto availableRooms = m_manager->getAvailableRoomsForDates(
         checkInStr.toStdString(), checkOutStr.toStdString(), availabilityError, m_editingBookingId);
     for (const auto& room : availableRooms) {
         if (m_adultCountSpin->value() + m_childCountSpin->value() > room->getMaximumGuests()) {

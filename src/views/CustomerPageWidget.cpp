@@ -595,7 +595,7 @@ void CustomerPageWidget::onEditCustomerClicked() {
 
     std::string errorMessage;
     std::string conflictingCustomerId;
-    // Modified: Route customer edits through CustomerService so duplicate detection cannot be bypassed by the UI.
+    // Route customer edits through HotelManager so duplicate detection cannot be bypassed by the UI.
     if (!m_manager->updateCustomer(customerId.toStdString(), dialog.getCustomerName().toStdString(),
                                    dialog.getCustomerPhone().toStdString(), errorMessage, &conflictingCustomerId)) {
         if (!conflictingCustomerId.empty()) {

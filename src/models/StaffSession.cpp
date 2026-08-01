@@ -6,7 +6,7 @@ StaffSession& StaffSession::instance()
     return session;
 }
 
-void StaffSession::start(const QString& username, const QString& displayName, const QString& role)
+void StaffSession::start(const std::string& username, const std::string& displayName, const std::string& role)
 {
     // Modified: Keep a single authenticated staff context so later audit records use the real signed-in operator.
     m_authenticated = true;
@@ -28,17 +28,17 @@ bool StaffSession::isAuthenticated() const
     return m_authenticated;
 }
 
-QString StaffSession::username() const
+const std::string& StaffSession::username() const
 {
     return m_username;
 }
 
-QString StaffSession::displayName() const
+const std::string& StaffSession::displayName() const
 {
     return m_displayName;
 }
 
-QString StaffSession::role() const
+const std::string& StaffSession::role() const
 {
     return m_role;
 }

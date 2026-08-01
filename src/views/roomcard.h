@@ -1,5 +1,4 @@
-#ifndef ROOMCARD_H
-#define ROOMCARD_H
+#pragma once
 
 #include <QWidget>
 #include <string>
@@ -61,5 +60,3 @@ protected:
     void mousePressEvent(QMouseEvent* event) override;
     void mouseReleaseEvent(QMouseEvent* event) override;
 };
-
-#endif // ROOMCARD_H

@@ -14,6 +14,47 @@
 #include <utility>
 #include <vector>
 
+namespace {
+bool hasCanonicalObjectGraph(const HotelManager& manager, std::string& errorMessage)
+{
+    for (const auto& booking : manager.getBookings()) {
+        if (!booking || !booking->getCustomer() || !booking->getRoom()) {
+            errorMessage = "Loaded booking graph contains a missing object reference.";
+            return false;
+        }
+        if (manager.findBookingById(booking->getBookingId()) != booking
+            || manager.findCustomerById(booking->getCustomer()->getCustomerId()) != booking->getCustomer()
+            || manager.findRoomByNumber(booking->getRoom()->getRoomNumber()) != booking->getRoom()) {
+            errorMessage = "Loaded booking graph does not use canonical object references.";
+            return false;
+        }
+    }
+
+    for (const auto& invoice : manager.getInvoices()) {
+        if (!invoice || !invoice->getBooking()
+            || manager.findInvoiceById(invoice->getInvoiceId()) != invoice
+            || manager.findBookingById(invoice->getBookingId()) != invoice->getBooking()) {
+            errorMessage = "Loaded invoice graph does not use its canonical booking reference.";
+            return false;
+        }
+    }
+
+    for (const auto& maintenance : manager.getRoomMaintenances()) {
+        if (!manager.findRoomByNumber(maintenance.getRoomNumber())) {
+            errorMessage = "Loaded maintenance graph references a missing room.";
+            return false;
+        }
+    }
+    for (const auto& notice : manager.getMaintenanceGuestNotices()) {
+        if (!manager.findBookingById(notice.getBookingId())) {
+            errorMessage = "Loaded maintenance notification references a missing booking.";
+            return false;
+        }
+    }
+    return true;
+}
+}
+
 // Creates or returns the one shared DataManager instance.
 // Reference helps ensuring only one DataManager instance exist
 DataManager& DataManager::getInstance() {
@@ -672,7 +713,11 @@ bool DataManager::loadAll(HotelManager& manager, const std::string& dataPath) {
         return false;
     }
 
-    // Modified: Publish only a fully validated snapshot and update the booking ID counter after a successful load.
+    // Publish only a fully validated, canonical snapshot and update the booking ID counter after a successful load.
+    if (!hasCanonicalObjectGraph(loadedManager, errorMsg)) {
+        qDebug() << "Failed loaded object-graph validation:" << QString::fromStdString(errorMsg);
+        return false;
+    }
     qint64 loadedRevision = -1;
     if (!readDatabaseRevision(loadedRevision)) {
         return false;

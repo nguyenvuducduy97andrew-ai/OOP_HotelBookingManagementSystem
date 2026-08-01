@@ -137,7 +137,8 @@ void LoginWindow::attemptLogin()
         return;
     }
 
-    StaffSession::instance().start("admin", "Administrator", "Administrator");
+    // Convert from the Qt UI type at the model boundary; StaffSession remains Qt-independent.
+    StaffSession::instance().start(username.toLower().toStdString(), "Administrator", "Administrator");
     accept();
 }
 

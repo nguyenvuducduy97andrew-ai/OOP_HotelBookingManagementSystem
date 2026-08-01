@@ -3,80 +3,28 @@
 #include <string>
 #include <vector>
 #include "Booking.h"
+#include "BookingManager.h"
 #include "Customer.h"
+#include "CustomerManager.h"
+#include "RoomManager.h"
 #include "Invoice.h"
-#include "Room.h"
-#include "RoomFactory.h"
-#include "RoomMaintenance.h"
-#include "MaintenanceGuestNotice.h"
 
-class BookingService;
-class InvoiceService;
-class BookingManager;
-class CustomerService;
-class RoomService;
-
-// Fixed-modified: Move booking state ownership closer to the booking model while keeping manager queries intact.
+// HotelManager remains the stable facade for Views, ReportService, and DataManager.
+// The method groups below document the current compatibility surface only;
+// they do not change ownership or behavior in this phase.
 std::string bookingStateToString(BookingState state);
 
 class HotelManager
 {
 private:
-    // Modified and optimized performance: allow only focused workflow services to append validated domain objects to the manager-owned collections.
-    friend class BookingService;
-    friend class InvoiceService;
-    friend class CustomerService;
-    friend class RoomService;
+    RoomManager m_roomManager;
+    CustomerManager m_customerManager;
+    BookingManager m_bookingManager;
 
-    std::vector<std::shared_ptr<Room>> rooms;
-    std::vector<std::shared_ptr<Customer>> customers;
-    std::vector<std::shared_ptr<Booking>> bookings;
-    std::vector<std::shared_ptr<Invoice>> invoices;
-    std::vector<RoomMaintenance> roomMaintenances;
-    std::vector<MaintenanceGuestNotice> maintenanceGuestNotices;
-
-    // Validation helpers
-    bool isValidRoomNumber(const std::string& roomNumber) const;
-
-    bool validateRoomInput(
-        const std::string& roomNumber,
-        double baseRate,
-        std::string& errorMessage
-        ) const;
-
-    bool validateCustomerInput(
-        const std::string& id,
-        const std::string& name,
-        const std::string& phone,
-        std::string& errorMessage
-        ) const;
     bool isValidDateString(
         const std::string &dateString,
         std::string &errorMessage
         ) const;
-
-    void addRoom(std::shared_ptr<Room> room);
-    void addCustomer(std::shared_ptr<Customer> customer);
-    void addBooking(std::shared_ptr<Booking> booking);
-    void addInvoice(std::shared_ptr<Invoice> invoice);
-
-    bool registerRoomCore(RoomType kind, const std::string& roomNumber, double baseRate, std::string& errorMessage);
-    bool registerCustomerCore(const std::string& id, const std::string& name, const std::string& phone, std::string& errorMessage);
-    // Modified: Centralize validation for mutable customer fields while keeping the customer ID immutable.
-    bool updateCustomerCore(const std::string& customerId, const std::string& name, const std::string& phone, std::string& errorMessage);
-    bool resolveCustomerForBookingCore(const std::string& id, const std::string& name, const std::string& phone, std::string& errorMessage);
-    bool setRoomAvailabilityCore(const std::string& roomNumber, bool available, std::string& errorMessage);
-    bool scheduleRoomMaintenanceCore(const std::string& roomNumber, const std::string& startDate,
-                                     const std::string& endDate, const std::string& note,
-                                     std::string& errorMessage);
-    bool cancelRoomMaintenanceCore(const std::string& maintenanceId, std::string& errorMessage);
-    bool confirmRoomMaintenanceCore(const std::string& maintenanceId, std::string& errorMessage);
-    bool archiveRoomCore(const std::string& roomNumber, std::string& errorMessage);
-    bool archiveCustomerCore(const std::string& customerId, std::string& errorMessage);
-    bool restoreRoomCore(const std::string& roomNumber, std::string& errorMessage);
-    bool restoreCustomerCore(const std::string& customerId, std::string& errorMessage);
-    bool deleteRoomCore(const std::string& roomNumber, std::string& errorMessage);
-    bool deleteCustomerCore(const std::string& customerId, std::string& errorMessage);
 
 public:
     HotelManager();
@@ -85,7 +33,7 @@ public:
     static bool isValidCustomerNameFormat(const std::string& customerName);
     static bool isValidPhoneNumberFormat(const std::string& phoneNumber);
 
-    // Getters
+    // Read-only queries and collection accessors.
     const std::vector<std::shared_ptr<Room>>& getRooms() const;
     const std::vector<std::shared_ptr<Customer>>& getCustomers() const;
     const std::vector<std::shared_ptr<Booking>>& getBookings() const;
@@ -94,25 +42,34 @@ public:
     const std::vector<MaintenanceGuestNotice>& getMaintenanceGuestNotices() const;
     std::vector<MaintenanceGuestNotice> getMaintenanceGuestNotices(const std::string& maintenanceId) const;
 
-    // Modified: Moved internal add methods to public so DataManager can populate entities when loading database
-    
+    // Persistence support used by DataManager during staged loads.
     void clearAll();
 
-    // Existence checks
+    // Existence checks.
     bool roomNumberExists(const std::string& roomNumber) const;
     bool customerIdExists(const std::string& customerId) const;
     bool bookingIdExists(const std::string& bookingId) const;
     bool invoiceIdExists(const std::string& invoiceId) const;
 
-    // Find methods
+    // Entity lookups.
     std::shared_ptr<Room> findRoomByNumber(const std::string& roomNumber) const;
     std::shared_ptr<Customer> findCustomerById(const std::string& customerId) const;
     std::shared_ptr<Booking> findBookingById(const std::string& bookingId) const;
     std::shared_ptr<Invoice> findInvoiceById(const std::string& invoiceId) const;
     std::shared_ptr<Invoice> findInvoiceForBooking(const std::string& bookingId) const;
 
-    // Queries
+    // Read-only domain queries.
     std::vector<std::shared_ptr<Room>> getAvailableRooms() const;
+    std::vector<std::shared_ptr<Room>> getAvailableRoomsForDates(
+        const std::string& checkInDate,
+        const std::string& checkOutDate,
+        std::string& errorMessage,
+        const std::string& excludedBookingId = "") const;
+    bool isRoomFreeForDates(const std::string& roomNumber,
+                            const std::string& checkInDate,
+                            const std::string& checkOutDate,
+                            std::string& errorMessage,
+                            const std::string& excludedBookingId = "") const;
     std::vector<std::shared_ptr<Booking>> getBookingsForCustomer(const std::string& customerId) const;
     std::vector<std::shared_ptr<Booking>> getTodayCheckIns() const;
     std::vector<std::shared_ptr<Booking>> getTodayCheckOuts() const;
@@ -122,14 +79,14 @@ public:
     bool hasRoomMaintenanceConflict(const std::string& roomNumber, const std::string& startDate,
                                     const std::string& endDate, std::string& errorMessage) const;
 
-    // Added: Filter bookings by their specific operational status for tabbed interface sub-pages
+    // Booking filters used by the UI and reports.
     std::vector<std::shared_ptr<Booking>> getBookingsByStatus(BookingState state) const;
 
-    // Added: Fetch today's dynamic arrivals and departures targeting a custom date string for the Dashboard
+    // Date-specific arrival and departure queries.
     std::vector<std::shared_ptr<Booking>> getArrivalsByDate(const std::string& dateStr) const;
     std::vector<std::shared_ptr<Booking>> getDeparturesByDate(const std::string& dateStr) const;
 
-    // Use-case facade methods. Their business rules live in the dedicated services.
+    // View-facing facade methods.
     bool registerRoom(
         RoomType kind,
         const std::string& roomNumber,
@@ -145,7 +102,7 @@ public:
         std::string* conflictingCustomerId = nullptr
         );
 
-    // Modified: Delegate customer edits to CustomerService so views cannot bypass collision checks.
+    // Customer edits remain behind the facade so views cannot bypass collision checks.
     bool updateCustomer(
         const std::string& customerId,
         const std::string& name,
@@ -161,6 +118,7 @@ public:
         std::string& errorMessage
         );
 
+    // Booking and invoice workflow methods.
     bool createBooking(
         const std::string& customerId,
         const std::string& roomNumber,
@@ -206,6 +164,7 @@ public:
         std::string& errorMessage
         );
 
+    // Maintenance and lifecycle workflow methods.
     bool checkInBooking(const std::string& bookingId, const std::string& checkInDate,
                         std::string& errorMessage);
     bool scheduleRoomMaintenance(const std::string& roomNumber, const std::string& startDate,
@@ -219,7 +178,7 @@ public:
     bool restoreRoom(const std::string& roomNumber, std::string& errorMessage);
     bool restoreCustomer(const std::string& customerId, std::string& errorMessage);
 
-    //Data Manager integration methods for persistence, only used by DataManager to restore objects from database
+    // DataManager persistence restoration entry points.
     bool restoreBookingFromDatabase(
         const std::string& bookingId,
         const std::string& customerId,
@@ -279,15 +238,14 @@ public:
                                                    const std::string& bookingId, const std::string& channel,
                                                    const std::string& status, const std::string& loggedAt,
                                                    std::string& errorMessage);
-    // Added: Soft-cancels a reservation by changing its status and releasing the assigned room back to inventory
+    // Booking lifecycle mutations.
     bool cancelBooking(const std::string& bookingId, const std::string& reason, std::string& errorMessage);
     bool markNoShow(const std::string& bookingId, const std::string& reason, std::string& errorMessage);
 
-    // ID generation
+    // ID generation.
     std::string nextInvoiceId() const;
 
-    // Fixed-modified: Make booking deletion consistent with the other hard-delete operations.
-    // Delete methods
+    // Delete operations.
     bool deleteRoom(const std::string& roomNumber, std::string& errorMessage);
     bool deleteCustomer(const std::string& customerId, std::string& errorMessage);
     bool soft_deleteBooking(const std::string& bookingId, std::string& errorMessage);

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <QString>
+#include <string>
 
 // Stores the authenticated staff identity for the lifetime of the application process.
 class StaffSession
@@ -8,19 +8,19 @@ class StaffSession
 public:
     static StaffSession& instance();
 
-    void start(const QString& username, const QString& displayName, const QString& role);
+    void start(const std::string& username, const std::string& displayName, const std::string& role);
     void clear();
 
     bool isAuthenticated() const;
-    QString username() const;
-    QString displayName() const;
-    QString role() const;
+    const std::string& username() const;
+    const std::string& displayName() const;
+    const std::string& role() const;
 
 private:
     StaffSession() = default;
 
     bool m_authenticated = false;
-    QString m_username;
-    QString m_displayName;
-    QString m_role;
+    std::string m_username;
+    std::string m_displayName;
+    std::string m_role;
 };

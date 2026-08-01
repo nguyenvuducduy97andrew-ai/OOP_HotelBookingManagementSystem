@@ -1,5 +1,4 @@
-#ifndef DASHBOARDWIDGET_H
-#define DASHBOARDWIDGET_H
+#pragma once
 
 #include <QWidget>
 #include <QDateTime>
@@ -51,5 +50,3 @@ private:
     QTextBrowser *bookingHistoryBrowser;
     int m_historyPage = 0;
 };
-
-#endif

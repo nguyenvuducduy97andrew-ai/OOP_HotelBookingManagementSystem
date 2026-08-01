@@ -4,8 +4,7 @@
 #include "Booking.h"
 
 class Booking;
-class HotelManager;
-class InvoiceService;
+class BookingManager;
 
 class Invoice
 {
@@ -34,8 +33,7 @@ public:
     Invoice();
 
     // Modified and optimized performance: restrict invoice-ID assignment to persistence restoration and the controlled invoice workflow.
-    friend class HotelManager;
-    friend class InvoiceService;
+    friend class BookingManager;
 
     std::string getInvoiceId() const;
     

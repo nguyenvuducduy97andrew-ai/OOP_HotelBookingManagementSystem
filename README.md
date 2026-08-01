@@ -63,7 +63,7 @@ Checkout and invoice creation are staged together, then persisted through one `D
 
 ## Availability and maintenance
 
-`RoomAvailabilityService` is the single date-range availability source used by Reservation and Room Status.
+`BookingManager` is the single date-range availability authority. Reservation and Room Status request availability through `HotelManager`, which supplies canonical room and maintenance data without exposing domain managers to views.
 
 - Cancelled, deleted, and completed bookings do not block future availability.
 - An active stay blocks a requested period that covers today until the guest checks out.
@@ -113,17 +113,16 @@ The current persistence strategy favors consistency and recovery over incrementa
 src/
 ├── models/        Domain entities and the room hierarchy
 ├── controllers/
-│   ├── hotel/     HotelManager in-memory store and UI-compatible facade
-│   ├── booking/   BookingManager → BookingService, InvoiceService; availability service
-│   │               is created on demand by booking and view workflows
-│   ├── customer/  CustomerManager → CustomerService
-│   ├── room/      RoomManager → RoomService
+│   ├── hotel/     HotelManager facade and cross-domain coordinator
+│   ├── booking/   BookingManager: bookings, invoices, lifecycle, availability
+│   ├── customer/  CustomerManager: customers and identity/collision rules
+│   ├── room/      RoomManager: rooms, maintenance, and notices
 │   └── report/    ReportService read-only reporting branch
 ├── database/      DataManager SQLite schema, migration, load, and save
 └── views/         Qt widgets, dialogs, navigation, dashboard, and .ui files
 ```
 
-`HotelManager` owns the in-memory entity collections and exposes the UI-compatible facade. Its facade methods create a `BookingManager`, `CustomerManager`, or `RoomManager` as a temporary local object for the requested workflow; it does not retain these managers as members. `ReportService` is a separately created, read-only aggregation service. See [ARCHITECTURE.md](ARCHITECTURE.md) for ownership, dependencies, and data flow.
+`HotelManager` owns one persistent `RoomManager`, `CustomerManager`, and `BookingManager`. Each manager is the sole owner of its domain collections; `HotelManager` keeps no duplicate collections. Single-domain operations are forwarded to the relevant manager, while workflows involving multiple domains are coordinated by the facade. Views and `ReportService` never access managers directly. See [ARCHITECTURE.md](ARCHITECTURE.md) for ownership, dependencies, and data flow.
 
 ## Build
 
@@ -166,10 +165,10 @@ If the compiler cannot build CMake's one-file test program, repair or reinstall 
 | `Invoice` | Immutable billing data for one completed booking, validated against the booking snapshot |
 | `MaintenanceGuestNotice` | Internal simulated guest-contact log for an affected maintenance booking; it is not delivery evidence |
 | `StaffSession` | In-memory authenticated username, display name, and role for the current desktop process |
-| `HotelManager` | In-memory collections and lookup/query facade; creates workflow managers per facade call |
-| `BookingManager` | Temporary booking-workflow delegate; owns booking and invoice services for its lifetime |
-| `CustomerManager` | Temporary customer-workflow delegate; owns customer service for its lifetime |
-| `RoomManager` | Temporary room-workflow delegate; owns room service for its lifetime |
+| `HotelManager` | Stable UI/persistence facade; owns managers and coordinates cross-domain workflows |
+| `BookingManager` | Owns bookings and invoices; handles lifecycle, availability, billing, and restoration |
+| `CustomerManager` | Owns customers; handles identity validation, collisions, archive, restore, and lookup |
+| `RoomManager` | Owns rooms, maintenance, and notices; handles room-local and maintenance-local rules |
 | `ReportService` | Read-only PDF report snapshot builder |
 | `DataManager` | SQLite schema, migrations, reconciliation, staged load, and transactional save |
 

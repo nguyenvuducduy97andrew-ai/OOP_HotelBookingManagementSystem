@@ -4,8 +4,6 @@
 
 class Customer;
 class Room;
-class HotelManager;
-class BookingService;
 
 enum class BookingState { UPCOMING, ACTIVE, COMPLETED, CANCELLED, NO_SHOW };
 
@@ -42,8 +40,7 @@ public:
     Booking();
 
     // Modified and optimized performance: restrict booking-ID assignment to the manager facade and controlled booking workflow.
-    friend class HotelManager;
-    friend class BookingService;
+    friend class BookingManager;
 
     static std::string nextBookingId();
     static void initCounterFromDatabase(int maxBookingNumber);

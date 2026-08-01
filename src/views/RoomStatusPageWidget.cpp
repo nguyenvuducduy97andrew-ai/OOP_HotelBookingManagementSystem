@@ -1,7 +1,6 @@
 #include "RoomStatusPageWidget.h"
 #include "ui_RoomStatusPageWidget.h"
 #include "Customer.h"
-#include "RoomAvailabilityService.h"
 #include <QGridLayout>
 #include <QDate>
 #include <unordered_map>
@@ -223,8 +222,7 @@ void RoomStatusPageWidget::applyFilters() {
     std::unordered_set<std::string> availableRoomNumbers;
     if (m_isCheckAvailMode) {
         std::string availabilityError;
-        RoomAvailabilityService availability(*m_manager);
-        const auto availableRooms = availability.getAvailableRoomsForDates(
+        const auto availableRooms = m_manager->getAvailableRoomsForDates(
             reqIn.toString(Qt::ISODate).toStdString(),
             reqOut.toString(Qt::ISODate).toStdString(), availabilityError);
         for (const auto& room : availableRooms) {

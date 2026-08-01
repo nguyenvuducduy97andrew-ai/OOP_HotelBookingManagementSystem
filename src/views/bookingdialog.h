@@ -1,5 +1,4 @@
-#ifndef BOOKINGDIALOG_H
-#define BOOKINGDIALOG_H
+#pragma once
 
 #include <QDialog>
 
@@ -31,5 +30,3 @@ private:
     void shake(); // Retained for validation feedback.
     Ui::BookingDialog *ui;
 };
-
-#endif // BOOKINGDIALOG_H

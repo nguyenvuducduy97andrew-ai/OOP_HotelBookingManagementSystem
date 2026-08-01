@@ -222,7 +222,7 @@ Mỗi row đi qua `restore...FromDatabase()`. Nếu một record sai nghiệp v�
 UI không chạy SQL trực tiếp. Luồng là:
 
 ```text
-View → HotelManager facade → workflow manager → service → in-memory model
+View → HotelManager facade/coordinator → persistent domain manager → canonical in-memory model
      → DataManager::commitChanges → SQLite transaction
 ```
 
@@ -325,8 +325,8 @@ Backup này chỉ là safety net cho reconciliation, không phải cơ chế bac
 - Không xóa table/cột để reset. Muốn dữ liệu sạch, đóng app rồi xóa đúng `data/hotel_data.db`; app sẽ tạo database rỗng tại cùng chỗ ở lần chạy sau.
 - Không sửa `DataVersion` để vượt stale-save warning; điều đó có thể làm instance cũ ghi đè thay đổi mới.
 - Giữ file `.customer-dedup-*.bak` đến khi xác nhận reconciliation đúng.
-- Khi thêm cột/bảng, cần cập nhật: `initDatabase` migration, `loadAll`, `saveAll`, model, service validation, report nếu có ý nghĩa lịch sử, và tài liệu này.
+- Khi thêm cột/bảng, cần cập nhật: `initDatabase` migration, `loadAll`, `saveAll`, model, domain-manager validation, report nếu có ý nghĩa lịch sử, và tài liệu này.
 
 ## 12. Tóm tắt
 
-`hotel_data.db` là SQLite project-local được load toàn bộ vào `HotelManager` và lưu lại bằng transaction snapshot. Primary/foreign keys liên kết guest, room, booking, maintenance notice và invoice. `DataVersion` là token chống stale snapshot overwrite, không phải audit log. Thiết kế hiện tại hợp lý cho đồ án hoặc dữ liệu nhỏ; để scale thực tế cần incremental persistence, payment ledger, migration versioning, security và server backend.
+`hotel_data.db` là SQLite project-local được staged-load qua facade `HotelManager` vào các collection do `CustomerManager`, `RoomManager` và `BookingManager` sở hữu, rồi lưu lại bằng transaction snapshot. Trước khi publish bằng move-assignment, loader xác minh canonical pointer identity cho Booking → Customer/Room và Invoice → Booking. Primary/foreign keys liên kết guest, room, booking, maintenance notice và invoice. `DataVersion` là token chống stale snapshot overwrite, không phải audit log. Thiết kế hiện tại hợp lý cho đồ án hoặc dữ liệu nhỏ; để scale thực tế cần incremental persistence, payment ledger, migration versioning, security và server backend.

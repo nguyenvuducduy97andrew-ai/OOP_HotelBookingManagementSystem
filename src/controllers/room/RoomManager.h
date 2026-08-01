@@ -1,23 +1,80 @@
 #pragma once
 
-#include "services/RoomService.h"
+#include <memory>
+#include <string>
+#include <vector>
 
-class HotelManager;
+#include "MaintenanceGuestNotice.h"
+#include "Room.h"
+#include "RoomFactory.h"
+#include "RoomMaintenance.h"
 
 class RoomManager
 {
 public:
-    // Modified and optimized performance: keep RoomService as the manager's only direct workflow dependency.
-    explicit RoomManager(HotelManager& hotelManager);
+    RoomManager();
+
+    const std::vector<std::shared_ptr<Room>>& getRooms() const;
+    std::shared_ptr<Room> findRoomByNumber(const std::string& roomNumber) const;
+    bool roomNumberExists(const std::string& roomNumber) const;
+
     bool registerRoom(RoomType type, const std::string& roomNumber, double baseRate, std::string& errorMessage);
-    bool setAvailability(const std::string& roomNumber, bool available, std::string& errorMessage);
-    bool scheduleMaintenance(const std::string& roomNumber, const std::string& startDate,
-                             const std::string& endDate, const std::string& note, std::string& errorMessage);
-    bool cancelMaintenance(const std::string& maintenanceId, std::string& errorMessage);
-    bool confirmMaintenance(const std::string& maintenanceId, std::string& errorMessage);
+    bool setRoomAvailability(const std::string& roomNumber, bool available, std::string& errorMessage);
+    bool scheduleRoomMaintenance(const std::string& roomNumber,
+                                 const std::string& startDate,
+                                 const std::string& endDate,
+                                 const std::string& note,
+                                 const std::vector<std::string>& affectedBookingIds,
+                                 std::string& errorMessage);
+    bool cancelRoomMaintenance(const std::string& maintenanceId, std::string& errorMessage);
+    bool confirmRoomMaintenance(const std::string& maintenanceId, std::string& errorMessage);
     bool archiveRoom(const std::string& roomNumber, std::string& errorMessage);
     bool restoreRoom(const std::string& roomNumber, std::string& errorMessage);
     bool deleteRoom(const std::string& roomNumber, std::string& errorMessage);
+
+    const std::vector<RoomMaintenance>& getRoomMaintenances() const;
+    const std::vector<MaintenanceGuestNotice>& getMaintenanceGuestNotices() const;
+    std::vector<MaintenanceGuestNotice> getMaintenanceGuestNotices(const std::string& maintenanceId) const;
+    bool isRoomUnderMaintenance(const std::string& roomNumber, const std::string& date) const;
+    bool hasRoomMaintenanceConflict(const std::string& roomNumber,
+                                    const std::string& startDate,
+                                    const std::string& endDate,
+                                    std::string& errorMessage) const;
+
+    bool restoreRoomMaintenanceFromDatabase(const std::string& maintenanceId,
+                                            const std::string& roomNumber,
+                                            const std::string& startDate,
+                                            const std::string& endDate,
+                                            const std::string& note,
+                                            const std::string& status,
+                                            const std::string& createdAt,
+                                            std::string& errorMessage);
+    bool validateRoomMaintenanceRestoration(const std::string& maintenanceId,
+                                            const std::string& roomNumber,
+                                            const std::string& startDate,
+                                            const std::string& endDate,
+                                            const std::string& status,
+                                            std::string& errorMessage) const;
+
+    bool restoreMaintenanceGuestNoticeFromDatabase(const std::string& noticeId,
+                                                   const std::string& maintenanceId,
+                                                   const std::string& bookingId,
+                                                   const std::string& channel,
+                                                   const std::string& status,
+                                                   const std::string& loggedAt,
+                                                   std::string& errorMessage);
+
+    void clearAll();
+
 private:
-    RoomService m_roomService;
+    bool isValidRoomNumber(const std::string& roomNumber) const;
+    bool validateRoomInput(const std::string& roomNumber,
+                           double baseRate,
+                           std::string& errorMessage) const;
+    RoomMaintenance* findMaintenanceById(const std::string& maintenanceId);
+    const RoomMaintenance* findMaintenanceById(const std::string& maintenanceId) const;
+
+    std::vector<std::shared_ptr<Room>> m_rooms;
+    std::vector<RoomMaintenance> m_roomMaintenances;
+    std::vector<MaintenanceGuestNotice> m_maintenanceGuestNotices;
 };

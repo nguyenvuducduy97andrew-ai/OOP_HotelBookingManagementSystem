@@ -13,12 +13,17 @@ find_package(Qt6 REQUIRED COMPONENTS Core Sql Widgets Charts)
 
 # Modified and optimized performance: reconfigure automatically when a new controller or view source file is added.
 file(GLOB_RECURSE SOURCE_FILES CONFIGURE_DEPENDS
-    "src/*.cpp" "src/*.h"
+
     "src/models/*.cpp" "src/models/*.h"
-    "src/controllers/*.cpp" "src/controllers/*.h"
+    "src/controllers/hotel/*.cpp" "src/controllers/hotel/*.h"
+    "src/controllers/booking/*.cpp" "src/controllers/booking/*.h"
+    "src/controllers/customer/*.cpp" "src/controllers/customer/*.h"
+    "src/controllers/room/*.cpp" "src/controllers/room/*.h"
+    "src/controllers/report/*.cpp" "src/controllers/report/*.h"
     "src/database/*.cpp" "src/database/*.h"
     "src/views/*.cpp" "src/views/*.h" "src/views/*.ui"
     "src/resources/*.qrc"
+    "src/main.cpp"
 )
 
 # Modified: Remove the superseded legacy dialog before the target source list is consumed by CMake.
@@ -31,11 +36,8 @@ target_include_directories(HotelBookingManagement PRIVATE
     src/controllers
     src/controllers/hotel
     src/controllers/booking
-    src/controllers/booking/services
     src/controllers/customer
-    src/controllers/customer/services
     src/controllers/room
-    src/controllers/room/services
     src/controllers/report
     src/database
     src/views
