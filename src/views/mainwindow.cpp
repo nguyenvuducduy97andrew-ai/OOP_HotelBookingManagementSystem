@@ -4,6 +4,7 @@
 #include "ReservationsPageWidget.h"
 #include "CustomerPageWidget.h"
 #include "RoomStatusPageWidget.h"
+#include "StatisticsPageWidget.h"
 #include "ui_mainwindow.h"
 #include <QStyle>
 #include <QTimer>
@@ -49,8 +50,14 @@ MainWindow::MainWindow(HotelManager* manager, QWidget *parent)
     m_roomStatusPage = new RoomStatusPageWidget(m_manager, this);
     m_roomStatusPage->setObjectName("pageRoomStatus");
 
+    m_statisticsPage = new StatisticsPageWidget(m_manager, this);
+    m_statisticsPage->setObjectName("pageStatistics");
+
     connect(m_reservationsPage, &ReservationsPageWidget::bookingCompleted,
             m_roomStatusPage, &RoomStatusPageWidget::refreshData);
+
+    connect(m_reservationsPage, &ReservationsPageWidget::bookingCompleted,
+            m_statisticsPage, &StatisticsPageWidget::refreshData);
 
     // Modified and optimized performance: keep navigation separate from booking persistence by routing selected rooms through MainWindow.
     connect(m_roomStatusPage, &RoomStatusPageWidget::bookingRequested,
@@ -66,6 +73,7 @@ MainWindow::MainWindow(HotelManager* manager, QWidget *parent)
             this, [this]() {
                 m_roomStatusPage->refreshData();
                 m_dashboardPage->refreshDashboard();
+                m_statisticsPage->refreshData();
             });
 
     connect(m_reservationsPage, &ReservationsPageWidget::roomStatusBookingCancelled,
@@ -82,9 +90,10 @@ MainWindow::MainWindow(HotelManager* manager, QWidget *parent)
     ui->stackedWidget->addWidget(m_customerPage);      // Index 2
     ui->stackedWidget->addWidget(m_roomPage);          // Index 3
     ui->stackedWidget->addWidget(m_roomStatusPage);    // Index 4
+    ui->stackedWidget->addWidget(m_statisticsPage);     // Index 5
 
     // Configure sidebar buttons to be checkable & exclusive (acting as tabs)
-    QList<QPushButton*> buttons = { ui->btnDashboard, ui->btnReservation, ui->btnCustomer, ui->btnRoom, ui->btnRoomStatus };
+    QList<QPushButton*> buttons = { ui->btnDashboard, ui->btnReservation, ui->btnCustomer, ui->btnRoom, ui->btnRoomStatus, ui->btnStatistics };
     for (QPushButton* btn : buttons) {
         btn->setCheckable(true);
         btn->setAutoExclusive(true);
@@ -130,6 +139,13 @@ MainWindow::MainWindow(HotelManager* manager, QWidget *parent)
             m_roomStatusPage->refreshData();
         }
     });
+    connect(ui->btnStatistics, &QPushButton::toggled, this, [=](bool checked) {
+        if (checked) {
+            ui->stackedWidget->setCurrentIndex(5);
+            updateButtonStyle(ui->btnStatistics);
+            m_statisticsPage->refreshData();
+        }
+    });
 
     // Default to Dashboard checked & displayed
     ui->btnDashboard->setChecked(true);
@@ -138,7 +154,7 @@ MainWindow::MainWindow(HotelManager* manager, QWidget *parent)
 }
 
 void MainWindow::updateButtonStyle(QPushButton* activeBtn) {
-    QList<QPushButton*> buttons = { ui->btnDashboard, ui->btnReservation, ui->btnCustomer, ui->btnRoom, ui->btnRoomStatus };
+    QList<QPushButton*> buttons = { ui->btnDashboard, ui->btnReservation, ui->btnCustomer, ui->btnRoom, ui->btnRoomStatus, ui->btnStatistics };
 
     for (QPushButton* btn : buttons) {
         bool isActive = (btn == activeBtn);

@@ -13,6 +13,7 @@ class RoomPageWidget;
 class ReservationsPageWidget;
 class CustomerPageWidget;
 class RoomStatusPageWidget;
+class StatisticsPageWidget;
 
 class MainWindow : public QMainWindow
 {
@@ -30,5 +31,6 @@ private:
     ReservationsPageWidget* m_reservationsPage;
     CustomerPageWidget* m_customerPage;
     RoomStatusPageWidget* m_roomStatusPage;
+    StatisticsPageWidget* m_statisticsPage;
     void updateButtonStyle(QPushButton* activeBtn);
 };

@@ -237,6 +237,16 @@ QMessageBox QPushButton:hover {
               </widget>
              </item>
              <item>
+                <widget class="QPushButton" name="btnStatistics">
+                 <property name="text">
+                    <string>Statistics</string>
+                 </property>
+                 <property name="sidebarBtn" stdset="0">
+                    <bool>true</bool>
+                 </property>
+                </widget>
+             </item>
+                <item>
               <spacer name="verticalSpacer">
                <property name="orientation">
                 <enum>Qt::Orientation::Vertical</enum>
