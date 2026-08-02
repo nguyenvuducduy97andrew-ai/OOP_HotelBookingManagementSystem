@@ -1,6 +1,8 @@
 #include "RoomStatusPageWidget.h"
 #include "ui_RoomStatusPageWidget.h"
 #include "Customer.h"
+#include "RoomManager.h"
+#include "RoomInfoDialog.h"
 #include <QGridLayout>
 #include <QDate>
 #include <unordered_map>
@@ -177,7 +179,14 @@ void RoomStatusPageWidget::refreshData() {
         connect(card, &RoomCard::cardClicked, this, [this, room, card]() {
             // Modified: Let Room Status select the room while Reservation owns booking validation and persistence.
             if (card->getStatus() == "AVL") {
-                emit bookingRequested(QString::fromStdString(room->getRoomNumber()));
+                RoomInfoDialog infoDialog(room, this);
+                if (infoDialog.exec() == QDialog::Accepted) {
+                    QDate reqIn = ui->dateEditCheckIn->date();
+                    QDate reqOut = ui->dateEditCheckOut->date();
+                    int reqAdults = ui->lblAdultCount->text().toInt();
+                    int reqChildren = ui->lblChildrenCount->text().toInt();
+                    emit bookingRequested(QString::fromStdString(room->getRoomNumber()), reqIn, reqOut, reqAdults, reqChildren);
+                }
             }
         });
 

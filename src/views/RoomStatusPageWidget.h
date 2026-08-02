@@ -20,7 +20,7 @@ public:
 
 signals:
     // Modified and optimized performance: hand off booking navigation to MainWindow instead of creating bookings from the room-status page.
-    void bookingRequested(const QString& roomNumber);
+    void bookingRequested(const QString& roomNumber, const QDate& checkIn, const QDate& checkOut, int adults, int children);
 
 private slots:
     void applyFilters();
