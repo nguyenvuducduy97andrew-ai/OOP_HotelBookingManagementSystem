@@ -19,6 +19,8 @@ public:
     bool roomNumberExists(const std::string& roomNumber) const;
 
     bool registerRoom(RoomType type, const std::string& roomNumber, double baseRate, std::string& errorMessage);
+    bool updateRoomPricing(const std::string& roomNumber, double baseRate, double extraFee,
+                           std::string& errorMessage);
     bool setRoomAvailability(const std::string& roomNumber, bool available, std::string& errorMessage);
     bool scheduleRoomMaintenance(const std::string& roomNumber,
                                  const std::string& startDate,

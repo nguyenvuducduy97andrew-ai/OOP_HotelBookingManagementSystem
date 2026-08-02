@@ -193,7 +193,8 @@ Any invalid row or graph aborts loading before live state is replaced. Save oper
 
 Views store or receive `HotelManager*`; none includes a domain manager. No public mutable manager getter exists. `ReportService` is read-only.
 
-Some room-edit UI code still mutates room pricing fields obtained through facade queries. This is recorded as a possible future command-API improvement, but it was deliberately left unchanged during the structural refactor to preserve behavior.
+`StatisticsPageWidget` is a read-only visualization and invoice-exploration view. It reads bookings and invoices through the `HotelManager` facade, builds its chart series and filtered table locally, and opens `InvoiceDialog` for invoice details. Booking changes and completed checkout events trigger `refreshData()` so its visualizations remain synchronized with the shared manager state.
+
 
 ## Dependency rules
 

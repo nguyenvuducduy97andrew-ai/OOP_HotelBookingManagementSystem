@@ -476,11 +476,11 @@ void DashboardWidget::buildBarChart()
             if (!b || b->isDeleted()) continue;
             auto room = b->getRoom();
             if (!room) continue;
-            if (dynamic_cast<StandardRoom*>(room.get())) {
+            if (room->getRoomTypeName() == "Standard") {
                 standardBookings++;
-            } else if (dynamic_cast<DeluxeRoom*>(room.get())) {
+            } else if (room->getRoomTypeName() == "Deluxe") {
                 deluxeBookings++;
-            } else if (dynamic_cast<SuiteRoom*>(room.get())) {
+            } else if (room->getRoomTypeName() == "Suite") {
                 suiteBookings++;
             }
         }

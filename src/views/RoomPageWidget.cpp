@@ -367,19 +367,19 @@ QWidget* RoomPageWidget::createRoomCard(const std::shared_ptr<Room>& room) {
     QColor typeColor;
 
     // Modified: Use room metadata accessors for type labels and subtype-specific fees.
-    if (dynamic_cast<StandardRoom*>(room.get())) {
+    if (room->getRoomTypeName() == "Standard") {
         typeLabel = "Standard";
         specLabel = "25m² · Queen Bed";
         thumbnail->setText("🛏");
         thumbnail->setStyleSheet("background-color: #E2E8F0; border-radius: 8px; font-size: 24px; color: #475569;");
         typeColor = QColor("#64748B");
-    } else if (dynamic_cast<DeluxeRoom*>(room.get())) {
+    } else if (room->getRoomTypeName() == "Deluxe") {
         typeLabel = "Deluxe";
         specLabel = "35m² · King Bed";
         thumbnail->setText("✨");
         thumbnail->setStyleSheet("background-color: #E0F2FE; border-radius: 8px; font-size: 24px; color: #0369A1;");
         typeColor = QColor("#0284C7");
-    } else if (dynamic_cast<SuiteRoom*>(room.get())) {
+    } else if (room->getRoomTypeName() == "Suite") {
         typeLabel = "Suite";
         specLabel = "55m² · Super King";
         thumbnail->setText("👑");
@@ -647,9 +647,14 @@ void RoomPageWidget::onAddRoomClicked() {
         std::string errMsg;
         // Modified: Set subtype fees through the room interface instead of concrete casts.
         if (m_manager->registerRoom(type, roomNum, price, errMsg)) {
-            auto room = m_manager->findRoomByNumber(roomNum);
-            if (room) {
-                room->setExtraFeeAmount(extraFee);
+            if (!m_manager->updateRoomPricing(roomNum, price, extraFee, errMsg)) {
+                std::string discardError;
+                m_manager->deleteRoom(roomNum, discardError);
+                QMessageBox::warning(
+                    this,
+                    "Room pricing error",
+                    QString::fromStdString(errMsg));
+                return;
             }
             if (dialog.shouldScheduleMaintenance() &&
                 !m_manager->scheduleRoomMaintenance(roomNum,
@@ -732,14 +737,15 @@ void RoomPageWidget::onEditRoomClicked() {
             return;
         }
 
+
         // Modified: Schedule maintenance by date range so future bookings remain valid outside the closure interval.
-        room->setBasePrice(newPrice);
-        if (type == RoomType::Deluxe) {
-            auto dlx = std::dynamic_pointer_cast<DeluxeRoom>(room);
-            if (dlx) dlx->setMiniBarFee(newExtraFee);
-        } else if (type == RoomType::Suite) {
-            auto sui = std::dynamic_pointer_cast<SuiteRoom>(room);
-            if (sui) sui->setPremiumServiceFee(newExtraFee);
+        if (!m_manager->updateRoomPricing(
+                roomNum, newPrice, newExtraFee, errorMessage)) {
+            QMessageBox::warning(
+                this,
+                "Room update failed",
+                QString::fromStdString(errorMessage));
+            return;
         }
 
         if (!DataManager::getInstance().commitChanges(*m_manager)) {

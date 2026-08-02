@@ -44,7 +44,8 @@ src/database/
     checking, full-snapshot save, rollback, and recovery.
 
 src/views/
-    Qt widgets, dialogs, navigation, dashboard, PDF rendering, and .ui files.
+    Qt widgets, dialogs, navigation, dashboard, Statistics visualization,
+    invoice exploration, PDF rendering, and .ui files.
 
 There are no controller service directories or forwarding service classes.
 
@@ -270,9 +271,11 @@ Every operational view stores or receives HotelManager, never a domain manager.
 Do not include RoomManager.h, CustomerManager.h, or BookingManager.h from views.
 Do not expose hotelManager.roomManager()-style mutable accessors.
 
-Some RoomPageWidget edit code currently mutates room pricing obtained through a
-facade query. Treat this as known technical debt; move it behind an explicit facade
-command only in a separately tested behavior-preserving change.
+StatisticsPageWidget is read-only. It obtains invoice and booking collections from
+HotelManager, constructs chart series and invoice filters locally, and opens
+InvoiceDialog for details. Keep business mutations in HotelManager commands and
+refresh Statistics after booking or checkout changes that affect its source data.
+
 
 
 9. CHANGE CHECKLIST

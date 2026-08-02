@@ -279,6 +279,24 @@ Chỉ khối dài hơn chính một trang mới bị tiếp tục sang trang kh�
 no-show có cột `Reason`; No-show hiển thị lý do staff đã nhập khi đánh dấu no-show.
 Xác nhận selected period, đọc lại data và cẩn thận PII trước khi share/in.
 
+9.1 STATISTICS VÀ TRA CỨU INVOICE
+----------------------------------
+
+Mở Statistics để trực quan hóa dữ liệu invoice và booking, tách biệt với Dashboard
+nghiệp vụ. Trang này có:
+- Monthly Revenue: tổng invoice theo từng tháng trong năm hiện tại.
+- Today's Revenue Structure: cơ cấu room fee và service fee hiển thị cho hôm nay.
+- Weekly Bookings Quantity: booking có invoice, nhóm theo thứ trong tuần của ngày
+  check-in.
+- Most Booked Rooms: booking có invoice, nhóm theo room type.
+
+Invoice List cho phép search theo Invoice ID hoặc Booking ID. Có thể kết hợp bộ lọc
+price range với ngày payment From/To; khoảng ngày mặc định là từ một tháng trước đến
+hôm nay. Hover action button để xem mô tả, sau đó click để mở đầy đủ invoice details.
+
+Statistics chỉ dùng để visualization và lookup. Các thao tác check-in, cancel,
+no-show, checkout hoặc sửa booking vẫn thực hiện trong Reservation Management.
+
 ===============================================================================
 10. NHỮNG ĐIỀU CẦN TRÁNH
 ===============================================================================
@@ -381,7 +399,7 @@ E. Khách rời đi
 2. Xác nhận actual departure, không dùng future date.
 3. Chọn Check out và confirm.
 4. Xem invoice được issue và Booking History theo selected range.
-5. Trong hộp checkout, chọn method, nhập đúng amount đã thực nhận và received date.
+5. Trong hộp checkout, chọn method, nhập đúng amount đã thực nhận.
    Nếu chỉ nhận một phần, xem số dư còn lại trên invoice; các lần thu sau xử lý
    theo quy trình kế toán ngoài app.
 

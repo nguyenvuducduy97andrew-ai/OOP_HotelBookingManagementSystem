@@ -86,6 +86,20 @@ bool RoomManager::registerRoom(RoomType type, const std::string& roomNumber, dou
     return true;
 }
 
+bool RoomManager::updateRoomPricing(const std::string& roomNumber, double baseRate, double extraFee,
+                                    std::string& errorMessage)
+{
+    const auto room = findRoomByNumber(roomNumber);
+    if (!room) {
+        errorMessage = "Room not found.";
+        return false;
+    }
+
+    room->setBasePrice(baseRate);
+    room->setExtraFeeAmount(extraFee);
+    return true;
+}
+
 bool RoomManager::setRoomAvailability(const std::string& roomNumber, bool available, std::string& errorMessage)
 {
     const auto room = findRoomByNumber(roomNumber);

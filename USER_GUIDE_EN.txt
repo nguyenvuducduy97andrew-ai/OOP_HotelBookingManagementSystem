@@ -131,8 +131,7 @@ delete historical customers merely to clean up a list.
 6. ROOM MANAGEMENT AND MAINTENANCE
 ===============================================================================
 
-Room Management lets staff add rooms, filter types, inspect room details, edit
-permanent room settings and manage dated maintenance.
+Room Management lets staff add rooms, filter types, inspect room details, edit room settings and manage dated maintenance.
 
 Add/Edit room:
 1. Select Add Room, or select a room then Edit.
@@ -261,6 +260,24 @@ to the next page. Only a block taller than one physical page continues across pa
 The Cancelled & no-show table has a dedicated `Reason` column; no-show rows display
 the reason entered by staff. Confirm the range and review personal data before
 printing or sharing.
+
+9.1 STATISTICS AND INVOICE EXPLORATION
+--------------------------------------
+
+Open Statistics to visualize invoice and booking data separately from the
+operational Dashboard. The page contains:
+- Monthly Revenue: invoice totals grouped by month for the current year.
+- Today's Revenue Structure: today's displayed room-fee and service-fee split.
+- Weekly Bookings Quantity: invoice-linked bookings grouped by check-in weekday.
+- Most Booked Rooms: invoice-linked bookings grouped by room type.
+
+The Invoice List can be searched by Invoice ID or Booking ID. Use the price-range
+selector and From/To payment-date fields together to narrow the displayed rows.
+The default date range is the previous month through today. Hover over the action
+button for its description, then select it to open the complete invoice details.
+
+Statistics is a visualization and lookup page. Use Reservation Management for
+check-in, cancellation, no-show, checkout, and other booking actions.
 
 ===============================================================================
 10. WHAT NOT TO DO

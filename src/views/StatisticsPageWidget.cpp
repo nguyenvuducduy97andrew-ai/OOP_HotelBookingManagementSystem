@@ -397,10 +397,10 @@ void StatisticsPageWidget::refreshData() {
 
             auto lockedRoom = lockedBooking->getRoom();
             if (lockedRoom) {
-                roomCharge = inv->getNights() * lockedRoom->calculateTargetPrice();
+                roomCharge = inv->getNights() * inv->getUnitPrice();
                 QString rType = "Standard";
-                if (dynamic_cast<DeluxeRoom*>(lockedRoom.get())) rType = "Deluxe"; //dynamic_cast để ép kiểu con trỏ an toàn 
-                else if (dynamic_cast<SuiteRoom*>(lockedRoom.get())) rType = "Suite";
+                if (lockedRoom->getRoomTypeName() == "Deluxe") rType = "Deluxe";
+                else if (lockedRoom->getRoomTypeName() == "Suite") rType = "Suite";
                 roomTypeCount[rType]++;
             }
         }

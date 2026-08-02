@@ -13,6 +13,7 @@
 #include <QUuid>
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <unordered_set>
 #include <type_traits>
 #include <utility>
@@ -395,6 +396,21 @@ bool HotelManager::hasRoomMaintenanceConflict(const std::string& roomNumber,
 bool HotelManager::registerRoom(RoomType kind, const std::string& roomNumber, double baseRate, std::string& errorMessage)
 {
     return m_roomManager.registerRoom(kind, roomNumber, baseRate, errorMessage);
+}
+
+bool HotelManager::updateRoomPricing(const std::string& roomNumber, double baseRate, double extraFee,
+                                     std::string& errorMessage)
+{
+    if (!std::isfinite(baseRate) || baseRate <= 0.0) {
+        errorMessage = "Base rate must be a finite value greater than zero.";
+        return false;
+    }
+    if (!std::isfinite(extraFee) || extraFee < 0.0) {
+        errorMessage = "Extra fee must be a finite non-negative value.";
+        return false;
+    }
+
+    return m_roomManager.updateRoomPricing(roomNumber, baseRate, extraFee, errorMessage);
 }
 
 bool HotelManager::registerCustomer(const std::string& id, const std::string& name, const std::string& phone, std::string& errorMessage, std::string* conflictingCustomerId)

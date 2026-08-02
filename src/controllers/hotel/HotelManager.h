@@ -94,6 +94,13 @@ public:
         std::string& errorMessage
         );
 
+    bool updateRoomPricing(
+        const std::string& roomNumber,
+        double baseRate,
+        double extraFee,
+        std::string& errorMessage
+        );
+
     bool registerCustomer(
         const std::string& id,
         const std::string& name,

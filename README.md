@@ -17,6 +17,7 @@ A C++17 / Qt6 desktop application for hotel rooms, customers, reservations, chec
 - Shared availability rules for Reservation and Room Status, including booking dates, active stays, archived rooms, permanent room availability, and maintenance periods.
 - Room Status distinguishes a sellable `Available` room from `Awaiting check-in` (an arrival due today or overdue but not yet checked in), `Occupied`, and `Maintenance`.
 - Dashboard Booking History for completed stays in the selected period, with seven entries per page.
+- A dedicated Statistics page for visualizing monthly invoice revenue, today's revenue composition, booking distribution by weekday, and booked room types, with a searchable and filterable invoice list and invoice-detail action.
 - A4 landscape PDF export with measured, whole-section pagination, a distinct reporting-period badge, balanced data columns, invoice-based KPIs, room inventory, actual-arrival top rooms, open bookings, completed stays, and a dedicated reason column for cancelled/no-show reservations.
 - SQLite schema migration, immutable invoice snapshots, staged loading, duplicate-customer reconciliation, and transactional persistence.
 - A modal sign-in gate that starts a staff session before the operational window is opened, including a password-visibility control and a single validation message per failed sign-in; the current classroom bootstrap account is `admin` and should be replaced by persisted staff accounts before production use.
@@ -171,6 +172,7 @@ If the compiler cannot build CMake's one-file test program, repair or reinstall 
 | `RoomManager` | Owns rooms, maintenance, and notices; handles room-local and maintenance-local rules |
 | `ReportService` | Read-only PDF report snapshot builder |
 | `DataManager` | SQLite schema, migrations, reconciliation, staged load, and transactional save |
+| `StatisticsPageWidget` | Invoice and booking data visualization, invoice filtering, and invoice-detail access |
 
 ## Contributors
 
