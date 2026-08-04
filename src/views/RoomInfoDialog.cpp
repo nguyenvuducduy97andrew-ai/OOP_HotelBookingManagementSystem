@@ -4,6 +4,7 @@
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QFrame>
+#include <QLocale>
 
 RoomInfoDialog::RoomInfoDialog(std::shared_ptr<Room> room, QWidget *parent)
     : QDialog(parent), m_room(std::move(room)) {
@@ -19,13 +20,8 @@ RoomInfoDialog::RoomInfoDialog(std::shared_ptr<Room> room, QWidget *parent)
 }
 
 QString RoomInfoDialog::formatMoney(double amount) {
-    QString str = QString::number(static_cast<long long>(amount));
-    int insertPosition = str.length() - 3;
-    while (insertPosition > 0) {
-        str.insert(insertPosition, ",");
-        insertPosition -= 3;
-    }
-    return str;
+    // Modified: Format room information prices locally with comma thousands separators.
+    return QLocale(QLocale::English, QLocale::UnitedStates).toString(amount, 'f', 0);
 }
 
 void RoomInfoDialog::setupUI() {

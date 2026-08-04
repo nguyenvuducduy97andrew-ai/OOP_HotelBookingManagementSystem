@@ -159,7 +159,8 @@ void RoomDialog::setupUI() {
     m_roomNumberEdit->setPlaceholderText("Example: 101, 302");
     formLayout->addRow("Room Number:", m_roomNumberEdit);
 
-    const QLocale moneyLocale(QLocale::Vietnamese, QLocale::Vietnam);
+    // Modified: use a comma-grouped locale so every editable VND amount follows the application currency format.
+    const QLocale moneyLocale(QLocale::English, QLocale::UnitedStates);
 
     m_basePriceSpin = new QDoubleSpinBox(this);
     m_basePriceSpin->setRange(0, 100000000);

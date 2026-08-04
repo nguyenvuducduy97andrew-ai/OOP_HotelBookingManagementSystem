@@ -2,10 +2,10 @@
 #include "Booking.h"
 #include "Room.h"
 #include "Customer.h"
+#include <cmath>
 #include <iostream>
 #include <iomanip>
 #include <sstream> // Added for std::stringstream in generateInvoiceDetails
-#include <locale>
 
 namespace {
 // Fixed-modified: Replace Qt-only helpers with standard C++ parsing/formatting in the invoice model.
@@ -17,13 +17,22 @@ bool isIsoDateString(const std::string& value)
     return !input.fail() && input.eof();
 }
 
+// Modified: Format invoice amounts locally with comma thousands separators while keeping this model independent of Qt.
 std::string formatMoney(double value)
 {
-    std::ostringstream output;
-    output.imbue(std::locale::classic());
-    output << std::fixed << std::setprecision(0) << value;
-    return output.str();
+    if (!std::isfinite(value)) {
+        return "0";
+    }
+
+    const long long roundedValue = std::llround(value);
+    const bool isNegative = roundedValue < 0;
+    std::string digits = std::to_string(isNegative ? -roundedValue : roundedValue);
+    for (std::size_t position = digits.length(); position > 3; position -= 3) {
+        digits.insert(position - 3, 1, ',');
+    }
+    return isNegative ? "-" + digits : digits;
 }
+
 }
 
 

@@ -26,6 +26,7 @@
 #include <QPainter>
 #include <QScrollBar>
 #include <QUrl>
+#include <QLocale>
 #include <vector>
 #include <map>
 #include <unordered_set>
@@ -43,6 +44,12 @@ QString escapeHtml(const QString& text)
 QString escapeHtmlNoWrap(const QString& text)
 {
     return escapeHtml(text).replace(QLatin1Char(' '), QStringLiteral("&nbsp;"));
+}
+
+// Modified: Format dashboard report amounts locally with comma thousands separators for readable VND values.
+QString formatMoney(double value)
+{
+    return QLocale(QLocale::English, QLocale::UnitedStates).toString(value, 'f', 0);
 }
 
 }
@@ -1016,7 +1023,10 @@ QString DashboardWidget::buildReportHtml() const
     stream << kReportSectionMarker;
     stream << "<table class='compact-shell'><tr><td><div class='small-card'><h2>Revenue indicators (period to date)</h2><div class='section-note'>Based on issued invoices for completed stays, not payment settlement. RevPAR uses the selected period's elapsed room-nights.</div>";
     stream << "<table class='data-table'><tr><th>Invoiced revenue</th><th>ADR</th><th>RevPAR</th></tr>";
-    stream << "<tr><td>" << QString::number(invoicedRevenue, 'f', 0) << " VND</td><td>" << QString::number(averageDailyRate, 'f', 0) << " VND</td><td>" << QString::number(revenuePerAvailableRoom, 'f', 0) << " VND</td></tr></table></div></td></tr></table>";
+    // Modified: render all PDF revenue values with comma-grouped VND formatting.
+    stream << "<tr><td>" << formatMoney(invoicedRevenue) << " VND</td><td>"
+           << formatMoney(averageDailyRate) << " VND</td><td>"
+           << formatMoney(revenuePerAvailableRoom) << " VND</td></tr></table></div></td></tr></table>";
 
     stream << kReportSectionMarker;
     // Modified: Keep the Top Rooms heading, note, and table as one block without forcing a new page when remaining space is sufficient.

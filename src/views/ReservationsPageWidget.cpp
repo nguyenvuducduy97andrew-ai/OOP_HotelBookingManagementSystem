@@ -17,6 +17,7 @@
 #include <QComboBox>
 #include <QDoubleSpinBox>
 #include <QDate>
+#include <QLocale>
 #include <QDebug>
 #include <QFrame>
 #include <QLabel>
@@ -27,6 +28,12 @@
 #include <QEvent>
 
 namespace {
+// Modified: Format checkout totals locally with comma thousands separators for readable VND values.
+QString formatMoney(double value)
+{
+    return QLocale(QLocale::English, QLocale::UnitedStates).toString(value, 'f', 0);
+}
+
 bool requestReservationReason(
     QWidget* parent,
     const QString& title,
@@ -112,13 +119,16 @@ bool requestCheckoutPayment(QWidget* parent, double total, QString& method, doub
     auto* layout = new QVBoxLayout(&dialog);
     layout->setContentsMargins(24, 22, 24, 20);
     layout->setSpacing(10);
-    layout->addWidget(new QLabel(QString("Invoice total: %1 VND").arg(QString::number(total, 'f', 0)), &dialog));
+    // Modified: show checkout currency values with comma grouping while preserving the raw payment amount.
+    layout->addWidget(new QLabel(QString("Invoice total: %1 VND").arg(formatMoney(total)), &dialog));
     auto* methodBox = new QComboBox(&dialog);
     methodBox->addItems({"Cash", "Card", "Bank transfer", "Other"});
     auto* amountSpin = new QDoubleSpinBox(&dialog);
     amountSpin->setRange(1.0, total);
     amountSpin->setDecimals(0);
     amountSpin->setValue(total);
+    amountSpin->setLocale(QLocale(QLocale::English, QLocale::UnitedStates));
+    amountSpin->setGroupSeparatorShown(true);
     amountSpin->setSuffix(" VND");
     layout->addWidget(new QLabel("Payment method:", &dialog));
     layout->addWidget(methodBox);

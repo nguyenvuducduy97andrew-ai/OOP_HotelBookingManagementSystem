@@ -19,7 +19,8 @@
 namespace {
 QString formatMoney(double value)
 {
-    return QLocale(QLocale::Vietnamese, QLocale::Vietnam).toString(value, 'f', 0);
+    // Modified: Format room prices directly in the existing view using comma thousands separators.
+    return QLocale(QLocale::English, QLocale::UnitedStates).toString(value, 'f', 0);
 }
 }
 

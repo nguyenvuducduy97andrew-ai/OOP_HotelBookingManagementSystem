@@ -13,9 +13,16 @@
 #include <QFrame>
 #include <QGuiApplication>
 #include <QScreen>
+#include <QLocale>
 #include <map>
 
 namespace {
+// Modified: Format statistics amounts locally with comma thousands separators for readable VND values.
+QString formatMoney(double value)
+{
+    return QLocale(QLocale::English, QLocale::UnitedStates).toString(value, 'f', 0);
+}
+
 class InvoiceActionTooltipFilter : public QObject
 {
 public:
@@ -234,6 +241,9 @@ void StatisticsPageWidget::setupUI() {
 void StatisticsPageWidget::setupCharts() {
     // --- Thiết lập Biểu đồ Cột ---
     m_barChart = new QChart();
+    // Modified: localize revenue-axis labels with comma-separated currency grouping.
+    m_barChart->setLocale(QLocale(QLocale::English, QLocale::UnitedStates));
+    m_barChart->setLocalizeNumbers(true);
     m_barSeries = new QBarSeries();
     m_barChart->addSeries(m_barSeries);
     // Bỏ title mặc định của QChart vì đã dùng QLabel
@@ -421,11 +431,12 @@ void StatisticsPageWidget::refreshData() {
         m_invoiceTable->setItem(row, 0, createCenteredItem(invId));
         m_invoiceTable->setItem(row, 1, createCenteredItem(bookId));
         m_invoiceTable->setItem(row, 2, createCenteredItem(payDate));
-        m_invoiceTable->setItem(row, 3, createCenteredItem(QString::number(roomCharge, 'f', 0) + " đ"));
-        m_invoiceTable->setItem(row, 4, createCenteredItem(QString::number(serviceCharge, 'f', 0) + " đ"));
+        // Modified: format every invoice amount with comma-separated VND thousands in the statistics table.
+        m_invoiceTable->setItem(row, 3, createCenteredItem(formatMoney(roomCharge) + " VND"));
+        m_invoiceTable->setItem(row, 4, createCenteredItem(formatMoney(serviceCharge) + " VND"));
 
         // Lưu giá trị số thực vào cột tổng cộng để lát nữa bộ lọc tính toán dễ hơn
-        auto* totalItem = createCenteredItem(QString::number(totalAmount, 'f', 0) + " đ");
+        auto* totalItem = createCenteredItem(formatMoney(totalAmount) + " VND");
         totalItem->setData(Qt::UserRole, totalAmount); // Lưu ngầm data dạng số
         m_invoiceTable->setItem(row, 5, totalItem);
 
@@ -496,8 +507,14 @@ void StatisticsPageWidget::refreshData() {
 
     m_pieSeries->clear();
     if (todayRoomFee > 0 || todayServiceFee > 0) {
-        m_pieSeries->append("Room Fee", todayRoomFee)->setColor(QColor("#05CD99"));
-        m_pieSeries->append("Service Fee", todayServiceFee)->setColor(QColor("#F59E0B"));
+        auto* roomFeeSlice = m_pieSeries->append("Room Fee", todayRoomFee);
+        roomFeeSlice->setColor(QColor("#05CD99"));
+        roomFeeSlice->setLabel(QString("Room Fee: %1 VND")
+            .arg(formatMoney(todayRoomFee)));
+        auto* serviceFeeSlice = m_pieSeries->append("Service Fee", todayServiceFee);
+        serviceFeeSlice->setColor(QColor("#F59E0B"));
+        serviceFeeSlice->setLabel(QString("Service Fee: %1 VND")
+            .arg(formatMoney(todayServiceFee)));
         for (auto slice : m_pieSeries->slices()) {
             slice->setLabelVisible(true);
             slice->setLabelPosition(QPieSlice::LabelOutside);
