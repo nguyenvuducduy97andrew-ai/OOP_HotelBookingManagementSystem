@@ -393,12 +393,25 @@ bool HotelManager::hasRoomMaintenanceConflict(const std::string& roomNumber,
     return m_roomManager.hasRoomMaintenanceConflict(roomNumber, startDate, endDate, errorMessage);
 }
 
-bool HotelManager::registerRoom(RoomType kind, const std::string& roomNumber, double baseRate, std::string& errorMessage)
+bool HotelManager::registerRoom(RoomType kind, const std::string& roomNumber, double baseRate, 
+                                double area, const std::string& bedType, int maxGuests, 
+                                const std::string& description, const std::string& amenities, 
+                                std::string& errorMessage)
 {
-    return m_roomManager.registerRoom(kind, roomNumber, baseRate, errorMessage);
+    if (area <= 0) {
+        errorMessage = "Area must be greater than zero.";
+        return false;
+    }
+    if (maxGuests <= 0) {
+        errorMessage = "Max guests must be at least 1.";
+        return false;
+    }
+    return m_roomManager.registerRoom(kind, roomNumber, baseRate, area, bedType, maxGuests, description, amenities, errorMessage);
 }
 
-bool HotelManager::updateRoomPricing(const std::string& roomNumber, double baseRate, double extraFee,
+bool HotelManager::updateRoomDetails(const std::string& roomNumber, double baseRate, double extraFee,
+                                     double area, const std::string& bedType, int maxGuests,
+                                     const std::string& description, const std::string& amenities,
                                      std::string& errorMessage)
 {
     if (!std::isfinite(baseRate) || baseRate <= 0.0) {
@@ -409,8 +422,16 @@ bool HotelManager::updateRoomPricing(const std::string& roomNumber, double baseR
         errorMessage = "Extra fee must be a finite non-negative value.";
         return false;
     }
+    if (area <= 15) {
+        errorMessage = "Area must be greater than 15. No room should be that small!";
+        return false;
+    }
+    if (maxGuests <= 0) {
+        errorMessage = "Max guests must be at least 1.";
+        return false;
+    }
 
-    return m_roomManager.updateRoomPricing(roomNumber, baseRate, extraFee, errorMessage);
+    return m_roomManager.updateRoomDetails(roomNumber, baseRate, extraFee, area, bedType, maxGuests, description, amenities, errorMessage);
 }
 
 bool HotelManager::registerCustomer(const std::string& id, const std::string& name, const std::string& phone, std::string& errorMessage, std::string* conflictingCustomerId)

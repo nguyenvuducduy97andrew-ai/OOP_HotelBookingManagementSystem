@@ -38,3 +38,18 @@ bool Room::isArchived() const {
 void Room::setArchived(bool archived) {
     this->archived = archived;
 }
+
+double Room::getArea() const { return m_area; }
+void Room::setArea(double area) { m_area = area; }
+
+std::string Room::getBedType() const { return m_bedType; }
+void Room::setBedType(const std::string& bedType) { m_bedType = bedType; }
+
+int Room::getMaxGuests() const { return m_maxGuests; }
+void Room::setMaxGuests(int maxGuests) { m_maxGuests = maxGuests; }
+
+std::string Room::getDescription() const { return m_description; }
+void Room::setDescription(const std::string& description) { m_description = description; }
+
+std::string Room::getAmenities() const { return m_amenities; }
+void Room::setAmenities(const std::string& amenities) { m_amenities = amenities; }

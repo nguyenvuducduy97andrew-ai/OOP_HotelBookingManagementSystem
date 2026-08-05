@@ -228,16 +228,34 @@ bool DataManager::initDatabase(const std::string& dataPath) {
 
     if (schemaQuery.exec("PRAGMA table_info(Room)")) {
         bool hasArchived = false;
+        bool hasArea = false, hasBedType = false, hasMaxGuests = false, hasDesc = false, hasAmenities = false;
         while (schemaQuery.next()) {
-            if (schemaQuery.value(1).toString() == "archived") {
-                hasArchived = true;
-            }
+            QString colName = schemaQuery.value(1).toString();
+            if (colName == "archived") hasArchived = true;
+            else if (colName == "area") hasArea = true;
+            else if (colName == "bedType") hasBedType = true;
+            else if (colName == "maxGuests") hasMaxGuests = true;
+            else if (colName == "description") hasDesc = true;
+            else if (colName == "amenities") hasAmenities = true;
         }
-        if (!hasArchived) {
-            if (!schemaQuery.exec("ALTER TABLE Room ADD COLUMN archived INTEGER NOT NULL DEFAULT 0")) {
-                qDebug() << "Error adding archived column to Room: " << schemaQuery.lastError().text();
-                return false;
-            }
+        if (!hasArchived && !schemaQuery.exec("ALTER TABLE Room ADD COLUMN archived INTEGER NOT NULL DEFAULT 0")) {
+            qDebug() << "Error adding archived column to Room: " << schemaQuery.lastError().text();
+            return false;
+        }
+        if (!hasArea && !schemaQuery.exec("ALTER TABLE Room ADD COLUMN area REAL NOT NULL DEFAULT 0.0")) {
+            return false;
+        }
+        if (!hasBedType && !schemaQuery.exec("ALTER TABLE Room ADD COLUMN bedType TEXT NOT NULL DEFAULT ''")) {
+            return false;
+        }
+        if (!hasMaxGuests && !schemaQuery.exec("ALTER TABLE Room ADD COLUMN maxGuests INTEGER NOT NULL DEFAULT 0")) {
+            return false;
+        }
+        if (!hasDesc && !schemaQuery.exec("ALTER TABLE Room ADD COLUMN description TEXT NOT NULL DEFAULT ''")) {
+            return false;
+        }
+        if (!hasAmenities && !schemaQuery.exec("ALTER TABLE Room ADD COLUMN amenities TEXT NOT NULL DEFAULT ''")) {
+            return false;
         }
     } else {
         qDebug() << "Error inspecting Room schema: " << schemaQuery.lastError().text();
@@ -556,7 +574,7 @@ bool DataManager::loadAll(HotelManager& manager, const std::string& dataPath) {
     }
 
     // Load room properties and restore distinct sub-type specific data fields
-    if (query.exec("SELECT roomNumber, basePrice, isAvailable, archived, roomType, premiumServiceFee, miniBarFee FROM Room")) {
+    if (query.exec("SELECT roomNumber, basePrice, isAvailable, archived, roomType, premiumServiceFee, miniBarFee, area, bedType, maxGuests, description, amenities FROM Room")) {
         while (query.next()) {
             std::string roomNum = query.value(0).toString().toStdString();
             double price = query.value(1).toDouble();
@@ -565,12 +583,17 @@ bool DataManager::loadAll(HotelManager& manager, const std::string& dataPath) {
             std::string typeStr = query.value(4).toString().toStdString();
             double premiumFee = query.value(5).toDouble();
             double miniBarFee = query.value(6).toDouble();
+            double area = query.value(7).toDouble();
+            std::string bedType = query.value(8).toString().toStdString();
+            int maxGuests = query.value(9).toInt();
+            std::string description = query.value(10).toString().toStdString();
+            std::string amenities = query.value(11).toString().toStdString();
 
             RoomType type = RoomType::Standard;
             if (typeStr == "Deluxe") type = RoomType::Deluxe;
             else if (typeStr == "Suite") type = RoomType::Suite;
 
-            if (!loadedManager.registerRoom(type, roomNum, price, errorMsg)) {
+            if (!loadedManager.registerRoom(type, roomNum, price, area, bedType, maxGuests, description, amenities, errorMsg)) {
                 qDebug() << "Failed to restore room during load:" << QString::fromStdString(errorMsg);
                 return false;
             }
@@ -990,7 +1013,7 @@ bool DataManager::saveAll(HotelManager& manager, const std::string& dataPath) {
     }
 
     // 3. Persist Room lists (Inspect polymorphism variables to save correct individual fee items)
-    query.prepare("INSERT INTO Room (roomNumber, basePrice, isAvailable, archived, roomType, premiumServiceFee, miniBarFee) VALUES (?, ?, ?, ?, ?, ?, ?)");
+    query.prepare("INSERT INTO Room (roomNumber, basePrice, isAvailable, archived, roomType, premiumServiceFee, miniBarFee, area, bedType, maxGuests, description, amenities) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
     for (const auto& room : manager.getRooms()) {
         if (room) {
             query.addBindValue(QString::fromStdString(room->getRoomNumber()));
@@ -1014,6 +1037,11 @@ bool DataManager::saveAll(HotelManager& manager, const std::string& dataPath) {
             query.addBindValue(typeStr);
             query.addBindValue(premiumFee);
             query.addBindValue(miniBarFee);
+            query.addBindValue(room->getArea());
+            query.addBindValue(QString::fromStdString(room->getBedType()));
+            query.addBindValue(room->getMaxGuests());
+            query.addBindValue(QString::fromStdString(room->getDescription()));
+            query.addBindValue(QString::fromStdString(room->getAmenities()));
 
             if (!query.exec()) {
                 m_db.rollback();

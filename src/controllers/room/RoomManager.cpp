@@ -70,7 +70,10 @@ bool RoomManager::validateRoomInput(const std::string& roomNumber, double baseRa
     return true;
 }
 
-bool RoomManager::registerRoom(RoomType type, const std::string& roomNumber, double baseRate, std::string& errorMessage)
+bool RoomManager::registerRoom(RoomType type, const std::string& roomNumber, double baseRate, 
+                               double area, const std::string& bedType, int maxGuests, 
+                               const std::string& description, const std::string& amenities, 
+                               std::string& errorMessage)
 {
     if (!validateRoomInput(roomNumber, baseRate, errorMessage)) {
         return false;
@@ -82,11 +85,19 @@ bool RoomManager::registerRoom(RoomType type, const std::string& roomNumber, dou
         return false;
     }
 
+    room->setArea(area);
+    room->setBedType(bedType);
+    room->setMaxGuests(maxGuests);
+    room->setDescription(description);
+    room->setAmenities(amenities);
+
     m_rooms.push_back(room);
     return true;
 }
 
-bool RoomManager::updateRoomPricing(const std::string& roomNumber, double baseRate, double extraFee,
+bool RoomManager::updateRoomDetails(const std::string& roomNumber, double baseRate, double extraFee,
+                                    double area, const std::string& bedType, int maxGuests,
+                                    const std::string& description, const std::string& amenities,
                                     std::string& errorMessage)
 {
     const auto room = findRoomByNumber(roomNumber);
@@ -97,6 +108,11 @@ bool RoomManager::updateRoomPricing(const std::string& roomNumber, double baseRa
 
     room->setBasePrice(baseRate);
     room->setExtraFeeAmount(extraFee);
+    room->setArea(area);
+    room->setBedType(bedType);
+    room->setMaxGuests(maxGuests);
+    room->setDescription(description);
+    room->setAmenities(amenities);
     return true;
 }
 

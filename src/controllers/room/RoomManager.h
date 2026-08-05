@@ -18,8 +18,13 @@ public:
     std::shared_ptr<Room> findRoomByNumber(const std::string& roomNumber) const;
     bool roomNumberExists(const std::string& roomNumber) const;
 
-    bool registerRoom(RoomType type, const std::string& roomNumber, double baseRate, std::string& errorMessage);
-    bool updateRoomPricing(const std::string& roomNumber, double baseRate, double extraFee,
+    bool registerRoom(RoomType type, const std::string& roomNumber, double baseRate, 
+                      double area, const std::string& bedType, int maxGuests, 
+                      const std::string& description, const std::string& amenities, 
+                      std::string& errorMessage);
+    bool updateRoomDetails(const std::string& roomNumber, double baseRate, double extraFee,
+                           double area, const std::string& bedType, int maxGuests,
+                           const std::string& description, const std::string& amenities,
                            std::string& errorMessage);
     bool setRoomAvailability(const std::string& roomNumber, bool available, std::string& errorMessage);
     bool scheduleRoomMaintenance(const std::string& roomNumber,

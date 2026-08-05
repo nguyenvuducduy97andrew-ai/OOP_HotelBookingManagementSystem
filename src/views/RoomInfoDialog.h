@@ -9,6 +9,8 @@ class QPushButton;
 class QFrame;
 class QVBoxLayout;
 class QHBoxLayout;
+class QGridLayout;
+class QTextEdit;
 
 class RoomInfoDialog : public QDialog {
     Q_OBJECT
@@ -38,8 +40,9 @@ private:
     QLabel* m_guestLabel;
     
     QLabel* m_extraFeeLabel;
-    QLabel* m_descLabel;
-    
+    QTextEdit* m_descLabel;
+    QWidget* m_amContainer;
+    QGridLayout* m_amLayout;
     QPushButton* m_btnCancel;
     QPushButton* m_btnBooking;
 };
