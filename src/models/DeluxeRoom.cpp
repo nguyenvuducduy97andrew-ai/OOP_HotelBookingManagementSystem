@@ -4,6 +4,11 @@
 DeluxeRoom::DeluxeRoom(std::string num, double basePrice, double miniBarFee)
     : Room(num, basePrice),
       miniBarFee(miniBarFee) {
+    this->setArea(35.0);
+    this->setBedType("King Bed");
+    this->setMaxGuests(3);
+    this->setDescription("Deluxe room with extra space and city view.");
+    this->setAmenities("Free Wi-Fi, Air Conditioning, Smart TV, Mini Bar");
 }
 
 double DeluxeRoom::getMiniBarFee() const {
@@ -23,8 +28,7 @@ std::string DeluxeRoom::getRoomTypeName() const {
 }
 
 int DeluxeRoom::getMaximumGuests() const {
-    // Modified: Define Deluxe inventory capacity centrally for reservation validation.
-    return 3;
+    return this->getMaxGuests();
 }
 
 double DeluxeRoom::getExtraFeeAmount() const {

@@ -3,6 +3,11 @@
 
 StandardRoom::StandardRoom(std::string num, double basePrice)
     : Room(num, basePrice) {
+    this->setArea(25.0);
+    this->setBedType("Queen Bed");
+    this->setMaxGuests(2);
+    this->setDescription("Standard room with basic amenities.");
+    this->setAmenities("Free Wi-Fi, Air Conditioning, TV");
 }
 
 double StandardRoom::calculateTargetPrice() const {
@@ -14,8 +19,7 @@ std::string StandardRoom::getRoomTypeName() const {
 }
 
 int StandardRoom::getMaximumGuests() const {
-    // Modified: Define Standard inventory capacity centrally for reservation validation.
-    return 2;
+    return this->getMaxGuests();
 }
 
 double StandardRoom::getExtraFeeAmount() const {

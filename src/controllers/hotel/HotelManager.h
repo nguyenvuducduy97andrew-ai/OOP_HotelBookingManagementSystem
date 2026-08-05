@@ -91,13 +91,17 @@ public:
         RoomType kind,
         const std::string& roomNumber,
         double baseRate,
+        double area, const std::string& bedType, int maxGuests,
+        const std::string& description, const std::string& amenities,
         std::string& errorMessage
         );
 
-    bool updateRoomPricing(
+    bool updateRoomDetails(
         const std::string& roomNumber,
         double baseRate,
         double extraFee,
+        double area, const std::string& bedType, int maxGuests,
+        const std::string& description, const std::string& amenities,
         std::string& errorMessage
         );
 

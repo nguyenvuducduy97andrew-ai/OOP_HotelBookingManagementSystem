@@ -7,7 +7,57 @@
 #include <QLocale>
 #include <QDate>
 #include <QColor>
-#include <QPalette>
+#include <QListWidget>
+#include <QPainter>
+#include <QStyleOptionButton>
+
+class AmenityButton : public QPushButton {
+public:
+    AmenityButton(const QString& text, QWidget* parent = nullptr) : QPushButton(text, parent) {
+        setCursor(Qt::PointingHandCursor);
+        setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+        updateStyle();
+    }
+    
+    void setActive(bool active) {
+        if (m_isActive != active) {
+            m_isActive = active;
+            updateStyle();
+        }
+    }
+    
+    bool isActive() const { return m_isActive; }
+    
+    void setChosen(bool chosen) {
+        if (m_isChosen != chosen) {
+            m_isChosen = chosen;
+            updateStyle();
+        }
+    }
+    
+    bool isChosen() const { return m_isChosen; }
+
+private:
+    bool m_isActive = false;
+    bool m_isChosen = false;
+    
+public:
+    void updateStyle() {
+        QString style = "QPushButton { border-radius: 16px; padding: 6px 16px; font-weight: 600; font-size: 13px; text-align: center; ";
+        if (m_isChosen) { // Chosen state
+            style += "background-color: #ECFDF5; color: #05A660; ";
+        } else { // Normal/Gray state
+            style += "background-color: #F1F5F9; color: #64748B; ";
+        }
+        if (m_isActive) {
+            style += "border: 2px solid #005BFE; ";
+        } else {
+            style += "border: 2px solid transparent; ";
+        }
+        style += "}";
+        setStyleSheet(style);
+    }
+};
 
 RoomDialog::RoomDialog(QWidget *parent)
     : QDialog(parent), m_isEditMode(false) {
@@ -16,7 +66,9 @@ RoomDialog::RoomDialog(QWidget *parent)
     onTypeChanged(0); // Standard by default
 }
 
-RoomDialog::RoomDialog(const QString& roomNum, double basePrice, RoomType type, double extraFee, bool isAvailable, QWidget *parent)
+RoomDialog::RoomDialog(const QString& roomNum, double basePrice, RoomType type, double extraFee, bool isAvailable,
+                       double area, const QString& bedType, int maxGuests, const QString& description, const QString& amenities,
+                       QWidget *parent)
     : QDialog(parent), m_isEditMode(true), m_originalRoomNum(roomNum) {
     setupUI();
     setWindowTitle("Edit Room");
@@ -37,6 +89,46 @@ RoomDialog::RoomDialog(const QString& roomNum, double basePrice, RoomType type, 
     if (type == RoomType::Deluxe || type == RoomType::Suite) {
         m_extraFeeSpin->setValue(extraFee);
     }
+    // Apply existing values
+    m_areaSpin->setValue(area);
+    
+    // Set bed type
+    int bedIndex = m_bedTypeCombo->findText(bedType);
+    if (bedIndex >= 0) {
+        m_bedTypeCombo->setCurrentIndex(bedIndex);
+    } else {
+        m_bedTypeCombo->addItem(bedType);
+        m_bedTypeCombo->setCurrentText(bedType);
+    }
+    
+    m_maxGuestsSpin->setValue(maxGuests);
+    m_descEdit->setText(description);
+    
+    m_originalAmenities = amenities;
+    
+    // Load initial amenities keeping unselected ones gray
+    int idx = m_typeCombo->currentIndex();
+    QStringList baseAmenities;
+    if (idx == 0) {
+        baseAmenities << "Free Wi-Fi" << "Air Conditioning" << "Flat-screen TV" << "Work Desk" << "Private Bathroom";
+    } else if (idx == 1) {
+        baseAmenities << "Stylish Furnishings" << "Air Conditioning" << "Free High-Speed Wi-Fi" << "Mini Bar"<< "Smart TV" << "Modern Bathroom";
+    } else if (idx == 2) {
+        baseAmenities << "Private Balcony" <<  "Separate Living Room" << "Free High-Speed Wi-Fi" << "Bathtub" << "Smart TV" << "Complimentary Bar" << "luxurious Bathroom" << "Premium Service";
+    }
+    QStringList currentAmenities = amenities.split(", ", Qt::SkipEmptyParts);
+    QStringList allAmenities = baseAmenities;
+    for (const QString& am : currentAmenities) {
+        if (!allAmenities.contains(am)) {
+            allAmenities << am;
+        }
+    }
+    populateAmenities(allAmenities, false);
+    for (const QString& am : currentAmenities) {
+        if (m_amenityButtons.contains(am)) {
+            m_amenityButtons[am]->setChosen(true);
+        }
+    }
 }
 
 void setupDialogStyle(QDialog* dialog) {
@@ -44,12 +136,17 @@ void setupDialogStyle(QDialog* dialog) {
         QDialog {
             background-color: #FFFFFF;
         }
+        QCheckBox {
+            font-size: 13px;
+            color: #2B3674;
+            font-weight: 500;
+        }
         QLabel {
             font-size: 13px;
             color: #2B3674;
             font-weight: 600;
         }
-        QLineEdit, QComboBox, QDoubleSpinBox, QDateEdit, QTextEdit {
+        QLineEdit, QComboBox, QDoubleSpinBox, QSpinBox, QDateEdit, QTextEdit {
             background-color: #F4F7FE;
             border: 1px solid #E9EDF7;
             border-radius: 8px;
@@ -61,7 +158,7 @@ void setupDialogStyle(QDialog* dialog) {
             selection-background-color: #005BFE;
             selection-color: #FFFFFF;
         }
-        QLineEdit:focus, QComboBox:focus, QDoubleSpinBox:focus, QDateEdit:focus, QTextEdit:focus {
+        QLineEdit:focus, QComboBox:focus, QDoubleSpinBox:focus, QSpinBox:focus, QDateEdit:focus, QTextEdit:focus {
             border: 1px solid #005BFE;
         }
         QComboBox QAbstractItemView {
@@ -142,17 +239,40 @@ void setupDialogStyle(QDialog* dialog) {
         QPushButton#btnCancel:hover {
             background-color: #D3DDF4;
         }
+        QPushButton#btnAddAmenity {
+            background-color: #005BFE;
+            color: #FFFFFF;
+            border-radius: 8px;
+            padding: 6px 12px;
+            font-weight: 600;
+            font-size: 13px;
+        }
+        QPushButton#btnAddAmenity:hover {
+            background-color: #2B7BFF;
+        }
     )");
 }
 
 void RoomDialog::setupUI() {
     setupDialogStyle(this);
+    setMinimumWidth(700); // Make dialog wider horizontally
 
     auto* mainLayout = new QVBoxLayout(this);
-    mainLayout->setContentsMargins(24, 24, 24, 24);
-    mainLayout->setSpacing(16);
+    mainLayout->setContentsMargins(0, 0, 0, 0);
+    mainLayout->setSpacing(0);
+    
+    QScrollArea* mainScrollArea = new QScrollArea(this);
+    mainScrollArea->setWidgetResizable(true);
+    mainScrollArea->setFrameShape(QFrame::NoFrame);
+    mainScrollArea->setStyleSheet("QScrollArea { background-color: transparent; border: none; }");
+    
+    QWidget* scrollContentWidget = new QWidget(mainScrollArea);
+    scrollContentWidget->setObjectName("scrollContent");
+    scrollContentWidget->setStyleSheet("QWidget#scrollContent { background-color: transparent; }");
+    mainScrollArea->setWidget(scrollContentWidget);
 
-    auto* formLayout = new QFormLayout();
+    auto* formLayout = new QFormLayout(scrollContentWidget);
+    formLayout->setContentsMargins(24, 24, 24, 8);
     formLayout->setSpacing(12);
 
     m_roomNumberEdit = new QLineEdit(this);
@@ -225,10 +345,94 @@ void RoomDialog::setupUI() {
     m_extraFeeSpin->setGroupSeparatorShown(true);
     formLayout->addRow(m_extraFeeLabel, m_extraFeeSpin);
 
-    mainLayout->addLayout(formLayout);
+    m_areaSpin = new QDoubleSpinBox(this);
+    m_areaSpin->setRange(0, 1000);
+    m_areaSpin->setSingleStep(5);
+    m_areaSpin->setSuffix(" m2");
+    formLayout->addRow("Area:", m_areaSpin);
+
+    m_bedTypeCombo = new QComboBox(this);
+    m_bedTypeCombo->addItems({"Single Bed", "Twin Beds", "Queen Bed", "King Bed", "Super King Bed"});
+    formLayout->addRow("Bed Type:", m_bedTypeCombo);
+
+    m_maxGuestsSpin = new QSpinBox(this);
+    m_maxGuestsSpin->setRange(1, 10);
+    formLayout->addRow("Max Guests:", m_maxGuestsSpin);
+
+    m_descEdit = new QTextEdit(this);
+    m_descEdit->setFixedHeight(60);
+    m_descEdit->setAlignment(Qt::AlignJustify);
+    formLayout->addRow("Description:", m_descEdit);
+
+    m_amenitiesScrollArea = new QScrollArea(this);
+    m_amenitiesScrollArea->setFixedHeight(120);
+    m_amenitiesScrollArea->setMinimumWidth(380); // Fix horizontal clipping
+    m_amenitiesScrollArea->setWidgetResizable(true);
+    m_amenitiesScrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    m_amenitiesScrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
+    m_amenitiesWidget = new QWidget();
+    m_amenitiesWidget->setObjectName("amenitiesWidget");
+    
+    auto* amenitiesVBox = new QVBoxLayout(m_amenitiesWidget);
+    amenitiesVBox->setContentsMargins(0, 0, 0, 0);
+    
+    m_amenitiesGridLayout = new QGridLayout();
+    m_amenitiesGridLayout->setContentsMargins(5, 5, 5, 5);
+    m_amenitiesGridLayout->setSpacing(5);
+    m_amenitiesGridLayout->setColumnStretch(0, 1);
+    m_amenitiesGridLayout->setColumnStretch(1, 1);
+    m_amenitiesGridLayout->setColumnStretch(2, 1);
+    
+    amenitiesVBox->addLayout(m_amenitiesGridLayout);
+    amenitiesVBox->addStretch();
+    
+    m_amenitiesScrollArea->setWidget(m_amenitiesWidget);
+    m_amenitiesScrollArea->setStyleSheet("QScrollArea { background-color: #FFFFFF; border: 1px solid #E9EDF7; border-radius: 8px; } QWidget#amenitiesWidget { background-color: transparent; }");
+    
+    auto* customAmenityLayout = new QHBoxLayout();
+    m_customAmenityEdit = new QLineEdit(this);
+    m_customAmenityEdit->setPlaceholderText("Add custom amenity...");
+    m_addAmenityBtn = new QPushButton("Add", this);
+    m_addAmenityBtn->setObjectName("btnAddAmenity");
+    customAmenityLayout->addWidget(m_customAmenityEdit);
+    customAmenityLayout->addWidget(m_addAmenityBtn);
+    
+    auto* actionsLayout = new QVBoxLayout();
+    actionsLayout->setSpacing(8);
+    m_chooseAmenityBtn = new QPushButton("Choose", this);
+    m_deleteAmenityBtn = new QPushButton("Delete", this);
+    m_resetAmenityBtn = new QPushButton("Reset", this);
+    
+    m_chooseAmenityBtn->setStyleSheet("QPushButton { background-color: #005BFE; color: white; border-radius: 8px; padding: 6px 12px; font-weight: bold; } QPushButton:hover { background-color: #004ecc; }");
+    m_deleteAmenityBtn->setStyleSheet("QPushButton { background-color: #FEE2E2; color: #DC2626; border-radius: 8px; padding: 6px 12px; font-weight: bold; } QPushButton:hover { background-color: #FCA5A5; }");
+    m_resetAmenityBtn->setStyleSheet("QPushButton { background-color: #F1F5F9; color: #475569; border-radius: 8px; padding: 6px 12px; font-weight: bold; } QPushButton:hover { background-color: #E2E8F0; }");
+    
+    m_chooseAmenityBtn->setVisible(false);
+    m_deleteAmenityBtn->setVisible(false);
+    
+    actionsLayout->addWidget(m_chooseAmenityBtn);
+    actionsLayout->addWidget(m_deleteAmenityBtn);
+    actionsLayout->addWidget(m_resetAmenityBtn);
+    
+    auto* amenitiesContainer = new QVBoxLayout();
+    amenitiesContainer->setContentsMargins(0,0,0,0);
+    amenitiesContainer->addWidget(m_amenitiesScrollArea);
+    amenitiesContainer->addLayout(customAmenityLayout);
+    
+    QWidget* labelWidget = new QWidget();
+    auto* labelLayout = new QVBoxLayout(labelWidget);
+    labelLayout->setContentsMargins(0, 0, 0, 0);
+    labelLayout->addWidget(new QLabel("Amenities:"));
+    labelLayout->addLayout(actionsLayout);
+    labelLayout->addStretch();
+    
+    formLayout->addRow(labelWidget, amenitiesContainer);
+
+    mainLayout->addWidget(mainScrollArea);
 
     // Button Row
     auto* btnLayout = new QHBoxLayout();
+    btnLayout->setContentsMargins(24, 8, 24, 24);
     btnLayout->addStretch();
     auto* cancelBtn = new QPushButton("Cancel", this);
     cancelBtn->setObjectName("btnCancel");
@@ -245,12 +449,33 @@ void RoomDialog::setupUI() {
     connect(m_availabilityCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &RoomDialog::onStatusChanged);
     connect(m_cancelMaintenanceBtn, &QPushButton::clicked, this, &RoomDialog::markSelectedMaintenanceForCancellation);
     connect(m_confirmMaintenanceBtn, &QPushButton::clicked, this, &RoomDialog::markSelectedMaintenanceForConfirmation);
+    connect(m_addAmenityBtn, &QPushButton::clicked, this, &RoomDialog::onAddCustomAmenity);
     connect(m_existingMaintenanceCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int) {
         const bool pendingGuestResponse = m_existingMaintenanceCombo->currentData(Qt::UserRole + 1).toString() == "Awaiting guest response";
         m_confirmMaintenanceBtn->setEnabled(pendingGuestResponse);
     });
     connect(cancelBtn, &QPushButton::clicked, this, &QDialog::reject);
     connect(saveBtn, &QPushButton::clicked, this, &RoomDialog::onAccept);
+    
+    connect(m_chooseAmenityBtn, &QPushButton::clicked, this, [this]() {
+        if (m_activeAmenity) {
+            m_activeAmenity->setChosen(!m_activeAmenity->isChosen());
+            m_chooseAmenityBtn->setText(m_activeAmenity->isChosen() ? "Unchoose" : "Choose");
+        }
+    });
+    
+    connect(m_deleteAmenityBtn, &QPushButton::clicked, this, [this]() {
+        if (m_activeAmenity) {
+            QString amText = m_activeAmenity->text();
+            m_activeAmenity = nullptr;
+            m_chooseAmenityBtn->setVisible(false);
+            m_deleteAmenityBtn->setVisible(false);
+            onRemoveAmenity(amText);
+        }
+    });
+    
+    connect(m_resetAmenityBtn, &QPushButton::clicked, this, &RoomDialog::resetAmenities);
+    
     onStatusChanged(m_availabilityCombo->currentIndex());
 }
 
@@ -258,14 +483,36 @@ void RoomDialog::onTypeChanged(int index) {
     if (index == 0) { // Standard
         m_extraFeeLabel->setVisible(false);
         m_extraFeeSpin->setVisible(false);
+        if (!m_isEditMode) {
+            m_areaSpin->setValue(25);
+            m_maxGuestsSpin->setValue(2);
+            m_bedTypeCombo->setCurrentText("Queen Bed");
+            m_descEdit->setText("Our Standard Room offers a comfortable and affordable stay, perfect for solo travelers or couples. The room features a cozy queen-size bed, air conditioning, free Wi-Fi, a flat-screen TV, a work desk, and a private bathroom with complimentary toiletries. It provides everything you need for a pleasant and relaxing stay.");
+        }
     } else if (index == 1) { // Deluxe
         m_extraFeeLabel->setText("Mini Bar Fee:");
         m_extraFeeLabel->setVisible(true);
         m_extraFeeSpin->setVisible(true);
+        if (!m_isEditMode) {
+            m_areaSpin->setValue(35);
+            m_maxGuestsSpin->setValue(3);
+            m_bedTypeCombo->setCurrentText("King Bed");
+            m_descEdit->setText("The Deluxe Room provides extra space and enhanced comfort for guests seeking a more enjoyable experience. It includes a king-size bed, stylish furnishings, a seating area, large windows with city or garden views, free high-speed Wi-Fi, a smart TV, a minibar, and a modern bathroom equipped with premium amenities. It is an excellent choice for both business and leisure travelers.");
+        }
     } else if (index == 2) { // Suite
         m_extraFeeLabel->setText("Premium Service Fee:");
         m_extraFeeLabel->setVisible(true);
         m_extraFeeSpin->setVisible(true);
+        if (!m_isEditMode) {
+            m_areaSpin->setValue(55);
+            m_maxGuestsSpin->setValue(4);
+            m_bedTypeCombo->setCurrentText("Super King Bed");
+            m_descEdit->setText("Our Suite is designed for guests who appreciate luxury, elegance, and privacy. Featuring a spacious bedroom, a separate living room, and a luxurious bathroom with a bathtub and rain shower, the suite offers a premium experience. Guests can also enjoy a private balcony, complimentary minibar, coffee machine, high-speed Wi-Fi, smart TV, and personalized services, making it ideal for families, special occasions, or extended stays.");
+        }
+    }
+
+    if (!m_isEditMode) {
+        resetAmenities();
     }
     adjustSize();
 }
@@ -305,18 +552,22 @@ RoomType RoomDialog::getRoomType() const {
     return RoomType::Standard;
 }
 
-double RoomDialog::getExtraFee() const {
-    if (m_typeCombo->currentIndex() == 0) return 0.0;
-    return m_extraFeeSpin->value();
+double RoomDialog::getExtraFee() const { return m_extraFeeSpin->value(); }
+bool RoomDialog::getIsAvailable() const { return m_availabilityCombo->currentIndex() == 0; }
+double RoomDialog::getArea() const { return m_areaSpin->value(); }
+QString RoomDialog::getBedType() const { return m_bedTypeCombo->currentText(); }
+int RoomDialog::getMaxGuests() const { return m_maxGuestsSpin->value(); }
+QString RoomDialog::getDescription() const { return m_descEdit->toPlainText(); }
+QString RoomDialog::getAmenities() const {
+    QStringList checkedAmenities;
+    for (auto it = m_amenityButtons.begin(); it != m_amenityButtons.end(); ++it) {
+        if (it.value()->isChosen()) {
+            checkedAmenities << it.key();
+        }
+    }
+    return checkedAmenities.join(", ");
 }
-
-bool RoomDialog::getIsAvailable() const {
-    return m_availabilityCombo->currentIndex() == 0;
-}
-
-bool RoomDialog::shouldScheduleMaintenance() const {
-    return m_availabilityCombo->currentIndex() == 1;
-}
+bool RoomDialog::shouldScheduleMaintenance() const { return m_availabilityCombo->currentIndex() == 1; }
 
 QString RoomDialog::getMaintenanceStartDate() const {
     return m_maintenanceStartDateEdit->date().toString(Qt::ISODate);
@@ -386,7 +637,6 @@ void RoomDialog::markSelectedMaintenanceForCancellation() {
         return;
     }
 
-    // Modified: Stage one maintenance cancellation and persist it atomically with the room edit.
     m_maintenanceIdToCancel = m_existingMaintenanceCombo->currentData().toString();
     m_existingMaintenanceLabel->setText("Cancelled");
     m_existingMaintenanceCombo->setEnabled(false);
@@ -395,9 +645,6 @@ void RoomDialog::markSelectedMaintenanceForCancellation() {
 }
 
 void RoomDialog::markSelectedMaintenanceForConfirmation() {
-    if (m_existingMaintenanceCombo->currentIndex() < 0) {
-        return;
-    }
 
     // Modified: Close immediately after selecting confirmation; the parent workflow rechecks live booking conflicts before persistence.
     m_maintenanceIdToConfirm = m_existingMaintenanceCombo->currentData().toString();
@@ -413,4 +660,129 @@ void RoomDialog::onStatusChanged(int index) {
     m_maintenanceNoteLabel->setVisible(scheduleMaintenance);
     m_maintenanceNoteEdit->setVisible(scheduleMaintenance);
     adjustSize();
+}
+
+void RoomDialog::onAddCustomAmenity() {
+    QString text = m_customAmenityEdit->text().trimmed();
+    if (!text.isEmpty()) {
+        if (!m_amenityButtons.contains(text)) {
+            QStringList current;
+            for (auto it = m_amenityButtons.begin(); it != m_amenityButtons.end(); ++it) {
+                current << it.key();
+            }
+            current << text;
+            populateAmenities(current, true);
+        } else {
+            m_amenityButtons[text]->setChosen(true);
+        }
+        m_customAmenityEdit->clear();
+    }
+}
+
+void RoomDialog::populateAmenities(const QStringList& amenities, bool checkAll) {
+    // Determine which ones are currently chosen so we can preserve state if they still exist
+    QStringList currentlyChosen;
+    for (auto it = m_amenityButtons.begin(); it != m_amenityButtons.end(); ++it) {
+        if (it.value()->isChosen()) {
+            currentlyChosen << it.key();
+        }
+    }
+
+    // Clear layout
+    QLayoutItem* item;
+    while ((item = m_amenitiesGridLayout->takeAt(0)) != nullptr) {
+        if (item->widget()) {
+            item->widget()->deleteLater();
+        }
+        delete item;
+    }
+    m_amenityButtons.clear();
+    m_activeAmenity = nullptr;
+    m_chooseAmenityBtn->setVisible(false);
+    m_deleteAmenityBtn->setVisible(false);
+
+    // Rebuild grid (now with flow-like wrapping but we will just use grid 3 columns)
+    int row = 0;
+    int col = 0;
+    for (int i = 0; i < amenities.size(); ++i) {
+        const QString& am = amenities[i];
+        
+        AmenityButton* btn = new AmenityButton(am, this);
+        if (checkAll || currentlyChosen.contains(am)) {
+            btn->setChosen(true);
+        }
+        m_amenityButtons.insert(am, btn);
+
+        connect(btn, &QPushButton::clicked, this, [this, btn]() {
+            if (m_activeAmenity == btn) {
+                // Toggle off
+                m_activeAmenity->setActive(false);
+                m_activeAmenity = nullptr;
+                m_chooseAmenityBtn->setVisible(false);
+                m_deleteAmenityBtn->setVisible(false);
+                return;
+            }
+            if (m_activeAmenity) {
+                m_activeAmenity->setActive(false);
+            }
+            m_activeAmenity = btn;
+            m_activeAmenity->setActive(true);
+            m_chooseAmenityBtn->setText(m_activeAmenity->isChosen() ? "Unchoose" : "Choose");
+            m_chooseAmenityBtn->setVisible(true);
+            m_deleteAmenityBtn->setVisible(true);
+        });
+
+        m_amenitiesGridLayout->addWidget(btn, row, col);
+        
+        col++;
+        if (col >= 3) {
+            col = 0;
+            row++;
+        }
+    }
+}
+
+void RoomDialog::onRemoveAmenity(const QString& amenityText) {
+    QStringList current;
+    for (auto it = m_amenityButtons.begin(); it != m_amenityButtons.end(); ++it) {
+        if (it.key() != amenityText) {
+            current << it.key();
+        }
+    }
+    populateAmenities(current, false);
+}
+
+void RoomDialog::mousePressEvent(QMouseEvent *event) {
+    if (m_activeAmenity) {
+        m_activeAmenity->setActive(false);
+        m_activeAmenity = nullptr;
+        m_chooseAmenityBtn->setVisible(false);
+        m_deleteAmenityBtn->setVisible(false);
+    }
+    QDialog::mousePressEvent(event);
+}
+
+void RoomDialog::resetAmenities() {
+    int index = m_typeCombo->currentIndex();
+    QStringList baseAmenities;
+    if (index == 0) {
+        baseAmenities << "Free Wi-Fi" << "Air Conditioning" << "Flat-screen TV" << "Work Desk" << "Private Bathroom";
+    } else if (index == 1) {
+        baseAmenities << "Stylish Furnishings" << "Air Conditioning" << "Free High-Speed Wi-Fi" << "Mini Bar"<< "Smart TV" << "Modern Bathroom";
+    } else if (index == 2) {
+        baseAmenities << "Private Balcony" <<  "Separate Living Room" << "Free High-Speed Wi-Fi" << "Bathtub" << "Smart TV" << "Complimentary Bar" << "luxurious Bathroom" << "Premium Service";
+    }
+
+    if (m_isEditMode) {
+        QStringList currentAmenities = m_originalAmenities.split(", ", Qt::SkipEmptyParts);
+        QStringList allAmenities = baseAmenities;
+        for (const QString& am : currentAmenities) {
+            if (!allAmenities.contains(am)) {
+                allAmenities << am;
+            }
+        }
+        populateAmenities(allAmenities, true);
+    } else {
+        populateAmenities(baseAmenities, true);
+    }
 }

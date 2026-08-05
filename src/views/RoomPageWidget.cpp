@@ -243,7 +243,13 @@ void RoomPageWidget::setupUI() {
     detailLayout->addLayout(detailHeader);
 
     // Detail Panel Content (We wrap this in a widget to easily hide/show)
-    m_detailPanel = new QWidget(this);
+    QScrollArea* detailScrollArea = new QScrollArea(this);
+    detailScrollArea->setWidgetResizable(true);
+    detailScrollArea->setFrameShape(QFrame::NoFrame);
+    detailScrollArea->setStyleSheet("QScrollArea { background-color: transparent; } QWidget#detailPanel { background-color: transparent; }");
+    
+    m_detailPanel = new QWidget(detailScrollArea);
+    m_detailPanel->setObjectName("detailPanel");
     auto* contentLayout = new QVBoxLayout(m_detailPanel);
     contentLayout->setContentsMargins(0, 0, 0, 0);
     contentLayout->setSpacing(15);
@@ -301,13 +307,15 @@ void RoomPageWidget::setupUI() {
     // Features
     auto* featHeader = new QLabel("Amenities", this);
     featHeader->setStyleSheet("font-size: 13px; font-weight: 700; color: #2B3674;");
-    auto* featDesc = new QLabel("✔ Free Wi-Fi  ·  ✔ Smart TV  ·  ✔ Air Conditioning  ·  ✔ Private bathroom", this);
-    featDesc->setStyleSheet("font-size: 11px; color: #A3AED0;");
+    m_detailAmenitiesLabel = new QLabel(this);
+    m_detailAmenitiesLabel->setStyleSheet("font-size: 12px; color: #A3AED0; line-height: 18px;");
+    m_detailAmenitiesLabel->setWordWrap(true);
     contentLayout->addWidget(featHeader);
-    contentLayout->addWidget(featDesc);
+    contentLayout->addWidget(m_detailAmenitiesLabel);
 
     contentLayout->addStretch();
-    detailLayout->addWidget(m_detailPanel);
+    detailScrollArea->setWidget(m_detailPanel);
+    detailLayout->addWidget(detailScrollArea);
 
     mainLayout->addWidget(m_detailFrame, 2); // 2 parts width
 
@@ -369,19 +377,19 @@ QWidget* RoomPageWidget::createRoomCard(const std::shared_ptr<Room>& room) {
     // Modified: Use room metadata accessors for type labels and subtype-specific fees.
     if (room->getRoomTypeName() == "Standard") {
         typeLabel = "Standard";
-        specLabel = "25m² · Queen Bed";
+        specLabel = QString("%1m² · %2").arg(room->getArea()).arg(QString::fromStdString(room->getBedType()));
         thumbnail->setText("🛏");
         thumbnail->setStyleSheet("background-color: #E2E8F0; border-radius: 8px; font-size: 24px; color: #475569;");
         typeColor = QColor("#64748B");
     } else if (room->getRoomTypeName() == "Deluxe") {
         typeLabel = "Deluxe";
-        specLabel = "35m² · King Bed";
+        specLabel = QString("%1m² · %2").arg(room->getArea()).arg(QString::fromStdString(room->getBedType()));
         thumbnail->setText("✨");
         thumbnail->setStyleSheet("background-color: #E0F2FE; border-radius: 8px; font-size: 24px; color: #0369A1;");
         typeColor = QColor("#0284C7");
     } else if (room->getRoomTypeName() == "Suite") {
         typeLabel = "Suite";
-        specLabel = "55m² · Super King";
+        specLabel = QString("%1m² · %2").arg(room->getArea()).arg(QString::fromStdString(room->getBedType()));
         thumbnail->setText("👑");
         thumbnail->setStyleSheet("background-color: #FEF3C7; border-radius: 8px; font-size: 24px; color: #B45309;");
         typeColor = QColor("#D97706");
@@ -557,25 +565,37 @@ void RoomPageWidget::updateDetailPanel(const std::shared_ptr<Room>& room) {
     m_detailStatusLabel->style()->polish(m_detailStatusLabel);
 
     const std::string typeName = room->getRoomTypeName();
+    m_detailSizeLabel->setText(QString("📏 %1m²").arg(room->getArea()));
+    m_detailBedLabel->setText(QString("🛏 %1").arg(QString::fromStdString(room->getBedType())));
+    m_detailGuestLabel->setText(QString("👤 %1 Guests").arg(room->getMaximumGuests()));
+    m_detailDescLabel->setText(QString::fromStdString(room->getDescription()));
+
+    QStringList amenitiesList = QString::fromStdString(room->getAmenities()).split(", ", Qt::SkipEmptyParts);
+    QString formattedAmenities = "<table width='100%' cellpadding='4'>";
+    for (int i = 0; i < amenitiesList.size(); i += 2) {
+        formattedAmenities += "<tr>";
+        formattedAmenities += "<td width='50%'><span style='color: #005BFE;'>✔</span> " + amenitiesList[i] + "</td>";
+        if (i + 1 < amenitiesList.size()) {
+            formattedAmenities += "<td width='50%'><span style='color: #005BFE;'>✔</span> " + amenitiesList[i+1] + "</td>";
+        } else {
+            formattedAmenities += "<td width='50%'></td>";
+        }
+        formattedAmenities += "</tr>";
+    }
+    formattedAmenities += "</table>";
+    m_detailAmenitiesLabel->setText(formattedAmenities);
+    m_detailAmenitiesLabel->setTextFormat(Qt::RichText);
+
     if (typeName == "Standard") {
-        m_detailSizeLabel->setText("📏 25m²");
-        m_detailBedLabel->setText("🛏 Queen Bed");
-        m_detailGuestLabel->setText(QString("👤 %1 Guests").arg(room->getMaximumGuests()));
         m_detailExtraFeeLabel->setVisible(false);
         m_detailImageLabel->setText("🏨 Standard Room Image Placeholder");
         m_detailImageLabel->setStyleSheet("background-color: #F4F7FE; border-radius: 14px; font-weight: bold; color: #A3AED0;");
     } else if (typeName == "Deluxe") {
-        m_detailSizeLabel->setText("📏 35m²");
-        m_detailBedLabel->setText("🛏 King Bed");
-        m_detailGuestLabel->setText(QString("👤 %1 Guests").arg(room->getMaximumGuests()));
         m_detailExtraFeeLabel->setText(QString("💰 Mini Bar Fee: %1 VND").arg(formatMoney(room->getExtraFeeAmount())));
         m_detailExtraFeeLabel->setVisible(true);
         m_detailImageLabel->setText("✨ Deluxe Room Image Placeholder");
         m_detailImageLabel->setStyleSheet("background-color: #E0F2FE; border-radius: 14px; font-weight: bold; color: #0284C7;");
     } else if (typeName == "Suite") {
-        m_detailSizeLabel->setText("📏 55m²");
-        m_detailBedLabel->setText("🛏 Super King Bed");
-        m_detailGuestLabel->setText(QString("👤 %1 Guests").arg(room->getMaximumGuests()));
         m_detailExtraFeeLabel->setText(QString("👑 Premium Service Fee: %1 VND").arg(formatMoney(room->getExtraFeeAmount())));
         m_detailExtraFeeLabel->setVisible(true);
         m_detailImageLabel->setText("👑 Suite Room Image Placeholder");
@@ -638,6 +658,11 @@ void RoomPageWidget::onAddRoomClicked() {
         double price = dialog.getBasePrice();
         RoomType type = dialog.getRoomType();
         double extraFee = dialog.getExtraFee();
+        double area = dialog.getArea();
+        std::string bedType = dialog.getBedType().toStdString();
+        int maxGuests = dialog.getMaxGuests();
+        std::string desc = dialog.getDescription().toStdString();
+        std::string amen = dialog.getAmenities().toStdString();
 
         if (m_manager->roomNumberExists(roomNum)) {
             QMessageBox::warning(this, "Add room error", "The room number already exists in the system.");
@@ -646,8 +671,8 @@ void RoomPageWidget::onAddRoomClicked() {
 
         std::string errMsg;
         // Modified: Set subtype fees through the room interface instead of concrete casts.
-        if (m_manager->registerRoom(type, roomNum, price, errMsg)) {
-            if (!m_manager->updateRoomPricing(roomNum, price, extraFee, errMsg)) {
+        if (m_manager->registerRoom(type, roomNum, price, area, bedType, maxGuests, desc, amen, errMsg)) {
+            if (!m_manager->updateRoomDetails(roomNum, price, extraFee, area, bedType, maxGuests, desc, amen, errMsg)) {
                 std::string discardError;
                 m_manager->deleteRoom(roomNum, discardError);
                 QMessageBox::warning(
@@ -698,7 +723,9 @@ void RoomPageWidget::onEditRoomClicked() {
     }
     double extraFee = room->getExtraFeeAmount();
 
-    RoomDialog dialog(QString::fromStdString(roomNum), room->getBasePrice(), type, extraFee, room->getIsAvailable(), this);
+    RoomDialog dialog(QString::fromStdString(roomNum), room->getBasePrice(), type, extraFee, room->getIsAvailable(), 
+                      room->getArea(), QString::fromStdString(room->getBedType()), room->getMaximumGuests(), 
+                      QString::fromStdString(room->getDescription()), QString::fromStdString(room->getAmenities()), this);
     std::vector<RoomMaintenance> existingSchedules;
     const std::string today = QDate::currentDate().toString(Qt::ISODate).toStdString();
     for (const RoomMaintenance& maintenance : m_manager->getRoomMaintenances()) {
@@ -739,8 +766,14 @@ void RoomPageWidget::onEditRoomClicked() {
 
 
         // Modified: Schedule maintenance by date range so future bookings remain valid outside the closure interval.
-        if (!m_manager->updateRoomPricing(
-                roomNum, newPrice, newExtraFee, errorMessage)) {
+        double area = dialog.getArea();
+        std::string bedType = dialog.getBedType().toStdString();
+        int maxGuests = dialog.getMaxGuests();
+        std::string desc = dialog.getDescription().toStdString();
+        std::string amen = dialog.getAmenities().toStdString();
+
+        if (!m_manager->updateRoomDetails(
+                roomNum, newPrice, newExtraFee, area, bedType, maxGuests, desc, amen, errorMessage)) {
             QMessageBox::warning(
                 this,
                 "Room update failed",

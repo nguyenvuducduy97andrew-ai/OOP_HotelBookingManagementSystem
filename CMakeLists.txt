@@ -9,7 +9,7 @@ set(CMAKE_AUTORCC ON)
 
 file(MAKE_DIRECTORY "${CMAKE_SOURCE_DIR}/data")
 
-find_package(Qt6 REQUIRED COMPONENTS Core Sql Widgets Charts)
+find_package(Qt6 REQUIRED COMPONENTS Core Sql Widgets Charts Svg)
 
 # Modified and optimized performance: reconfigure automatically when a new controller or view source file is added.
 file(GLOB_RECURSE SOURCE_FILES CONFIGURE_DEPENDS
@@ -48,4 +48,5 @@ target_link_libraries(HotelBookingManagement PRIVATE
     Qt6::Sql
     Qt6::Widgets
     Qt6::Charts
+    Qt6::Svg
 )

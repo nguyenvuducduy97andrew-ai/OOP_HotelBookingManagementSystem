@@ -4,6 +4,7 @@
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QFrame>
+#include <QTextEdit>
 
 RoomInfoDialog::RoomInfoDialog(std::shared_ptr<Room> room, QWidget *parent)
     : QDialog(parent), m_room(std::move(room)) {
@@ -79,15 +80,23 @@ void RoomInfoDialog::setupUI() {
     // Description
     auto* descTitle = new QLabel("Room Description", this);
     descTitle->setObjectName("sectionTitle");
-    m_descLabel = new QLabel(this);
+    m_descLabel = new QTextEdit(this);
     m_descLabel->setObjectName("descLabel");
-    m_descLabel->setWordWrap(true);
+    m_descLabel->setReadOnly(true);
+    m_descLabel->setFrameShape(QFrame::NoFrame);
+    m_descLabel->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    m_descLabel->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    m_descLabel->setFixedHeight(80);
+    m_descLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    m_descLabel->setAlignment(Qt::AlignJustify);
     
     // Amenities
     auto* amTitle = new QLabel("Amenities", this);
     amTitle->setObjectName("sectionTitle");
-    auto* amLabel = new QLabel("✓ Free Wi-Fi   ·   ✓ Smart TV   ·   ✓ Air Conditioning   ·   ✓ Private bathroom", this);
-    amLabel->setObjectName("amLabel");
+    m_amContainer = new QWidget(this);
+    m_amLayout = new QGridLayout(m_amContainer);
+    m_amLayout->setContentsMargins(0, 0, 0, 0);
+    m_amLayout->setSpacing(8);
     
     // Buttons
     auto* btnLayout = new QHBoxLayout();
@@ -111,7 +120,7 @@ void RoomInfoDialog::setupUI() {
     frameLayout->addWidget(m_descLabel);
     frameLayout->addSpacing(10);
     frameLayout->addWidget(amTitle);
-    frameLayout->addWidget(amLabel);
+    frameLayout->addWidget(m_amContainer);
     frameLayout->addStretch();
     frameLayout->addLayout(btnLayout);
     
@@ -160,10 +169,10 @@ void RoomInfoDialog::setupStyle() {
             font-weight: 700;
             color: #1B2559;
         }
-        QLabel#descLabel {
+        QTextEdit#descLabel {
             font-size: 14px;
             color: #A3AED0;
-            line-height: 1.5;
+            background-color: transparent;
         }
         QLabel#amLabel {
             font-size: 14px;
@@ -201,28 +210,79 @@ void RoomInfoDialog::populateData() {
     if (!m_room) return;
     
     m_titleLabel->setText(QString("Room %1").arg(QString::fromStdString(m_room->getRoomNumber())));
-    m_descLabel->setText("This room is currently available and can be booked for your selected dates.");
+    
+    QString desc = QString::fromStdString(m_room->getDescription());
+    if (desc.isEmpty()) {
+        desc = "This room is currently available and can be booked for your selected dates.";
+    }
+    m_descLabel->setHtml("<div align=\"justify\">" + desc + "</div>");
+    
+    QString rawAmenities = QString::fromStdString(m_room->getAmenities());
+    QStringList amList = rawAmenities.split(",", Qt::SkipEmptyParts);
+    
+    QLayoutItem *child;
+    while ((child = m_amLayout->takeAt(0)) != nullptr) {
+        if (child->widget()) child->widget()->deleteLater();
+        delete child;
+    }
+    
+    int row = 0;
+    int col = 0;
+    bool hasAmenities = false;
+    for (QString am : amList) {
+        am = am.trimmed();
+        if (am.isEmpty()) continue;
+        hasAmenities = true;
+        
+        QLabel* pill = new QLabel("✓ " + am, m_amContainer);
+        pill->setStyleSheet("background-color: #F4F7FE; color: #005BFE; border: 1px solid #E9EDF7; padding: 6px 12px; border-radius: 12px; font-weight: 600; font-size: 13px;");
+        m_amLayout->addWidget(pill, row, col);
+        
+        col++;
+        if (col >= 3) {
+            col = 0;
+            row++;
+        }
+    }
+    
+    if (!hasAmenities) {
+        QLabel* emptyLabel = new QLabel("No amenities listed.", m_amContainer);
+        emptyLabel->setStyleSheet("color: #A3AED0; font-size: 14px; font-style: italic;");
+        m_amLayout->addWidget(emptyLabel, 0, 0);
+    } else {
+        m_amLayout->setColumnStretch(3, 1);
+    }
     
     const std::string typeName = m_room->getRoomTypeName();
+    
+    double area = m_room->getArea();
+    if (area <= 0) {
+        if (typeName == "Standard") area = 25;
+        else if (typeName == "Deluxe") area = 35;
+        else area = 55;
+    }
+    m_sizeLabel->setText(QString("📏 %1m²").arg(area));
+    
+    QString bedType = QString::fromStdString(m_room->getBedType());
+    if (bedType.isEmpty()) {
+        if (typeName == "Standard") bedType = "Queen Bed";
+        else if (typeName == "Deluxe") bedType = "King Bed";
+        else bedType = "Super King Bed";
+    }
+    m_bedLabel->setText(QString("🛏 %1").arg(bedType));
+    
+    m_guestLabel->setText(QString("👤 %1 Guests").arg(m_room->getMaximumGuests()));
+
     if (typeName == "Standard") {
-        m_sizeLabel->setText("📏 25m²");
-        m_bedLabel->setText("🛏 Queen Bed");
-        m_guestLabel->setText(QString("👤 %1 Guests").arg(m_room->getMaximumGuests()));
         m_extraFeeLabel->setVisible(false);
         m_imageLabel->setText("🏨 Standard Room Image Placeholder");
         m_imageLabel->setStyleSheet("background-color: #F4F7FE; border-radius: 14px; font-weight: bold; color: #A3AED0; font-size: 18px;");
     } else if (typeName == "Deluxe") {
-        m_sizeLabel->setText("📏 35m²");
-        m_bedLabel->setText("🛏 King Bed");
-        m_guestLabel->setText(QString("👤 %1 Guests").arg(m_room->getMaximumGuests()));
         m_extraFeeLabel->setText(QString("💰 Mini Bar Fee: %1 VND").arg(formatMoney(m_room->getExtraFeeAmount())));
         m_extraFeeLabel->setVisible(true);
         m_imageLabel->setText("✨ Deluxe Room Image Placeholder");
         m_imageLabel->setStyleSheet("background-color: #E0F2FE; border-radius: 14px; font-weight: bold; color: #0284C7; font-size: 18px;");
     } else if (typeName == "Suite") {
-        m_sizeLabel->setText("📏 55m²");
-        m_bedLabel->setText("🛏 Super King Bed");
-        m_guestLabel->setText(QString("👤 %1 Guests").arg(m_room->getMaximumGuests()));
         m_extraFeeLabel->setText(QString("👑 Premium Service Fee: %1 VND").arg(formatMoney(m_room->getExtraFeeAmount())));
         m_extraFeeLabel->setVisible(true);
         m_imageLabel->setText("👑 Suite Room Image Placeholder");

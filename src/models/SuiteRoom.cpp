@@ -3,6 +3,11 @@
 SuiteRoom::SuiteRoom(std::string num, double basePrice, double fee)
     : Room(num, basePrice),
       premiumServiceFee(fee) {
+    this->setArea(55.0);
+    this->setBedType("Super King Bed");
+    this->setMaxGuests(4);
+    this->setDescription("Luxury suite with premium services and separate living area.");
+    this->setAmenities("Free Wi-Fi, Air Conditioning, 2 Smart TVs, Mini Bar, Bathtub, Premium Service");
 }
 
 double SuiteRoom::getPremiumServiceFee() const {
@@ -22,8 +27,7 @@ std::string SuiteRoom::getRoomTypeName() const {
 }
 
 int SuiteRoom::getMaximumGuests() const {
-    // Modified: Define Suite inventory capacity centrally for reservation validation.
-    return 4;
+    return this->getMaxGuests();
 }
 
 double SuiteRoom::getExtraFeeAmount() const {

@@ -58,6 +58,7 @@ private:
     QLabel* m_detailGuestLabel;
     QLabel* m_detailDescLabel;
     QLabel* m_detailExtraFeeLabel;
+    QLabel* m_detailAmenitiesLabel;
     QPushButton* m_editRoomBtn;
     QPushButton* m_deleteRoomBtn;
 };
