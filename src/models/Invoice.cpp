@@ -43,11 +43,16 @@ Invoice::Invoice() {
     this->bookingId = "";
     this->taxRate = 0.0;
     this->nights = 0; // Added: Initializing the new nights member variable
+    // Modified: Initialize time-based invoice facts as legacy-safe until the hourly checkout workflow is enabled.
+    this->actualDurationSeconds = 0;
+    this->billableHours = 0;
+    this->legacyNightlyBilling = true;
     this->invoiceIssuedDate = "";
     this->paymentMethod = "";
     this->paymentAmount = 0.0;
     this->paymentReceivedDate = "";
     this->unitPrice = 0.0;
+    this->hourlyRoomRateSnapshot = 0.0;
 }
 
 std::string Invoice::getInvoiceId() const {
@@ -98,6 +103,13 @@ void Invoice::setNights(int nights) {
     this->nights = nights;
 }
 
+long long Invoice::getActualDurationSeconds() const { return actualDurationSeconds; }
+void Invoice::setActualDurationSeconds(long long value) { actualDurationSeconds = value; }
+int Invoice::getBillableHours() const { return billableHours; }
+void Invoice::setBillableHours(int value) { billableHours = value; }
+bool Invoice::usesLegacyNightlyBilling() const { return legacyNightlyBilling; }
+void Invoice::setLegacyNightlyBilling(bool value) { legacyNightlyBilling = value; }
+
 // Modified: Returns std::string instead of QDate
 std::string Invoice::getInvoiceIssuedDate() const {
     return invoiceIssuedDate;
@@ -117,6 +129,8 @@ void Invoice::setPaymentReceivedDate(const std::string& value) { paymentReceived
 
 double Invoice::getUnitPrice() const { return unitPrice; }
 void Invoice::setUnitPrice(double value) { unitPrice = value; }
+double Invoice::getHourlyRoomRateSnapshot() const { return hourlyRoomRateSnapshot; }
+void Invoice::setHourlyRoomRateSnapshot(double value) { hourlyRoomRateSnapshot = value; }
 std::string Invoice::getCustomerNameSnapshot() const { return customerNameSnapshot; }
 void Invoice::setCustomerNameSnapshot(const std::string& value) { customerNameSnapshot = value; }
 std::string Invoice::getCustomerIdSnapshot() const { return customerIdSnapshot; }
@@ -131,17 +145,26 @@ std::string Invoice::getCheckInDateSnapshot() const { return checkInDateSnapshot
 void Invoice::setCheckInDateSnapshot(const std::string& value) { checkInDateSnapshot = value; }
 std::string Invoice::getCheckOutDateSnapshot() const { return checkOutDateSnapshot; }
 void Invoice::setCheckOutDateSnapshot(const std::string& value) { checkOutDateSnapshot = value; }
+std::string Invoice::getPlannedCheckInAtSnapshot() const { return plannedCheckInAtSnapshot; }
+void Invoice::setPlannedCheckInAtSnapshot(const std::string& value) { plannedCheckInAtSnapshot = value; }
+std::string Invoice::getPlannedCheckOutAtSnapshot() const { return plannedCheckOutAtSnapshot; }
+void Invoice::setPlannedCheckOutAtSnapshot(const std::string& value) { plannedCheckOutAtSnapshot = value; }
+std::string Invoice::getActualCheckInAtSnapshot() const { return actualCheckInAtSnapshot; }
+void Invoice::setActualCheckInAtSnapshot(const std::string& value) { actualCheckInAtSnapshot = value; }
+std::string Invoice::getActualCheckOutAtSnapshot() const { return actualCheckOutAtSnapshot; }
+void Invoice::setActualCheckOutAtSnapshot(const std::string& value) { actualCheckOutAtSnapshot = value; }
 
-// Modified: Validates booking existence, invoice data integrity, and duration validity
 bool Invoice::isValid() const {
-    // Modified: Require a linked booking, complete immutable snapshots, and valid billing values.
+    // Modified: Validate legacy nightly invoices and timestamp-based hourly invoices against their own immutable facts.
     const auto lockedBooking = booking.lock();
 
+    const bool validDuration = legacyNightlyBilling
+        ? nights > 0 && unitPrice > 0.0
+        : actualDurationSeconds > 0 && billableHours > 0 && hourlyRoomRateSnapshot > 0.0;
     return !invoiceId.empty() &&
            lockedBooking != nullptr &&
-           nights > 0 &&
+           validDuration &&
            taxRate >= 0.0 && taxRate <= 1.0 &&
-           unitPrice > 0.0 &&
            !paymentMethod.empty() && paymentAmount > 0.0 && isIsoDateString(paymentReceivedDate) &&
            !customerNameSnapshot.empty() && !customerIdSnapshot.empty() && !customerPhoneSnapshot.empty() &&
            !roomNumberSnapshot.empty() && !roomTypeSnapshot.empty() &&
@@ -149,9 +172,9 @@ bool Invoice::isValid() const {
            isIsoDateString(checkOutDateSnapshot);
 }
 
-// Modified: Calculate subtotal from the stored stay length and immutable unit price.
 double Invoice::calculateSubtotal() const {
-    return nights * unitPrice;
+    // Modified: New invoices bill actual elapsed time rounded half-up to whole hours; legacy records retain nightly totals.
+    return legacyNightlyBilling ? nights * unitPrice : billableHours * hourlyRoomRateSnapshot;
 }
 
 // Modified: Calculate the final total from the immutable subtotal and stored tax rate.
@@ -175,11 +198,17 @@ std::string Invoice::generateInvoiceDetails() const {
     details << "<b>Customer ID:</b> " << customerIdSnapshot << "<br>";
     details << "<b>Phone:</b> " << customerPhoneSnapshot << "<br>";
     details << "<b>Room:</b> " << roomNumberSnapshot << " (" << roomTypeSnapshot << ")<br>";
-    details << "<b>Price per Night:</b> " << formatMoney(unitPrice) << " VND<br>";
+    details << "<b>Price per " << (legacyNightlyBilling ? "Night" : "Hour") << ": "
+            << formatMoney(legacyNightlyBilling ? unitPrice : hourlyRoomRateSnapshot) << " VND<br>";
     details << "<b>Check-in Date:</b> " << checkInDateSnapshot << "<br>";
     details << "<b>Check-out Date:</b> " << checkOutDateSnapshot << "<br>";
-    // Modified: render invoice duration with a real singular or plural night label.
-    details << "<b>Duration:</b> " << nights << (nights == 1 ? " night" : " nights") << "<br>";
+    if (legacyNightlyBilling) {
+        details << "<b>Duration:</b> " << nights << (nights == 1 ? " night" : " nights") << "<br>";
+    } else {
+        details << "<b>Actual duration:</b> " << actualDurationSeconds << " seconds<br>";
+        details << "<b>Billable duration:</b> " << billableHours
+                << (billableHours == 1 ? " hour" : " hours") << "<br>";
+    }
 
     // Billing breakdown
     double subtotal = calculateSubtotal();
@@ -206,12 +235,18 @@ void Invoice::captureBookingSnapshot(const std::shared_ptr<Booking>& sourceBooki
         return;
     }
 
-    // Modified: Capture immutable guest, room, date, and pricing data when an invoice is created.
-    // Modified: Bill from confirmed reservation values and actual stay dates, never from mutable room pricing at checkout.
+    // Modified: Capture immutable guest, room, schedule, actual timestamps, and pricing facts at invoice creation.
     checkInDateSnapshot = sourceBooking->getActualCheckInDate().empty()
         ? sourceBooking->getCheckInDate() : sourceBooking->getActualCheckInDate();
     checkOutDateSnapshot = sourceBooking->getEffectiveCheckOutDate();
     unitPrice = sourceBooking->getQuotedUnitPrice();
+    // Modified: Capture future datetime/hourly facts without altering the legacy invoice calculation in this migration phase.
+    plannedCheckInAtSnapshot = sourceBooking->getPlannedCheckInAt();
+    plannedCheckOutAtSnapshot = sourceBooking->getPlannedCheckOutAt();
+    actualCheckInAtSnapshot = sourceBooking->getActualCheckInAt();
+    actualCheckOutAtSnapshot = sourceBooking->getActualCheckOutAt();
+    hourlyRoomRateSnapshot = sourceBooking->getQuotedHourlyRate();
+    legacyNightlyBilling = sourceBooking->usesLegacyDateOnlySchedule();
     const auto customer = sourceBooking->getCustomer();
     if (customer) {
         customerNameSnapshot = customer->getName();

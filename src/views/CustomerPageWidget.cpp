@@ -149,10 +149,17 @@ QColor bookingStateColor(BookingState state)
     return QColor("#64748B");
 }
 
-QString displayBookingDate(const std::string& isoDate)
+QString displayBookingDateTime(const std::string& timestamp, const std::string& legacyDate)
 {
-    const QDate date = QDate::fromString(QString::fromStdString(isoDate), Qt::ISODate);
-    return date.isValid() ? date.toString("dd MMM yyyy") : QString::fromStdString(isoDate);
+    QDateTime dateTime = QDateTime::fromString(QString::fromStdString(timestamp), Qt::ISODateWithMs);
+    if (!dateTime.isValid()) {
+        dateTime = QDateTime::fromString(QString::fromStdString(timestamp), Qt::ISODate);
+    }
+    if (dateTime.isValid()) {
+        return dateTime.toString("dd MMM yyyy, HH:mm");
+    }
+    const QDate date = QDate::fromString(QString::fromStdString(legacyDate), Qt::ISODate);
+    return date.isValid() ? date.toString("dd MMM yyyy") : QString::fromStdString(legacyDate);
 }
 }
 
@@ -765,10 +772,13 @@ void CustomerPageWidget::showCustomerBookingHistory(const QString& customerId)
         m_bookingHistoryTable->setItem(row, 1, new QTableWidgetItem(room
             ? QString::fromStdString(room->getRoomNumber()) + " — " + QString::fromStdString(room->getRoomTypeName())
             : QStringLiteral("Unavailable room")));
-        m_bookingHistoryTable->setItem(row, 2, new QTableWidgetItem(displayBookingDate(booking->getCheckInDate())));
-        m_bookingHistoryTable->setItem(row, 3, new QTableWidgetItem(displayBookingDate(booking->getCheckOutDate())));
+        // Modified: Show planned and actual timestamps in customer history so hourly reservations are never mistaken for all-day stays.
+        m_bookingHistoryTable->setItem(row, 2, new QTableWidgetItem(
+            displayBookingDateTime(booking->getPlannedCheckInAt(), booking->getCheckInDate())));
+        m_bookingHistoryTable->setItem(row, 3, new QTableWidgetItem(
+            displayBookingDateTime(booking->getPlannedCheckOutAt(), booking->getCheckOutDate())));
         m_bookingHistoryTable->setItem(row, 4, new QTableWidgetItem(booking->isCheckedOut()
-            ? displayBookingDate(booking->getActualCheckOutDate()) : QStringLiteral("—")));
+            ? displayBookingDateTime(booking->getActualCheckOutAt(), booking->getActualCheckOutDate()) : QStringLiteral("—")));
 
         auto* statusItem = new QTableWidgetItem(bookingStateLabel(state));
         statusItem->setForeground(bookingStateColor(state));

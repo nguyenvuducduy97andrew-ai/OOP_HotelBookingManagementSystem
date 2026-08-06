@@ -1,4 +1,5 @@
 #include "RoomInfoDialog.h"
+#include "DialogWindowBehavior.h"
 #include <QLabel>
 #include <QPushButton>
 #include <QVBoxLayout>
@@ -14,10 +15,12 @@ RoomInfoDialog::RoomInfoDialog(std::shared_ptr<Room> room, QWidget *parent)
     setupStyle();
     populateData();
     
-    setMinimumWidth(520);
+    // Modified: Compact Room Info through whitespace and media sizing, while retaining the established typography and visual hierarchy.
+    lockDialogToWorkingArea(this, QSize(540, 640));
     setWindowTitle("Room Information");
     setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint);
-    setAttribute(Qt::WA_TranslucentBackground);
+    // Modified: Keep the room-information step opaque so it remains visually consistent with functional dialogs.
+    setAttribute(Qt::WA_TranslucentBackground, false);
 }
 
 QString RoomInfoDialog::formatMoney(double amount) {
@@ -27,13 +30,13 @@ QString RoomInfoDialog::formatMoney(double amount) {
 
 void RoomInfoDialog::setupUI() {
     auto* mainLayout = new QVBoxLayout(this);
-    mainLayout->setContentsMargins(10, 10, 10, 10);
+    mainLayout->setContentsMargins(8, 8, 8, 8);
     
     auto* bgFrame = new QFrame(this);
     bgFrame->setObjectName("bgFrame");
     auto* frameLayout = new QVBoxLayout(bgFrame);
-    frameLayout->setContentsMargins(24, 24, 24, 24);
-    frameLayout->setSpacing(16);
+    frameLayout->setContentsMargins(18, 18, 18, 18);
+    frameLayout->setSpacing(9);
     
     // Header row
     auto* headerLayout = new QHBoxLayout();
@@ -46,12 +49,13 @@ void RoomInfoDialog::setupUI() {
     headerLayout->addWidget(m_titleLabel);
     headerLayout->addWidget(m_statusBadge);
     headerLayout->addStretch();
+    enableDialogHeaderDrag(this, m_titleLabel);
     
     // Image placeholder
     m_imageLabel = new QLabel(this);
     m_imageLabel->setObjectName("imageLabel");
     m_imageLabel->setAlignment(Qt::AlignCenter);
-    m_imageLabel->setFixedHeight(180);
+    m_imageLabel->setFixedHeight(130);
     
     // Specs row
     auto* specsLayout = new QHBoxLayout();
@@ -82,7 +86,7 @@ void RoomInfoDialog::setupUI() {
     m_descLabel->setFrameShape(QFrame::NoFrame);
     m_descLabel->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_descLabel->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    m_descLabel->setFixedHeight(80);
+    m_descLabel->setFixedHeight(60);
     m_descLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     m_descLabel->setAlignment(Qt::AlignJustify);
     
@@ -92,7 +96,10 @@ void RoomInfoDialog::setupUI() {
     m_amContainer = new QWidget(this);
     m_amLayout = new QGridLayout(m_amContainer);
     m_amLayout->setContentsMargins(0, 0, 0, 0);
-    m_amLayout->setSpacing(8);
+    m_amLayout->setHorizontalSpacing(8);
+    m_amLayout->setVerticalSpacing(4);
+    m_amLayout->setColumnStretch(0, 1);
+    m_amLayout->setColumnStretch(1, 1);
     
     // Buttons
     auto* btnLayout = new QHBoxLayout();
@@ -107,14 +114,10 @@ void RoomInfoDialog::setupUI() {
     // Assemble
     frameLayout->addLayout(headerLayout);
     frameLayout->addWidget(m_imageLabel);
-    frameLayout->addSpacing(16);
     frameLayout->addLayout(specsLayout);
-    frameLayout->addSpacing(12);
     frameLayout->addWidget(m_extraFeeLabel);
-    frameLayout->addSpacing(10);
     frameLayout->addWidget(descTitle);
     frameLayout->addWidget(m_descLabel);
-    frameLayout->addSpacing(10);
     frameLayout->addWidget(amTitle);
     frameLayout->addWidget(m_amContainer);
     frameLayout->addStretch();
@@ -128,10 +131,15 @@ void RoomInfoDialog::setupUI() {
 
 void RoomInfoDialog::setupStyle() {
     setStyleSheet(R"(
+        QDialog {
+            background-color: #EFF6FF;
+            border: 2px solid #93C5FD;
+            border-radius: 18px;
+        }
         QFrame#bgFrame {
             background-color: #FFFFFF;
             border-radius: 20px;
-            border: 1px solid #E9EDF7;
+            border: 1px solid #D9EAFE;
         }
         QLabel#titleLabel {
             font-size: 24px;
@@ -231,11 +239,12 @@ void RoomInfoDialog::populateData() {
         hasAmenities = true;
         
         QLabel* pill = new QLabel("✓ " + am, m_amContainer);
-        pill->setStyleSheet("background-color: #F4F7FE; color: #005BFE; border: 1px solid #E9EDF7; padding: 6px 12px; border-radius: 12px; font-weight: 600; font-size: 13px;");
+        // Modified: Use two compact amenity columns so complete labels remain readable in the smaller Room Info dialog.
+        pill->setStyleSheet("background-color: #F4F7FE; color: #005BFE; border: 1px solid #E9EDF7; padding: 4px 8px; border-radius: 10px; font-weight: 600; font-size: 13px;");
         m_amLayout->addWidget(pill, row, col);
         
         col++;
-        if (col >= 3) {
+        if (col >= 2) {
             col = 0;
             row++;
         }
@@ -246,7 +255,8 @@ void RoomInfoDialog::populateData() {
         emptyLabel->setStyleSheet("color: #A3AED0; font-size: 14px; font-style: italic;");
         m_amLayout->addWidget(emptyLabel, 0, 0);
     } else {
-        m_amLayout->setColumnStretch(3, 1);
+        m_amLayout->setColumnStretch(0, 1);
+        m_amLayout->setColumnStretch(1, 1);
     }
     
     const std::string typeName = m_room->getRoomTypeName();

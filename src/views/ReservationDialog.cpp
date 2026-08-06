@@ -5,13 +5,22 @@
 #include "StandardRoom.h"
 #include "DeluxeRoom.h"
 #include "SuiteRoom.h"
+#include "SchedulePickerDialog.h"
+#include "CustomConfirmDialog.h"
+#include "DialogWindowBehavior.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QFormLayout>
 #include <QPushButton>
-#include <QMessageBox>
 #include <QRegularExpression>
 #include <QCompleter>
+#include <QButtonGroup>
+#include <QLocale>
+#include <QSignalBlocker>
+#include <QScrollArea>
+#include <QStackedLayout>
+#include <QTimeEdit>
+#include <algorithm>
 
 ReservationDialog::ReservationDialog(HotelManager* manager, QWidget *parent)
     : QDialog(parent), m_manager(manager), m_editingBookingId("") {
@@ -21,16 +30,22 @@ ReservationDialog::ReservationDialog(HotelManager* manager, QWidget *parent)
 }
 
 void setupReservationDialogStyle(QDialog* dialog) {
+    // Modified: Keep Reservation opaque while replacing the system title bar with a soft in-surface header.
+    dialog->setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint);
     dialog->setStyleSheet(R"(
         QDialog {
             background-color: #FFFFFF;
+            border: 2px solid #93C5FD;
+            border-radius: 18px;
         }
         QLabel {
             font-size: 13px;
             color: #2B3674;
             font-weight: 600;
+            background: transparent;
+            border: none;
         }
-        QLineEdit, QComboBox, QDateEdit, QSpinBox {
+        QLineEdit, QComboBox, QDateEdit, QTimeEdit, QSpinBox {
             background-color: #F4F7FE;
             border: 1px solid #E9EDF7;
             border-radius: 8px;
@@ -41,7 +56,7 @@ void setupReservationDialogStyle(QDialog* dialog) {
         QComboBox {
             padding-right: 28px;
         }
-        QLineEdit:focus, QComboBox:focus, QDateEdit:focus, QSpinBox:focus {
+        QLineEdit:focus, QComboBox:focus, QDateEdit:focus, QTimeEdit:focus, QSpinBox:focus {
             border: 1px solid #005BFE;
         }
         QComboBox QAbstractItemView {
@@ -95,21 +110,140 @@ void setupReservationDialogStyle(QDialog* dialog) {
         QPushButton#btnCancel:hover {
             background-color: #D3DDF4;
         }
+        QPushButton#btnSchedule {
+            color: #005BFE;
+            background-color: #EFF6FF;
+            border: 1px solid #BFDBFE;
+            border-radius: 8px;
+            font-weight: 700;
+            padding: 8px 12px;
+        }
+        QPushButton#btnSchedule:hover {
+            background-color: #DBEAFE;
+        }
+        QLabel#validationFeedback {
+            color: #92400E;
+            background-color: #FFFBEB;
+            border: 1px solid #FDE68A;
+            border-radius: 9px;
+            padding: 9px 12px;
+            font-weight: 600;
+        }
+        QLabel#validationFeedback[active="false"] {
+            background: transparent;
+            border: none;
+            padding: 0;
+        }
+        QLabel#roomReview {
+            color: #2B3674;
+            background-color: #F4F7FE;
+            border: 1px solid #D9E2F2;
+            border-radius: 9px;
+            padding: 10px 12px;
+            font-weight: 500;
+        }
+        QFrame#customerDetailsContainer {
+            background: #F8FAFC;
+            border: 1px solid #E2EAF6;
+            border-radius: 10px;
+            padding: 8px;
+        }
+        QLabel#reservationDialogTitle {
+            font-size: 20px;
+            font-weight: 800;
+            color: #1B3F83;
+        }
+        QPushButton#reservationDialogClose {
+            background: transparent;
+            color: #64748B;
+            border: none;
+            border-radius: 8px;
+            font-size: 20px;
+        }
+        QPushButton#reservationDialogClose:hover { background: #F1F5F9; color: #1B3F83; }
+        QLabel#reservationDialogSubtitle {
+            font-size: 12px;
+            color: #6B7FA8;
+            font-weight: 500;
+        }
     )");
 }
 
 void ReservationDialog::setupUI() {
     setupReservationDialogStyle(this);
+    // Modified: Keep Reservation at a stable usable size; long sub-sections scroll inside the dialog rather than resizing the outer window.
+    lockDialogToWorkingArea(this, QSize(780, 700));
 
     auto* mainLayout = new QVBoxLayout(this);
     mainLayout->setContentsMargins(24, 24, 24, 24);
     mainLayout->setSpacing(16);
 
-    auto* formLayout = new QFormLayout();
+    // Modified: Frameless reservation dialogs retain an in-surface title and explanation instead of relying on a harsh native title bar.
+    auto* titleRow = new QHBoxLayout();
+    auto* dialogIcon = new QLabel("▣", this);
+    dialogIcon->setStyleSheet("color:#005BFE; font-size:17px; background:transparent; border:none;");
+    auto* dialogTitle = new QLabel("Create reservation", this);
+    dialogTitle->setObjectName("reservationDialogTitle");
+    auto* dialogClose = new QPushButton("×", this);
+    dialogClose->setObjectName("reservationDialogClose");
+    dialogClose->setFixedSize(30, 30);
+    titleRow->addWidget(dialogIcon);
+    titleRow->addSpacing(8);
+    titleRow->addWidget(dialogTitle);
+    titleRow->addStretch();
+    titleRow->addWidget(dialogClose);
+    enableDialogHeaderDrag(this, dialogTitle);
+    auto* dialogSubtitle = new QLabel("Choose the guest, stay schedule, occupancy, and room before saving.", this);
+    dialogSubtitle->setObjectName("reservationDialogSubtitle");
+    dialogSubtitle->setWordWrap(true);
+    mainLayout->addLayout(titleRow);
+    mainLayout->addWidget(dialogSubtitle);
+
+    auto* formScroll = new QScrollArea(this);
+    formScroll->setWidgetResizable(true);
+    formScroll->setFrameShape(QFrame::NoFrame);
+    formScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    auto* formContent = new QWidget(formScroll);
+    auto* formLayout = new QFormLayout(formContent);
+    formLayout->setContentsMargins(2, 2, 8, 2);
     formLayout->setSpacing(12);
 
+    auto* customerTypeRow = new QHBoxLayout();
+    customerTypeRow->setSpacing(8);
+    auto* existingCustomerMode = new QPushButton("Existing customer", formContent);
+    auto* newCustomerMode = new QPushButton("New customer", formContent);
+    existingCustomerMode->setObjectName("btnSchedule");
+    newCustomerMode->setObjectName("btnSchedule");
+    existingCustomerMode->setCheckable(true);
+    newCustomerMode->setCheckable(true);
+    auto* customerModeGroup = new QButtonGroup(this);
+    customerModeGroup->setExclusive(true);
+    customerModeGroup->addButton(existingCustomerMode, 0);
+    customerModeGroup->addButton(newCustomerMode, 1);
+    newCustomerMode->setChecked(true);
+    customerTypeRow->addWidget(existingCustomerMode);
+    customerTypeRow->addWidget(newCustomerMode);
+    customerTypeRow->addStretch();
+    formLayout->addRow("Customer type:", customerTypeRow);
+
+    // Modified: Keep Existing and New customer content in equally sized pages so changing the choice never changes the outer dialog geometry.
+    auto* customerDetails = new QFrame(formContent);
+    customerDetails->setObjectName("customerDetailsContainer");
+    customerDetails->setFixedHeight(188);
+    m_customerDetailsStack = new QStackedLayout(customerDetails);
+    m_customerDetailsStack->setContentsMargins(0, 0, 0, 0);
+
+    auto* existingCustomerPage = new QWidget(customerDetails);
+    auto* existingCustomerLayout = new QVBoxLayout(existingCustomerPage);
+    existingCustomerLayout->setContentsMargins(0, 0, 0, 0);
+    existingCustomerLayout->setSpacing(8);
+    auto* existingHint = new QLabel("Search the saved customer list. Selected profile details remain read-only.", existingCustomerPage);
+    existingHint->setObjectName("reservationDialogSubtitle");
+    existingHint->setWordWrap(true);
+    existingCustomerLayout->addWidget(existingHint);
+
     // Modified: Let reservations reuse the stored customer key instead of re-registering a known guest from manually retyped fields.
-    m_existingCustomerCombo = new QComboBox(this);
+    m_existingCustomerCombo = new QComboBox(existingCustomerPage);
     m_existingCustomerCombo->setEditable(true);
     m_existingCustomerCombo->setInsertPolicy(QComboBox::NoInsert);
     m_existingCustomerCombo->lineEdit()->setPlaceholderText("Search document number, name, or phone...");
@@ -119,53 +253,106 @@ void ReservationDialog::setupUI() {
         completer->setCompletionMode(QCompleter::PopupCompletion);
     }
     populateExistingCustomerPicker();
-    formLayout->addRow("Existing customer:", m_existingCustomerCombo);
+    existingCustomerLayout->addWidget(m_existingCustomerCombo);
+    m_selectedCustomerProfileLabel = new QLabel(existingCustomerPage);
+    m_selectedCustomerProfileLabel->setObjectName("roomReview");
+    m_selectedCustomerProfileLabel->setWordWrap(true);
+    m_selectedCustomerProfileLabel->setFixedHeight(80);
+    m_selectedCustomerProfileLabel->setText("Select a customer to show the saved identity and phone details here.");
+    existingCustomerLayout->addWidget(m_selectedCustomerProfileLabel);
+    existingCustomerLayout->addStretch();
+
+    auto* newCustomerPage = new QWidget(customerDetails);
+    auto* newCustomerLayout = new QFormLayout(newCustomerPage);
+    newCustomerLayout->setContentsMargins(0, 0, 0, 0);
+    newCustomerLayout->setHorizontalSpacing(12);
+    newCustomerLayout->setVerticalSpacing(10);
 
     // Modified: Keep reservation document validation consistent with Customer Management.
-    auto* idRow = new QHBoxLayout();
+    auto* idRowWidget = new QWidget(newCustomerPage);
+    auto* idRow = new QHBoxLayout(idRowWidget);
+    idRow->setContentsMargins(0, 0, 0, 0);
     idRow->setSpacing(8);
-    m_customerDocumentType = new QComboBox(this);
+    m_customerDocumentType = new QComboBox(newCustomerPage);
     m_customerDocumentType->addItems({"National ID", "Passport", "Other"});
-    m_customerIdCountry = new QComboBox(this);
+    m_customerIdCountry = new QComboBox(newCustomerPage);
     for (const auto& rule : countryInputRules()) {
         m_customerIdCountry->addItem(rule.name, rule.key);
     }
-    m_customerIdEdit = new QLineEdit(this);
+    m_customerIdEdit = new QLineEdit(newCustomerPage);
     idRow->addWidget(m_customerDocumentType, 0);
     idRow->addWidget(m_customerIdCountry, 0);
     idRow->addWidget(m_customerIdEdit, 1);
-    formLayout->addRow("Identity document:", idRow);
+    auto* identityCaption = new QLabel("Identity document:", newCustomerPage);
+    newCustomerLayout->addRow(identityCaption, idRowWidget);
 
-    m_customerNameEdit = new QLineEdit(this);
+    m_customerNameEdit = new QLineEdit(newCustomerPage);
     m_customerNameEdit->setPlaceholderText("Full legal name as shown on identification");
-    formLayout->addRow("Full legal name:", m_customerNameEdit);
+    auto* nameCaption = new QLabel("Full legal name:", newCustomerPage);
+    newCustomerLayout->addRow(nameCaption, m_customerNameEdit);
 
-    auto* phoneRow = new QHBoxLayout();
+    auto* phoneRowWidget = new QWidget(newCustomerPage);
+    auto* phoneRow = new QHBoxLayout(phoneRowWidget);
+    phoneRow->setContentsMargins(0, 0, 0, 0);
     phoneRow->setSpacing(8);
-    m_customerPhoneCode = new QComboBox(this);
+    m_customerPhoneCode = new QComboBox(newCustomerPage);
     for (const auto& rule : countryInputRules()) {
         m_customerPhoneCode->addItem(QString("%1 (%2)").arg(rule.name, rule.callingCode), rule.key);
     }
-    m_customerPhoneLocalEdit = new QLineEdit(this);
+    m_customerPhoneLocalEdit = new QLineEdit(newCustomerPage);
     phoneRow->addWidget(m_customerPhoneCode, 0);
     phoneRow->addWidget(m_customerPhoneLocalEdit, 1);
-    formLayout->addRow("Phone Number:", phoneRow);
+    auto* phoneCaption = new QLabel("Phone Number:", newCustomerPage);
+    newCustomerLayout->addRow(phoneCaption, phoneRowWidget);
     updateIdPlaceholder();
     updatePhonePlaceholder();
+    m_customerDetailsStack->addWidget(existingCustomerPage);
+    m_customerDetailsStack->addWidget(newCustomerPage);
+    m_customerDetailsStack->setCurrentIndex(1);
+    formLayout->addRow("Customer details:", customerDetails);
 
-    QDate today = QDate::currentDate();
-    m_checkInDateEdit = new QDateEdit(today, this);
+    QDateTime defaultCheckIn = QDateTime::currentDateTime().addSecs(60 * 60);
+    defaultCheckIn.setTime(QTime(defaultCheckIn.time().hour(), 0));
+    if (defaultCheckIn <= QDateTime::currentDateTime()) {
+        defaultCheckIn = defaultCheckIn.addSecs(60 * 60);
+    }
+    const QDate today = QDate::currentDate();
+    m_checkInDateEdit = new QDateEdit(defaultCheckIn.date(), this);
     m_checkInDateEdit->setCalendarPopup(true);
     m_checkInDateEdit->setDisplayFormat("yyyy-MM-dd");
     // Modified: Match the service rule by preventing newly created reservations from using historical check-in dates.
     m_checkInDateEdit->setMinimumDate(today);
-    formLayout->addRow("Check-in Date:", m_checkInDateEdit);
+    // Modified: The shared schedule picker is the only visible schedule editor; legacy field widgets remain data holders and must not leak into the dialog at (0, 0).
+    m_checkInDateEdit->hide();
 
-    m_checkOutDateEdit = new QDateEdit(today.addDays(1), this);
+    m_checkInTimeEdit = new QTimeEdit(defaultCheckIn.time(), this);
+    m_checkInTimeEdit->setDisplayFormat("HH:mm");
+    m_checkInTimeEdit->setTimeRange(QTime(0, 0), QTime(23, 0));
+    m_checkInTimeEdit->setCurrentSection(QDateTimeEdit::HourSection);
+    m_checkInTimeEdit->hide();
+
+    const QDateTime defaultCheckOut = defaultCheckIn.addSecs(60 * 60);
+    m_checkOutDateEdit = new QDateEdit(defaultCheckOut.date(), this);
     m_checkOutDateEdit->setCalendarPopup(true);
     m_checkOutDateEdit->setDisplayFormat("yyyy-MM-dd");
     m_checkOutDateEdit->setMinimumDate(today);
-    formLayout->addRow("Check-out Date:", m_checkOutDateEdit);
+    m_checkOutDateEdit->hide();
+
+    m_checkOutTimeEdit = new QTimeEdit(defaultCheckOut.time(), this);
+    m_checkOutTimeEdit->setDisplayFormat("HH:mm");
+    m_checkOutTimeEdit->setTimeRange(QTime(0, 0), QTime(23, 0));
+    m_checkOutTimeEdit->setCurrentSection(QDateTimeEdit::HourSection);
+    m_checkOutTimeEdit->hide();
+    auto* scheduleRow = new QHBoxLayout();
+    scheduleRow->setSpacing(8);
+    m_scheduleButton = new QPushButton("Choose dates & times", this);
+    m_scheduleButton->setObjectName("btnSchedule");
+    m_scheduleSummary = new QLabel(this);
+    m_scheduleSummary->setWordWrap(true);
+    scheduleRow->addWidget(m_scheduleButton, 0);
+    scheduleRow->addWidget(m_scheduleSummary, 1);
+    formLayout->addRow("Booking schedule:", scheduleRow);
+    updateScheduleSummary();
 
     // Modified: Collect guest occupancy in the reservation so the service can enforce room capacity.
     m_adultCountSpin = new QSpinBox(this);
@@ -178,10 +365,29 @@ void ReservationDialog::setupUI() {
     m_childCountSpin->setValue(0);
     formLayout->addRow("Children:", m_childCountSpin);
 
+    auto* roomRow = new QHBoxLayout();
+    roomRow->setSpacing(8);
     m_roomCombo = new QComboBox(this);
-    formLayout->addRow("Available Rooms:", m_roomCombo);
+    roomRow->addWidget(m_roomCombo, 1);
+    // Modified: Selecting a room in the list is the single confirmation gesture; a second Select button caused redundant, error-prone state.
+    m_confirmRoomButton = nullptr;
+    formLayout->addRow("Available Rooms:", roomRow);
+    m_roomReviewLabel = new QLabel(this);
+    m_roomReviewLabel->setObjectName("roomReview");
+    m_roomReviewLabel->setWordWrap(true);
+    formLayout->addRow("Room review:", m_roomReviewLabel);
 
-    mainLayout->addLayout(formLayout);
+    formScroll->setWidget(formContent);
+    mainLayout->addWidget(formScroll, 1);
+
+    m_validationLabel = new QLabel(this);
+    m_validationLabel->setObjectName("validationFeedback");
+    m_validationLabel->setWordWrap(true);
+    // Modified: Reserve one feedback line so guidance can appear without changing Reservation Dialog height.
+    m_validationLabel->setFixedHeight(44);
+    m_validationLabel->setProperty("active", false);
+    m_validationLabel->setText(QString());
+    mainLayout->addWidget(m_validationLabel);
 
     // Buttons
     auto* btnLayout = new QHBoxLayout();
@@ -197,6 +403,21 @@ void ReservationDialog::setupUI() {
 
     connect(m_checkInDateEdit, &QDateEdit::dateChanged, this, &ReservationDialog::updateAvailableRooms);
     connect(m_checkOutDateEdit, &QDateEdit::dateChanged, this, &ReservationDialog::updateAvailableRooms);
+    connect(m_checkInTimeEdit, &QTimeEdit::timeChanged, this, &ReservationDialog::updateAvailableRooms);
+    connect(m_checkOutTimeEdit, &QTimeEdit::timeChanged, this, &ReservationDialog::updateAvailableRooms);
+    connect(m_scheduleButton, &QPushButton::clicked, this, &ReservationDialog::openSchedulePicker);
+    // Modified: Planned reservations use the agreed 24 whole-hour slots; actual arrival and departure still preserve seconds.
+    const auto keepWholeHour = [](QTimeEdit* editor, const QTime& time) {
+        if (time.minute() != 0 || time.second() != 0) {
+            editor->setTime(QTime(time.hour(), 0));
+        }
+    };
+    connect(m_checkInTimeEdit, &QTimeEdit::timeChanged, this, [this, keepWholeHour](const QTime& time) {
+        keepWholeHour(m_checkInTimeEdit, time);
+    });
+    connect(m_checkOutTimeEdit, &QTimeEdit::timeChanged, this, [this, keepWholeHour](const QTime& time) {
+        keepWholeHour(m_checkOutTimeEdit, time);
+    });
     connect(m_adultCountSpin, QOverload<int>::of(&QSpinBox::valueChanged), this, &ReservationDialog::updateAvailableRooms);
     connect(m_childCountSpin, QOverload<int>::of(&QSpinBox::valueChanged), this, &ReservationDialog::updateAvailableRooms);
     connect(m_customerDocumentType, &QComboBox::currentIndexChanged, this, &ReservationDialog::updateIdPlaceholder);
@@ -204,15 +425,65 @@ void ReservationDialog::setupUI() {
     connect(m_customerPhoneCode, &QComboBox::currentIndexChanged, this, [this]() { updatePhonePlaceholder(); normalizePhoneInput(); });
     connect(m_customerPhoneLocalEdit, &QLineEdit::textChanged, this, &ReservationDialog::normalizePhoneInput);
     connect(m_existingCustomerCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &ReservationDialog::applyExistingCustomerSelection);
-    connect(m_existingCustomerCombo->lineEdit(), &QLineEdit::textEdited, this, [this]() {
-        if (!m_selectedCustomerId.isEmpty()) {
-            // Modified: Return to explicit manual entry if staff changes a selected customer's search text.
-            m_selectedCustomerId.clear();
-            setCustomerFieldsEnabled(true);
+    connect(m_existingCustomerCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+            [this, existingCustomerMode, newCustomerMode](int index) {
+        const bool hasExistingSelection = !m_existingCustomerCombo->itemData(index).toString().isEmpty();
+        existingCustomerMode->setChecked(hasExistingSelection);
+        newCustomerMode->setChecked(!m_existingCustomerMode && !hasExistingSelection);
+    });
+    // Modified: Make the new-versus-existing customer branch explicit without inserting another modal window before booking.
+    connect(existingCustomerMode, &QPushButton::clicked, this, [this]() {
+        // Modified: Keep profile fields read-only until staff selects an existing customer instead of accidentally editing a new customer record.
+        m_existingCustomerMode = true;
+        m_selectedCustomerId.clear();
+        showCustomerMode(true);
+        setCustomerFieldsEnabled(false);
+        if (m_selectedCustomerProfileLabel) {
+            m_selectedCustomerProfileLabel->setText("Select a customer to show the saved identity and phone details here.");
         }
+        m_existingCustomerCombo->setEditText(QString());
+        showValidationMessage("Search for and select an existing customer. Their saved profile will then be shown here.");
+        m_existingCustomerCombo->setFocus();
+        m_existingCustomerCombo->showPopup();
+    });
+    connect(newCustomerMode, &QPushButton::clicked, this, [this]() {
+        m_existingCustomerMode = false;
+        showCustomerMode(false);
+        m_existingCustomerCombo->setCurrentIndex(0);
+        m_existingCustomerCombo->setEditText(QString());
+        setCustomerFieldsEnabled(true);
+        m_customerIdEdit->setFocus();
+    });
+    connect(m_existingCustomerCombo->lineEdit(), &QLineEdit::textEdited, this, [this](const QString& text) {
+        if (!m_selectedCustomerId.isEmpty()) {
+            // Modified: Returning to search never unlocks a selected profile; staff must explicitly choose New customer to enter new details.
+            m_selectedCustomerId.clear();
+            m_existingCustomerMode = true;
+            setCustomerFieldsEnabled(false);
+        }
+        filterExistingCustomerPicker(text);
+    });
+    connect(m_roomCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int) {
+        confirmPendingRoom();
     });
     connect(cancelBtn, &QPushButton::clicked, this, &QDialog::reject);
+    connect(dialogClose, &QPushButton::clicked, this, &QDialog::reject);
     connect(saveBtn, &QPushButton::clicked, this, &ReservationDialog::onAccept);
+
+    const auto clearValidationFeedback = [this]() {
+        if (m_validationLabel) {
+            m_validationLabel->setText(QString());
+            m_validationLabel->setProperty("active", false);
+            m_validationLabel->style()->unpolish(m_validationLabel);
+            m_validationLabel->style()->polish(m_validationLabel);
+        }
+    };
+    connect(m_customerIdEdit, &QLineEdit::textEdited, this, clearValidationFeedback);
+    connect(m_customerNameEdit, &QLineEdit::textEdited, this, clearValidationFeedback);
+    connect(m_customerPhoneLocalEdit, &QLineEdit::textEdited, this, clearValidationFeedback);
+    connect(m_adultCountSpin, QOverload<int>::of(&QSpinBox::valueChanged), this, clearValidationFeedback);
+    connect(m_childCountSpin, QOverload<int>::of(&QSpinBox::valueChanged), this, clearValidationFeedback);
+    disableNonMoneyWheelChanges(this);
 }
 
 void ReservationDialog::updateIdPlaceholder() {
@@ -243,6 +514,38 @@ void ReservationDialog::populateExistingCustomerPicker()
     }
 }
 
+void ReservationDialog::filterExistingCustomerPicker(const QString& searchText)
+{
+    if (!m_existingCustomerCombo || !m_manager) {
+        return;
+    }
+
+    // Modified: Support multi-term customer search (for example, "Nguyen + 098") across document number, name, and phone.
+    const QStringList terms = searchText.split('+', Qt::SkipEmptyParts);
+    QSignalBlocker blocker(m_existingCustomerCombo);
+    m_existingCustomerCombo->clear();
+    m_existingCustomerCombo->addItem("New customer — enter details manually", QString());
+
+    for (const auto& customer : m_manager->getCustomers()) {
+        if (!customer || customer->isArchived()) {
+            continue;
+        }
+        const QString documentNumber = QString::fromStdString(customer->getDocumentNumber());
+        const QString name = QString::fromStdString(customer->getName());
+        const QString phone = QString::fromStdString(customer->getPhoneNumber());
+        const QString searchable = QString("%1 %2 %3").arg(documentNumber, name, phone);
+        const bool matches = std::all_of(terms.cbegin(), terms.cend(), [&searchable](const QString& term) {
+            return searchable.contains(term.trimmed(), Qt::CaseInsensitive);
+        });
+        if (matches) {
+            m_existingCustomerCombo->addItem(
+                QString("%1 — %2 — %3").arg(documentNumber, name, phone),
+                QString::fromStdString(customer->getCustomerId()));
+        }
+    }
+    m_existingCustomerCombo->setEditText(searchText);
+}
+
 void ReservationDialog::setCustomerFieldsEnabled(bool enabled)
 {
     m_customerDocumentType->setEnabled(enabled);
@@ -251,21 +554,34 @@ void ReservationDialog::setCustomerFieldsEnabled(bool enabled)
     m_customerNameEdit->setEnabled(enabled);
     m_customerPhoneCode->setEnabled(enabled);
     m_customerPhoneLocalEdit->setEnabled(enabled);
+
+}
+
+void ReservationDialog::showCustomerMode(bool existingCustomer)
+{
+    if (m_customerDetailsStack) {
+        m_customerDetailsStack->setCurrentIndex(existingCustomer ? 0 : 1);
+    }
 }
 
 void ReservationDialog::applyExistingCustomerSelection(int index)
 {
     const QString selectedId = m_existingCustomerCombo->itemData(index).toString();
     if (selectedId.isEmpty()) {
-        // Modified: Make manual registration an explicit clean branch after staff leaves an existing customer selection.
+        // Modified: Keep the customer profile disabled while Existing customer mode has no selected record.
         m_selectedCustomerId.clear();
-        setCustomerFieldsEnabled(true);
-        m_customerDocumentType->setCurrentIndex(0);
-        m_customerIdCountry->setCurrentIndex(0);
-        m_customerIdEdit->clear();
-        m_customerNameEdit->clear();
-        m_customerPhoneCode->setCurrentIndex(0);
-        m_customerPhoneLocalEdit->clear();
+        setCustomerFieldsEnabled(!m_existingCustomerMode);
+        if (!m_existingCustomerMode) {
+            m_customerDocumentType->setCurrentIndex(0);
+            m_customerIdCountry->setCurrentIndex(0);
+            m_customerIdEdit->clear();
+            m_customerNameEdit->clear();
+            m_customerPhoneCode->setCurrentIndex(0);
+            m_customerPhoneLocalEdit->clear();
+        }
+        if (m_selectedCustomerProfileLabel) {
+            m_selectedCustomerProfileLabel->setText("Select a customer to show the saved identity and phone details here.");
+        }
         return;
     }
     if (!m_manager) {
@@ -274,7 +590,7 @@ void ReservationDialog::applyExistingCustomerSelection(int index)
 
     const auto customer = m_manager->findCustomerById(selectedId.toStdString());
     if (!customer || customer->isArchived()) {
-        QMessageBox::warning(this, "Customer unavailable", "The selected customer is no longer available for a reservation.");
+        showValidationMessage("The selected customer is no longer available. Choose another customer or enter a new customer.");
         m_existingCustomerCombo->setCurrentIndex(0);
         m_selectedCustomerId.clear();
         setCustomerFieldsEnabled(true);
@@ -282,6 +598,8 @@ void ReservationDialog::applyExistingCustomerSelection(int index)
     }
 
     m_selectedCustomerId = selectedId;
+    m_existingCustomerMode = true;
+    showCustomerMode(true);
     const int documentTypeIndex = m_customerDocumentType->findText(QString::fromStdString(customer->getDocumentType()));
     if (documentTypeIndex >= 0) {
         m_customerDocumentType->setCurrentIndex(documentTypeIndex);
@@ -311,6 +629,13 @@ void ReservationDialog::applyExistingCustomerSelection(int index)
         m_customerPhoneLocalEdit->setText(existingPhone);
     }
     setCustomerFieldsEnabled(false);
+    if (m_selectedCustomerProfileLabel) {
+        m_selectedCustomerProfileLabel->setText(QString("<b>%1</b><br>%2 · %3")
+            .arg(QString::fromStdString(customer->getName()).toHtmlEscaped(),
+                 QString::fromStdString(customer->getDocumentNumber()).toHtmlEscaped(),
+                 QString::fromStdString(customer->getPhoneNumber()).toHtmlEscaped()));
+        m_selectedCustomerProfileLabel->show();
+    }
 }
 
 void ReservationDialog::updatePhonePlaceholder() {
@@ -327,20 +652,86 @@ void ReservationDialog::normalizePhoneInput() {
     }
 }
 
+void ReservationDialog::updateScheduleSummary()
+{
+    if (!m_scheduleSummary) {
+        return;
+    }
+    const QDateTime start = QDateTime::fromString(getPlannedCheckInAt(), Qt::ISODate);
+    const QDateTime end = QDateTime::fromString(getPlannedCheckOutAt(), Qt::ISODate);
+    if (!start.isValid() || !end.isValid()) {
+        m_scheduleSummary->setText("Choose a valid check-in and check-out time.");
+        return;
+    }
+    m_scheduleSummary->setText(QString("%1 → %2")
+        .arg(start.toString("dd MMM yyyy, HH:mm"), end.toString("dd MMM yyyy, HH:mm")));
+}
+
+void ReservationDialog::showValidationMessage(const QString& message)
+{
+    if (!m_validationLabel) {
+        return;
+    }
+    // Modified: Keep form corrections inside the reservation window so staff are not forced through stacked modal warnings.
+    m_validationLabel->setText(QString("Please review: %1").arg(message));
+    m_validationLabel->setProperty("active", true);
+    m_validationLabel->style()->unpolish(m_validationLabel);
+    m_validationLabel->style()->polish(m_validationLabel);
+}
+
+void ReservationDialog::openSchedulePicker()
+{
+    const QDateTime initialCheckIn = QDateTime(m_checkInDateEdit->date(), m_checkInTimeEdit->time());
+    const QDateTime initialCheckOut = QDateTime(m_checkOutDateEdit->date(), m_checkOutTimeEdit->time());
+    const auto availabilityPredicate = [this](const QDateTime& start, const QDateTime& end) {
+        if (!m_manager) {
+            return false;
+        }
+        std::string availabilityError;
+        const auto availableRooms = m_manager->getAvailableRoomsForPeriod(
+            start.toString(Qt::ISODate).toStdString(), end.toString(Qt::ISODate).toStdString(),
+            availabilityError, m_editingBookingId);
+        const int guests = m_adultCountSpin->value() + m_childCountSpin->value();
+        return std::any_of(availableRooms.begin(), availableRooms.end(), [guests](const std::shared_ptr<Room>& room) {
+            return room && guests <= room->getMaximumGuests();
+        });
+    };
+
+    SchedulePickerDialog picker(initialCheckIn, initialCheckOut, availabilityPredicate, this);
+    if (picker.exec() != QDialog::Accepted) {
+        return;
+    }
+
+    const QDateTime checkIn = picker.selectedCheckIn();
+    const QDateTime checkOut = picker.selectedCheckOut();
+    m_checkInDateEdit->setDate(checkIn.date());
+    m_checkOutDateEdit->setDate(checkOut.date());
+    m_checkInTimeEdit->setTime(checkIn.time());
+    m_checkOutTimeEdit->setTime(checkOut.time());
+    updateScheduleSummary();
+    updateAvailableRooms();
+
+    // Modified: Delegate booking scheduling to the shared date-and-hour picker so create and edit flows cannot drift apart.
+    return;
+}
+
 void ReservationDialog::updateAvailableRooms() {
+    const QString previousPendingRoom = m_roomCombo->currentData().toString();
+    const QString previouslyConfirmedRoom = m_confirmedRoomNumber;
     m_roomCombo->clear();
     if (!m_manager) return;
 
-    QString checkInStr = m_checkInDateEdit->date().toString("yyyy-MM-dd");
-    QString checkOutStr = m_checkOutDateEdit->date().toString("yyyy-MM-dd");
-
-    if (checkOutStr <= checkInStr) {
+    const QString checkInAt = getPlannedCheckInAt();
+    const QString checkOutAt = getPlannedCheckOutAt();
+    const QDateTime start = QDateTime::fromString(checkInAt, Qt::ISODate);
+    const QDateTime end = QDateTime::fromString(checkOutAt, Qt::ISODate);
+    if (!start.isValid() || !end.isValid() || end < start.addSecs(60 * 60)) {
         return;
     }
 
     std::string availabilityError;
-    const auto availableRooms = m_manager->getAvailableRoomsForDates(
-        checkInStr.toStdString(), checkOutStr.toStdString(), availabilityError, m_editingBookingId);
+    const auto availableRooms = m_manager->getAvailableRoomsForPeriod(
+        checkInAt.toStdString(), checkOutAt.toStdString(), availabilityError, m_editingBookingId);
     for (const auto& room : availableRooms) {
         if (m_adultCountSpin->value() + m_childCountSpin->value() > room->getMaximumGuests()) {
             continue;
@@ -350,6 +741,62 @@ void ReservationDialog::updateAvailableRooms() {
         const std::string label = roomNum + " (" + room->getRoomTypeName() + ")";
         m_roomCombo->addItem(QString::fromStdString(label), QString::fromStdString(roomNum));
     }
+    int restoreIndex = m_roomCombo->findData(previousPendingRoom);
+    if (restoreIndex < 0) {
+        restoreIndex = m_roomCombo->findData(previouslyConfirmedRoom);
+    }
+    if (restoreIndex >= 0) {
+        m_roomCombo->setCurrentIndex(restoreIndex);
+    }
+    if (m_roomCombo->findData(m_confirmedRoomNumber) < 0) {
+        m_confirmedRoomNumber.clear();
+    }
+    updateRoomReview();
+}
+
+void ReservationDialog::updateRoomReview()
+{
+    if (!m_roomReviewLabel || !m_manager || m_roomCombo->currentIndex() < 0) {
+        if (m_roomReviewLabel) {
+            m_roomReviewLabel->setText("Choose a room to review its capacity, bed setup, amenities, and hourly rate.");
+        }
+        return;
+    }
+    const auto room = m_manager->findRoomByNumber(m_roomCombo->currentData().toString().toStdString());
+    if (!room) {
+        m_roomReviewLabel->setText("This room is no longer available. Choose another room.");
+        return;
+    }
+    const QString pendingRoom = QString::fromStdString(room->getRoomNumber()).toHtmlEscaped();
+    const QString selectionState = pendingRoom == m_confirmedRoomNumber
+        ? "<b style='color:#047857;'>Selected for this reservation</b>"
+        : "Select this room from the list to use it for this reservation.";
+    const QString amenities = QString::fromStdString(room->getAmenities()).trimmed().isEmpty()
+        ? "Not listed" : QString::fromStdString(room->getAmenities()).toHtmlEscaped();
+    const QString roomType = QString::fromStdString(room->getRoomTypeName()).toHtmlEscaped();
+    const QString bedType = QString::fromStdString(room->getBedType()).trimmed().isEmpty()
+        ? "Not listed" : QString::fromStdString(room->getBedType()).toHtmlEscaped();
+    const QString rate = QLocale(QLocale::English).toString(static_cast<qlonglong>(room->getBasePrice()));
+    // Modified: Keep room comparison in the booking dialog so staff can verify commercial and accommodation details without opening a second modal window.
+    m_roomReviewLabel->setText(QString(
+        "%1<br><b>Room %2 · %3</b><br>Capacity: %4 guests · Bed: %5<br>Hourly rate: %6 VND<br>Amenities: %7")
+        .arg(selectionState, pendingRoom, roomType)
+        .arg(room->getMaximumGuests())
+        .arg(bedType)
+        .arg(rate, amenities));
+}
+
+void ReservationDialog::confirmPendingRoom()
+{
+    if (m_roomCombo->currentIndex() < 0) {
+        // Modified: A schedule refresh may temporarily empty the one-click room list; keep that passive state out of the validation channel.
+        m_confirmedRoomNumber.clear();
+        updateRoomReview();
+        return;
+    }
+    // Modified: A room selection is committed in one click, while the review panel immediately confirms the exact selected room and rate.
+    m_confirmedRoomNumber = m_roomCombo->currentData().toString();
+    updateRoomReview();
 }
 
 void ReservationDialog::onAccept() {
@@ -367,44 +814,125 @@ void ReservationDialog::onAccept() {
     m_customerNameEdit->setText(customerName);
     m_customerPhoneLocalEdit->setText(phoneLocal);
 
-    if (!usingExistingCustomer && m_editingBookingId.empty() && !isValidDocumentNumber(documentType, idRule.key, customerId)) {
-        QMessageBox::warning(this, "Invalid identity document", QString("%1 for %2 must be %3.").arg(documentType, idRule.name, documentNumberHint(documentType, idRule.key)));
+    if (m_existingCustomerMode && !usingExistingCustomer) {
+        const QString searchText = m_existingCustomerCombo->currentText().trimmed();
+        if (!searchText.isEmpty() && searchText != "New customer — enter details manually") {
+            // Modified: Ask only when staff tries to save an unsuccessful existing-customer search, avoiding disruptive prompts while they type.
+            CustomConfirmDialog createCustomerPrompt(
+                "Customer not found",
+                "No existing customer matches this search. Is this a new customer?",
+                false, this, "Create new customer", "Keep searching");
+            if (createCustomerPrompt.exec() == QDialog::Accepted && createCustomerPrompt.isConfirmed()) {
+                m_existingCustomerMode = false;
+                showCustomerMode(false);
+                populateExistingCustomerPicker();
+                m_existingCustomerCombo->setCurrentIndex(0);
+                m_existingCustomerCombo->setEditText(QString());
+                setCustomerFieldsEnabled(true);
+                showValidationMessage("Enter the new customer's identity and contact details, then save the reservation.");
+                m_customerIdEdit->setFocus();
+            }
+            return;
+        }
+        showValidationMessage("Select a customer from the search results, or choose New customer to enter a new profile.");
         return;
     }
 
+    if (!usingExistingCustomer && m_editingBookingId.empty() && !isValidDocumentNumber(documentType, idRule.key, customerId)) {
+        showValidationMessage(QString("%1 for %2 must be %3.").arg(documentType, idRule.name, documentNumberHint(documentType, idRule.key)));
+        return;
+    }
+
+    if (!usingExistingCustomer && m_editingBookingId.empty() && m_manager) {
+        if (const auto existingCustomer = m_manager->findCustomerById(customerId.toStdString())) {
+            if (existingCustomer->isArchived()) {
+                showValidationMessage("This identity belongs to an archived customer record. Restore the customer in Customer Management before booking.");
+                return;
+            }
+            // Modified: Reuse the authoritative stored profile when a new-customer entry matches an existing document identity, preventing a duplicate guest record.
+            m_existingCustomerMode = true;
+            showCustomerMode(true);
+            populateExistingCustomerPicker();
+            const int existingIndex = m_existingCustomerCombo->findData(
+                QString::fromStdString(existingCustomer->getCustomerId()));
+            if (existingIndex >= 0) {
+                m_existingCustomerCombo->setCurrentIndex(existingIndex);
+                showValidationMessage("An existing customer record was found for this identity. The saved profile is now selected.");
+                return;
+            }
+        }
+    }
+
     if (!usingExistingCustomer && !HotelManager::isValidCustomerNameFormat(customerName.toStdString())) {
-        QMessageBox::warning(this, "Invalid customer name", "Enter a valid legal name using letters, spaces, apostrophes, hyphens, or initials.");
+        showValidationMessage("Enter a legal name using letters, spaces, apostrophes, hyphens, or initials.");
         return;
     }
 
     static const QRegularExpression digitsPattern(QStringLiteral(R"(^\d+$)"));
     if (!usingExistingCustomer && !digitsPattern.match(phoneLocal).hasMatch()) {
-        QMessageBox::warning(this, "Invalid phone number", "Phone number must contain digits only.");
+        showValidationMessage("The phone number can contain digits only.");
         return;
     }
 
     if (!usingExistingCustomer && (phoneLocal.size() < phoneRule.phoneMinDigits || phoneLocal.size() > phoneRule.phoneMaxDigits)) {
-        QMessageBox::warning(this, "Invalid phone number", QString("Phone number for %1 must be %2.").arg(phoneRule.name, phoneRule.phoneHint));
+        showValidationMessage(QString("The phone number for %1 must be %2.").arg(phoneRule.name, phoneRule.phoneHint));
         return;
     }
 
     if (!usingExistingCustomer && !HotelManager::isValidPhoneNumberFormat(fullPhone.toStdString())) {
-        QMessageBox::warning(this, "Invalid phone number", "Phone number format is invalid.");
+        showValidationMessage("The phone number format is invalid.");
+        return;
+    }
+
+    if (!usingExistingCustomer && m_editingBookingId.empty() && m_manager) {
+        const auto matchingPhoneCustomer = std::find_if(
+            m_manager->getCustomers().cbegin(), m_manager->getCustomers().cend(),
+            [&fullPhone](const std::shared_ptr<Customer>& customer) {
+                return customer && customer->getPhoneNumber() == fullPhone.toStdString();
+            });
+        if (matchingPhoneCustomer != m_manager->getCustomers().cend()) {
+            if ((*matchingPhoneCustomer)->isArchived()) {
+                showValidationMessage("This phone number belongs to an archived customer record. Restore the customer in Customer Management before booking.");
+                return;
+            }
+            // Modified: Route a new-customer entry with an existing phone to the canonical customer picker instead of asking staff to invent another phone number.
+            m_existingCustomerMode = true;
+            showCustomerMode(true);
+            populateExistingCustomerPicker();
+            const int existingIndex = m_existingCustomerCombo->findData(
+                QString::fromStdString((*matchingPhoneCustomer)->getCustomerId()));
+            if (existingIndex >= 0) {
+                m_existingCustomerCombo->setCurrentIndex(existingIndex);
+                showValidationMessage("An existing customer record was found for this phone number. The saved profile is now selected.");
+                return;
+            }
+        }
+    }
+
+    if (m_confirmedRoomNumber.isEmpty()) {
+        showValidationMessage("Select an available room before creating the reservation.");
+        return;
+    }
+
+    if (m_roomCombo->currentData().toString() != m_confirmedRoomNumber) {
+        showValidationMessage("The room list has changed. Select the intended room again before saving.");
         return;
     }
 
     if (m_roomCombo->currentIndex() < 0) {
-        QMessageBox::warning(this, "No available room", "No available rooms are available for the selected date range.");
+        showValidationMessage("No room is available for this schedule. Choose another date, hour, or guest count.");
         return;
     }
 
-    if (m_checkOutDateEdit->date() <= m_checkInDateEdit->date()) {
-        QMessageBox::warning(this, "Invalid date", "Check-out date must be after check-in date.");
+    const QDateTime plannedCheckIn = QDateTime::fromString(getPlannedCheckInAt(), Qt::ISODate);
+    const QDateTime plannedCheckOut = QDateTime::fromString(getPlannedCheckOutAt(), Qt::ISODate);
+    if (!plannedCheckIn.isValid() || !plannedCheckOut.isValid() || plannedCheckOut < plannedCheckIn.addSecs(60 * 60)) {
+        showValidationMessage("A reservation must be at least one hour long.");
         return;
     }
 
     if (m_adultCountSpin->value() + m_childCountSpin->value() <= 0) {
-        QMessageBox::warning(this, "Invalid guest count", "A reservation must include at least one guest.");
+        showValidationMessage("A reservation must include at least one guest.");
         return;
     }
 
@@ -448,7 +976,7 @@ QString ReservationDialog::getCustomerPhone() const {
 }
 
 QString ReservationDialog::getRoomNumber() const {
-    return m_roomCombo->currentData().toString();
+    return m_confirmedRoomNumber;
 }
 
 QString ReservationDialog::getCheckInDate() const {
@@ -459,12 +987,25 @@ QString ReservationDialog::getCheckOutDate() const {
     return m_checkOutDateEdit->date().toString("yyyy-MM-dd");
 }
 
+QString ReservationDialog::getPlannedCheckInAt() const {
+    return QDateTime(m_checkInDateEdit->date(), m_checkInTimeEdit->time()).toString(Qt::ISODate);
+}
+
+QString ReservationDialog::getPlannedCheckOutAt() const {
+    return QDateTime(m_checkOutDateEdit->date(), m_checkOutTimeEdit->time()).toString(Qt::ISODate);
+}
+
 int ReservationDialog::getAdultCount() const {
     return m_adultCountSpin->value();
 }
 
 int ReservationDialog::getChildCount() const {
     return m_childCountSpin->value();
+}
+
+bool ReservationDialog::usesExistingCustomer() const
+{
+    return !m_selectedCustomerId.isEmpty();
 }
 
 void ReservationDialog::setEditBooking(const std::string& bookingId) {
@@ -475,6 +1016,12 @@ void ReservationDialog::setEditBooking(const std::string& bookingId) {
     if (!booking) return;
 
     setWindowTitle("Edit Reservation");
+    if (auto* title = findChild<QLabel*>("reservationDialogTitle")) {
+        title->setText("Edit reservation");
+    }
+    if (auto* subtitle = findChild<QLabel*>("reservationDialogSubtitle")) {
+        subtitle->setText("Review the selected guest and adjust the planned schedule or room.");
+    }
     const QString existingId = QString::fromStdString(booking->getCustomer()->getDocumentNumber()).trimmed().toUpper();
     const QString existingType = QString::fromStdString(booking->getCustomer()->getDocumentType());
     const QString existingCountry = QString::fromStdString(booking->getCustomer()->getIssuingCountry());
@@ -489,9 +1036,9 @@ void ReservationDialog::setEditBooking(const std::string& bookingId) {
         }
     }
     m_customerIdEdit->setText(existingId);
-    m_customerIdEdit->setEnabled(false); // Disallow editing Guest ID to protect DB references
-    m_customerDocumentType->setEnabled(false);
-    m_customerIdCountry->setEnabled(false);
+    // Modified: Customer identity and contact fields stay read-only while editing a reservation; customer changes belong to Customer Management.
+    setCustomerFieldsEnabled(false);
+    m_existingCustomerCombo->setEnabled(false);
 
     m_customerNameEdit->setText(QString::fromStdString(booking->getCustomer()->getName()));
 
@@ -518,19 +1065,30 @@ void ReservationDialog::setEditBooking(const std::string& bookingId) {
     }
     m_checkInDateEdit->setDate(checkIn);
     m_checkOutDateEdit->setDate(checkOut);
+    const QDateTime plannedInAt = QDateTime::fromString(QString::fromStdString(booking->getPlannedCheckInAt()), Qt::ISODate);
+    const QDateTime plannedOutAt = QDateTime::fromString(QString::fromStdString(booking->getPlannedCheckOutAt()), Qt::ISODate);
+    if (plannedInAt.isValid()) {
+        m_checkInTimeEdit->setTime(plannedInAt.time());
+    }
+    if (plannedOutAt.isValid()) {
+        m_checkOutTimeEdit->setTime(plannedOutAt.time());
+    }
     m_adultCountSpin->setValue(booking->getAdultCount());
     m_childCountSpin->setValue(booking->getChildCount());
     if (m_manager->getBookingState(*booking) == BookingState::ACTIVE) {
         // Modified: Active stays retain their original arrival date; checkout remains the explicit completion action.
         m_checkInDateEdit->setEnabled(false);
+        m_scheduleButton->setEnabled(false);
     }
 
+    updateScheduleSummary();
     updateAvailableRooms();
 
     std::string currentRoom = booking->getRoom()->getRoomNumber();
     int idx = m_roomCombo->findData(QString::fromStdString(currentRoom));
     if (idx >= 0) {
         m_roomCombo->setCurrentIndex(idx);
+        confirmPendingRoom();
     }
 }
 
@@ -542,5 +1100,52 @@ bool ReservationDialog::selectRoom(const std::string& roomNumber) {
     }
 
     m_roomCombo->setCurrentIndex(roomIndex);
+    confirmPendingRoom();
     return true;
+}
+
+void ReservationDialog::setInitialSchedule(const QDate& checkIn,
+                                           const QDate& checkOut,
+                                           int adults,
+                                           int children)
+{
+    if (!checkIn.isValid() || !checkOut.isValid() || checkOut <= checkIn) {
+        return;
+    }
+
+    setInitialScheduleAt(QDateTime(checkIn, QTime(0, 0)), QDateTime(checkOut, QTime(0, 0)), adults, children);
+}
+
+void ReservationDialog::setInitialScheduleAt(const QDateTime& checkIn,
+                                             const QDateTime& checkOut,
+                                             int adults,
+                                             int children)
+{
+    if (!checkIn.isValid() || !checkOut.isValid() || checkOut < checkIn.addSecs(60 * 60)) {
+        return;
+    }
+
+    // Modified: Preserve the exact Room Status hour selection when its availability request opens Reservation.
+    QDateTime initialStart(checkIn.date(), QTime(checkIn.time().hour(), 0));
+    const QDateTime now = QDateTime::currentDateTime();
+    if (initialStart < now) {
+        initialStart = now.addSecs(60 * 60);
+        initialStart.setTime(QTime(initialStart.time().hour(), 0));
+        if (initialStart <= now) {
+            initialStart = initialStart.addSecs(60 * 60);
+        }
+    }
+    QDateTime initialEnd(checkOut.date(), QTime(checkOut.time().hour(), 0));
+    if (initialEnd < initialStart.addSecs(60 * 60)) {
+        initialEnd = initialStart.addSecs(60 * 60);
+    }
+    // Modified: A Room Status request for today starts at the next whole hour, never at an already elapsed midnight timestamp.
+    m_checkInDateEdit->setDate(initialStart.date());
+    m_checkOutDateEdit->setDate(initialEnd.date());
+    m_checkInTimeEdit->setTime(initialStart.time());
+    m_checkOutTimeEdit->setTime(initialEnd.time());
+    m_adultCountSpin->setValue(std::max(1, adults));
+    m_childCountSpin->setValue(std::max(0, children));
+    updateScheduleSummary();
+    updateAvailableRooms();
 }

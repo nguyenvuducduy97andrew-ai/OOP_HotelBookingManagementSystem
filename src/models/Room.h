@@ -4,6 +4,7 @@
 class Room {
 private:
     std::string roomNumber;
+    // Modified: Base price is the room's hourly operational rate; optional services must be added as explicit future invoice line items.
     double basePrice;
     bool isAvailable; // Maintenance/inspection status only; does not indicate guest occupancy.
     bool archived = false;

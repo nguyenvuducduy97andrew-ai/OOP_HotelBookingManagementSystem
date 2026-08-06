@@ -3,6 +3,7 @@
 #include "CustomerIdentity.h"
 #include "CountryInputRules.h"
 #include "HotelManager.h"
+#include "DialogWindowBehavior.h"
 #include <QLabel>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -35,20 +36,25 @@ CustomerDialog::CustomerDialog(const std::shared_ptr<Customer>& customer, QWidge
 
 void CustomerDialog::setupStyle() {
     // Match CustomConfirmDialog's window conventions
-    setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
+    // Modified: Customer editing uses the same opaque custom dialog chrome as booking flows.
+    setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint);
     // Modified: Reduce dialog height after replacing the two-part name form with one legal-name field.
     // Modified: Widen the customer dialog so document type, issuing country, and number remain readable on one row.
-    setFixedSize(540, 500);
+    lockDialogToWorkingArea(this, QSize(540, 500));
 
     // Modified and optimized performance: explicitly style the country selector popup so its item text remains visible on every platform theme.
     setStyleSheet(R"(
         QDialog {
             background-color: #FFFFFF;
+            border: 2px solid #93C5FD;
+            border-radius: 18px;
         }
         QLabel {
             font-size: 13px;
             color: #2B3674;
             font-weight: 600;
+            background: transparent;
+            border: none;
         }
         QLabel#dialogTitle {
             font-size: 18px;
@@ -61,6 +67,14 @@ void CustomerDialog::setupStyle() {
             color: #A3AED0;
             padding-bottom: 4px;
         }
+        QPushButton#customerDialogClose {
+            background: transparent;
+            color: #64748B;
+            border: none;
+            border-radius: 8px;
+            font-size: 20px;
+        }
+        QPushButton#customerDialogClose:hover { background: #F1F5F9; color: #1B3F83; }
         QLineEdit {
             background-color: #F4F7FE;
             border: 1px solid #E9EDF7;
@@ -155,9 +169,21 @@ void CustomerDialog::setupUI() {
     mainLayout->setContentsMargins(24, 20, 24, 20);
     mainLayout->setSpacing(12);
 
+    auto* titleRow = new QHBoxLayout();
+    auto* dialogIcon = new QLabel("♙", this);
+    dialogIcon->setStyleSheet("color:#005BFE; font-size:17px; background:transparent; border:none;");
     auto* titleLabel = new QLabel(m_customer ? "Edit customer details" : "Add a new customer", this);
     titleLabel->setObjectName("dialogTitle");
-    mainLayout->addWidget(titleLabel);
+    auto* dialogClose = new QPushButton("×", this);
+    dialogClose->setObjectName("customerDialogClose");
+    dialogClose->setFixedSize(30, 30);
+    titleRow->addWidget(dialogIcon);
+    titleRow->addSpacing(8);
+    titleRow->addWidget(titleLabel);
+    titleRow->addStretch();
+    titleRow->addWidget(dialogClose);
+    mainLayout->addLayout(titleRow);
+    enableDialogHeaderDrag(this, titleLabel);
 
     auto* descriptionLabel = new QLabel("Choose the ID and phone countries, then enter the customer's legal name and matching details.", this);
     descriptionLabel->setObjectName("dialogDescription");
@@ -227,6 +253,7 @@ void CustomerDialog::setupUI() {
 
     connect(m_okButton, &QPushButton::clicked, this, &CustomerDialog::onAccept);
     connect(cancelButton, &QPushButton::clicked, this, &QDialog::reject);
+    connect(dialogClose, &QPushButton::clicked, this, &QDialog::reject);
 
     // Clear a field's red border as soon as the user edits it; re-validated on next Save.
     connect(m_documentType, &QComboBox::currentIndexChanged, this, [this]() { updateIdPlaceholder(); });
@@ -235,6 +262,7 @@ void CustomerDialog::setupUI() {
     connect(m_fullNameEdit, &QLineEdit::textChanged, this, [this]() { setFieldError(m_fullNameEdit, false); });
     connect(m_phoneCountryCode, &QComboBox::currentIndexChanged, this, [this]() { updatePhonePlaceholder(); normalizePhoneInput(); });
     connect(m_phoneLocalEdit, &QLineEdit::textChanged, this, [this]() { normalizePhoneInput(); setFieldError(m_phoneLocalEdit, false); });
+    disableNonMoneyWheelChanges(this);
 }
 
 void CustomerDialog::populateFields() {

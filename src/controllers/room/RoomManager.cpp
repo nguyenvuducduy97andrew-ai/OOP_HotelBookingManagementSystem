@@ -2,6 +2,7 @@
 
 #include <QDate>
 #include <QDateTime>
+#include <QTime>
 #include <QUuid>
 #include <QRegularExpression>
 #include <QString>
@@ -17,6 +18,40 @@ bool isValidRoomNumber(const std::string& roomNumber)
            std::all_of(roomNumber.begin(), roomNumber.end(), [](unsigned char c) {
                return std::isalnum(c);
            });
+}
+
+QDateTime parseIsoDateTime(const std::string& value)
+{
+    QDateTime parsed = QDateTime::fromString(QString::fromStdString(value), Qt::ISODateWithMs);
+    if (!parsed.isValid()) {
+        parsed = QDateTime::fromString(QString::fromStdString(value), Qt::ISODate);
+    }
+    return parsed;
+}
+
+QDateTime startOfLegacyDate(const std::string& date)
+{
+    const QDate parsed = QDate::fromString(QString::fromStdString(date), Qt::ISODate);
+    return parsed.isValid() ? QDateTime(parsed, QTime(0, 0)) : QDateTime();
+}
+
+QDateTime blockStart(const RoomMaintenance& block)
+{
+    const QDateTime timedStart = parseIsoDateTime(block.getStartAt());
+    return timedStart.isValid() ? timedStart : startOfLegacyDate(block.getStartDate());
+}
+
+QDateTime blockEffectiveEnd(const RoomMaintenance& block)
+{
+    QDateTime end = parseIsoDateTime(block.getEndAt());
+    if (!end.isValid()) {
+        end = startOfLegacyDate(block.getEndDate());
+    }
+    const QDateTime completed = parseIsoDateTime(block.getCompletedAt());
+    if (completed.isValid() && (!end.isValid() || completed < end)) {
+        return completed;
+    }
+    return end;
 }
 }
 
@@ -133,15 +168,15 @@ bool RoomManager::hasRoomMaintenanceConflict(const std::string& roomNumber,
                                              const std::string& endDate,
                                              std::string& errorMessage) const
 {
-    const QDate start = QDate::fromString(QString::fromStdString(startDate), Qt::ISODate);
-    const QDate end = QDate::fromString(QString::fromStdString(endDate), Qt::ISODate);
-    if (!start.isValid() || !end.isValid() || end <= start) {
+    const QDate legacyStart = QDate::fromString(QString::fromStdString(startDate), Qt::ISODate);
+    const QDate legacyEnd = QDate::fromString(QString::fromStdString(endDate), Qt::ISODate);
+    if (!legacyStart.isValid() || !legacyEnd.isValid() || legacyEnd <= legacyStart) {
         errorMessage = "Maintenance availability requires a valid ISO date range.";
         return true;
     }
 
     for (const RoomMaintenance& maintenance : m_roomMaintenances) {
-        if (maintenance.getRoomNumber() != roomNumber) {
+        if (!maintenance.isMaintenance() || maintenance.getRoomNumber() != roomNumber) {
             continue;
         }
 
@@ -163,6 +198,81 @@ bool RoomManager::isRoomUnderMaintenance(const std::string& roomNumber, const st
                 && maintenance.getStartDate() <= date
                 && date < maintenance.getEndDate();
         });
+}
+
+bool RoomManager::isRoomBlockedAt(const std::string& roomNumber, const std::string& at) const
+{
+    const QDateTime requestedAt = parseIsoDateTime(at);
+    if (!requestedAt.isValid()) {
+        return false;
+    }
+
+    return std::any_of(m_roomMaintenances.cbegin(), m_roomMaintenances.cend(),
+        [&roomNumber, &requestedAt](const RoomMaintenance& block) {
+            const QDateTime start = blockStart(block);
+            const QDateTime end = blockEffectiveEnd(block);
+            return block.isConfirmed() && block.getRoomNumber() == roomNumber
+                && start.isValid() && end.isValid() && start <= requestedAt && requestedAt < end;
+        });
+}
+
+bool RoomManager::startCleaningAfterCheckout(const std::string& roomNumber,
+                                             const std::string& actualCheckoutAt,
+                                             std::string& errorMessage)
+{
+    const auto room = findRoomByNumber(roomNumber);
+    if (!room || room->isArchived()) {
+        errorMessage = "Cannot start cleaning for an unavailable room.";
+        return false;
+    }
+
+    const QDateTime checkoutAt = parseIsoDateTime(actualCheckoutAt);
+    if (!checkoutAt.isValid()) {
+        errorMessage = "Cleaning requires a valid actual checkout timestamp.";
+        return false;
+    }
+
+    const QDateTime cleaningEnd = checkoutAt.addSecs(2 * 60 * 60);
+    const std::string startDate = checkoutAt.date().toString(Qt::ISODate).toStdString();
+    const std::string endDate = cleaningEnd.date().addDays(1).toString(Qt::ISODate).toStdString();
+    const std::string timestamp = QDateTime::currentDateTime().toString(Qt::ISODateWithMs).toStdString();
+
+    // Modified: Create a distinct Cleaning block after checkout so the interval engine reserves the two-hour turnover window.
+    m_roomMaintenances.emplace_back(
+        "CLN-" + QUuid::createUuid().toString(QUuid::WithoutBraces).toStdString(),
+        roomNumber, startDate, endDate, "Automatic post-checkout cleaning", "Confirmed", timestamp,
+        "Cleaning", checkoutAt.toString(Qt::ISODateWithMs).toStdString(),
+        cleaningEnd.toString(Qt::ISODateWithMs).toStdString());
+    return true;
+}
+
+bool RoomManager::markRoomReady(const std::string& roomNumber,
+                                const std::string& readyAt,
+                                const std::string& completedBy,
+                                std::string& errorMessage)
+{
+    const QDateTime completion = parseIsoDateTime(readyAt);
+    if (!completion.isValid()) {
+        errorMessage = "Room-ready time must be a valid timestamp.";
+        return false;
+    }
+
+    for (auto& block : m_roomMaintenances) {
+        if (!block.isCleaning() || !block.isConfirmed() || block.getRoomNumber() != roomNumber) {
+            continue;
+        }
+        const QDateTime start = blockStart(block);
+        const QDateTime end = blockEffectiveEnd(block);
+        if (start.isValid() && end.isValid() && start <= completion && completion < end) {
+            // Modified: Finishing Cleaning early releases the room without rewriting its planned two-hour operational record.
+            block.setCompletedAt(completion.toString(Qt::ISODateWithMs).toStdString());
+            block.setCompletedBy(completedBy.empty() ? "Staff" : completedBy);
+            return true;
+        }
+    }
+
+    errorMessage = "No active cleaning block was found for this room.";
+    return false;
 }
 
 RoomMaintenance* RoomManager::findMaintenanceById(const std::string& maintenanceId)
@@ -210,7 +320,7 @@ bool RoomManager::scheduleRoomMaintenance(const std::string& roomNumber,
     }
 
     for (const RoomMaintenance& maintenance : m_roomMaintenances) {
-        if (maintenance.getRoomNumber() == roomNumber
+        if (maintenance.isMaintenance() && maintenance.getRoomNumber() == roomNumber
             && startDate < maintenance.getEndDate() && maintenance.getStartDate() < endDate) {
             errorMessage = "Room " + roomNumber + " already has a maintenance case from "
                 + maintenance.getStartDate() + " to " + maintenance.getEndDate() + ".";
@@ -221,7 +331,9 @@ bool RoomManager::scheduleRoomMaintenance(const std::string& roomNumber,
     const std::string maintenanceId = "MTN-" + QUuid::createUuid().toString(QUuid::WithoutBraces).toStdString();
     const std::string timestamp = QDateTime::currentDateTime().toString(Qt::ISODateWithMs).toStdString();
     const std::string status = affectedBookingIds.empty() ? "Confirmed" : "Awaiting guest response";
-    m_roomMaintenances.emplace_back(maintenanceId, roomNumber, startDate, endDate, note, status, timestamp);
+    // Modified: Preserve full-day Maintenance as an operational block, with timestamps available to the shared interval engine.
+    m_roomMaintenances.emplace_back(maintenanceId, roomNumber, startDate, endDate, note, status, timestamp,
+                                    "Maintenance", startDate + "T00:00:00", endDate + "T00:00:00");
 
     for (const std::string& bookingId : affectedBookingIds) {
         m_maintenanceGuestNotices.emplace_back(
@@ -347,14 +459,20 @@ bool RoomManager::restoreRoomMaintenanceFromDatabase(const std::string& maintena
                                                      const std::string& note,
                                                      const std::string& status,
                                                      const std::string& createdAt,
+                                                     const std::string& blockType,
+                                                     const std::string& startAt,
+                                                     const std::string& endAt,
+                                                     const std::string& completedAt,
+                                                     const std::string& completedBy,
                                                      std::string& errorMessage)
 {
     if (!validateRoomMaintenanceRestoration(
-            maintenanceId, roomNumber, startDate, endDate, status, errorMessage)) {
+            maintenanceId, roomNumber, startDate, endDate, status, blockType, startAt, endAt, errorMessage)) {
         return false;
     }
 
-    m_roomMaintenances.emplace_back(maintenanceId, roomNumber, startDate, endDate, note, status, createdAt);
+    m_roomMaintenances.emplace_back(maintenanceId, roomNumber, startDate, endDate, note, status, createdAt,
+                                    blockType, startAt, endAt, completedAt, completedBy);
     return true;
 }
 
@@ -363,6 +481,9 @@ bool RoomManager::validateRoomMaintenanceRestoration(const std::string& maintena
                                                      const std::string& startDate,
                                                      const std::string& endDate,
                                                      const std::string& status,
+                                                     const std::string& blockType,
+                                                     const std::string& startAt,
+                                                     const std::string& endAt,
                                                      std::string& errorMessage) const
 {
     if (maintenanceId.empty()) {
@@ -374,9 +495,9 @@ bool RoomManager::validateRoomMaintenanceRestoration(const std::string& maintena
         return false;
     }
 
-    const QDate start = QDate::fromString(QString::fromStdString(startDate), Qt::ISODate);
-    const QDate end = QDate::fromString(QString::fromStdString(endDate), Qt::ISODate);
-    if (!start.isValid() || !end.isValid() || end <= start) {
+    const QDate persistedStartDate = QDate::fromString(QString::fromStdString(startDate), Qt::ISODate);
+    const QDate persistedEndDate = QDate::fromString(QString::fromStdString(endDate), Qt::ISODate);
+    if (!persistedStartDate.isValid() || !persistedEndDate.isValid() || persistedEndDate <= persistedStartDate) {
         errorMessage = "Persisted maintenance dates are invalid.";
         return false;
     }
@@ -391,6 +512,16 @@ bool RoomManager::validateRoomMaintenanceRestoration(const std::string& maintena
 
     if (status != "Confirmed" && status != "Awaiting guest response") {
         errorMessage = "Persisted maintenance has an invalid status.";
+        return false;
+    }
+    if (blockType != "Maintenance" && blockType != "Cleaning") {
+        errorMessage = "Persisted room block has an invalid type.";
+        return false;
+    }
+    const QDateTime start = parseIsoDateTime(startAt);
+    const QDateTime end = parseIsoDateTime(endAt);
+    if (!start.isValid() || !end.isValid() || end <= start) {
+        errorMessage = "Persisted room block timestamps are invalid.";
         return false;
     }
 

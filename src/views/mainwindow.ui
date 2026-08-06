@@ -127,16 +127,16 @@ QMessageBox QPushButton:hover {
   <widget class="QWidget" name="centralwidget">
    <layout class="QGridLayout" name="gridLayout">
     <property name="leftMargin">
-     <number>40</number>
+     <number>24</number>
     </property>
     <property name="topMargin">
-     <number>40</number>
+     <number>24</number>
     </property>
     <property name="rightMargin">
-     <number>40</number>
+     <number>24</number>
     </property>
     <property name="bottomMargin">
-     <number>40</number>
+     <number>24</number>
     </property>
     <item row="0" column="0">
      <widget class="QFrame" name="mainAppContainer">
@@ -151,16 +151,16 @@ QMessageBox QPushButton:hover {
         <number>0</number>
        </property>
        <property name="leftMargin">
-        <number>20</number>
+        <number>16</number>
        </property>
        <property name="topMargin">
-        <number>20</number>
+        <number>16</number>
        </property>
        <property name="rightMargin">
-        <number>20</number>
+        <number>16</number>
        </property>
        <property name="bottomMargin">
-        <number>20</number>
+        <number>16</number>
        </property>
        <item>
         <widget class="QFrame" name="sidebarFrame">

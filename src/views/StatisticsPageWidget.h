@@ -47,7 +47,7 @@ private:
     QChart* m_roomTypeChart;
     QPieSeries* m_roomTypeSeries;
 
-    // --- Các bộ lọc mới ---
+    // Filter controls.
     QLineEdit* m_searchEdit;
     QComboBox* m_amountFilter;
     QDateEdit* m_dateFrom;

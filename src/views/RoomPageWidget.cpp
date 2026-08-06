@@ -12,6 +12,8 @@
 #include <QMessageBox>
 #include <QDebug>
 #include <QDate>
+#include <QDateTime>
+#include <QTime>
 #include <QPainter>
 #include <QLocale>
 #include <vector>
@@ -22,12 +24,48 @@ QString formatMoney(double value)
     // Modified: Format room prices directly in the existing view using comma thousands separators.
     return QLocale(QLocale::English, QLocale::UnitedStates).toString(value, 'f', 0);
 }
+
+QString maintenanceEndExclusive(const QString& selectedInclusiveEnd)
+{
+    const QDate endDate = QDate::fromString(selectedInclusiveEnd, Qt::ISODate);
+    // Modified: Store Maintenance as a half-open full-day interval, so a user-selected end date remains unavailable through that entire day.
+    return endDate.isValid() ? endDate.addDays(1).toString(Qt::ISODate) : selectedInclusiveEnd;
+}
+
+bool hasActiveCleaning(const HotelManager* manager, const std::string& roomNumber, const QDateTime& at)
+{
+    if (!manager) {
+        return false;
+    }
+    for (const RoomMaintenance& block : manager->getRoomMaintenances()) {
+        if (!block.isCleaning() || !block.isConfirmed() || block.getRoomNumber() != roomNumber) {
+            continue;
+        }
+        const QDateTime start = QDateTime::fromString(QString::fromStdString(block.getStartAt()), Qt::ISODateWithMs);
+        const QDateTime plannedEnd = QDateTime::fromString(QString::fromStdString(block.getEndAt()), Qt::ISODateWithMs);
+        const QDateTime completedAt = QDateTime::fromString(QString::fromStdString(block.getCompletedAt()), Qt::ISODateWithMs);
+        const QDateTime effectiveEnd = completedAt.isValid() ? completedAt : plannedEnd;
+        if (start.isValid() && effectiveEnd.isValid() && start <= at && at < effectiveEnd) {
+            return true;
+        }
+    }
+    return false;
+}
 }
 
 RoomPageWidget::RoomPageWidget(HotelManager* manager, QWidget *parent)
     : QWidget(parent), m_manager(manager), m_selectedTypeFilter("All") {
     setupUI();
     refreshData();
+    m_statusRefreshTimer = new QTimer(this);
+    m_statusRefreshTimer->setInterval(30 * 1000);
+    // Modified: Refresh visible room status periodically so an expired Cleaning block returns to Available without requiring manual navigation.
+    connect(m_statusRefreshTimer, &QTimer::timeout, this, [this]() {
+        if (isVisible()) {
+            refreshData();
+        }
+    });
+    m_statusRefreshTimer->start();
 }
 
 void setupRoomPageStyle(QWidget* widget) {
@@ -146,6 +184,18 @@ void setupRoomPageStyle(QWidget* widget) {
         QPushButton#btnEdit:hover {
             background-color: #D6E4FF;
         }
+        QPushButton#btnReady {
+            background-color: #DCFCE7;
+            color: #15803D;
+            font-weight: 700;
+            border-radius: 8px;
+            padding: 6px 14px;
+            border: none;
+            font-size: 12px;
+        }
+        QPushButton#btnReady:hover {
+            background-color: #BBF7D0;
+        }
         QPushButton#btnDelete {
             background-color: #FEE2E2;
             color: #EF4444;
@@ -234,11 +284,15 @@ void RoomPageWidget::setupUI() {
     titleLabel->setStyleSheet("font-size: 14px; font-weight: 700; color: #A3AED0;");
     m_editRoomBtn = new QPushButton("Edit", this);
     m_editRoomBtn->setObjectName("btnEdit");
+    m_markRoomReadyBtn = new QPushButton("Mark room ready", this);
+    m_markRoomReadyBtn->setObjectName("btnReady");
+    m_markRoomReadyBtn->setVisible(false);
     m_deleteRoomBtn = new QPushButton("Delete", this);
     m_deleteRoomBtn->setObjectName("btnDelete");
 
     detailHeader->addWidget(titleLabel);
     detailHeader->addStretch();
+    detailHeader->addWidget(m_markRoomReadyBtn);
     detailHeader->addWidget(m_editRoomBtn);
     detailHeader->addWidget(m_deleteRoomBtn);
     detailLayout->addLayout(detailHeader);
@@ -329,6 +383,7 @@ void RoomPageWidget::setupUI() {
     connect(m_addRoomBtn, &QPushButton::clicked, this, &RoomPageWidget::onAddRoomClicked);
     connect(m_editRoomBtn, &QPushButton::clicked, this, &RoomPageWidget::onEditRoomClicked);
     connect(m_deleteRoomBtn, &QPushButton::clicked, this, &RoomPageWidget::onDeleteRoomClicked);
+    connect(m_markRoomReadyBtn, &QPushButton::clicked, this, &RoomPageWidget::onMarkRoomReadyClicked);
     connect(m_roomListWidget, &QListWidget::itemSelectionChanged, this, &RoomPageWidget::onRoomSelectionChanged);
 
     m_detailFrame->setVisible(false);
@@ -422,10 +477,12 @@ QWidget* RoomPageWidget::createRoomCard(const std::shared_ptr<Room>& room) {
     const auto awaitingBooking = getAwaitingBooking(room->getRoomNumber());
 
     auto* statusBadge = new QLabel(card);
+    const QDateTime statusNow = QDateTime::currentDateTime();
+    const bool isCleaning = hasActiveCleaning(m_manager, room->getRoomNumber(), statusNow);
     const bool isUnderMaintenance = !room->getIsAvailable()
-        || m_manager->isRoomUnderMaintenance(room->getRoomNumber(), QDate::currentDate().toString(Qt::ISODate).toStdString());
+        || m_manager->isRoomBlockedAt(room->getRoomNumber(), QDateTime::currentDateTime().toString(Qt::ISODateWithMs).toStdString());
     if (isUnderMaintenance) {
-        statusBadge->setText("Maintenance");
+        statusBadge->setText(isCleaning ? "Cleaning" : "Maintenance");
         statusBadge->setStyleSheet("background-color: #FEF2F2; color: #EF4444; border-radius: 4px; padding: 2px 6px; font-size: 10px; font-weight: 700;");
     } else if (isOccupied) {
         statusBadge->setText("Occupied");
@@ -439,7 +496,8 @@ QWidget* RoomPageWidget::createRoomCard(const std::shared_ptr<Room>& room) {
         statusBadge->setStyleSheet("background-color: #ECFDF5; color: #05CD99; border-radius: 4px; padding: 2px 6px; font-size: 10px; font-weight: 700;");
     }
 
-    auto* priceLabel = new QLabel(formatMoney(room->getBasePrice()) + " VND", card);
+    // Modified: Label the displayed rate as hourly so staff do not confuse the time-based bill with the retired nightly price.
+    auto* priceLabel = new QLabel(formatMoney(room->getBasePrice()) + " VND / hour", card);
     priceLabel->setStyleSheet("font-size: 13px; font-weight: 800; color: #005BFE;");
 
     rightCol->addWidget(statusBadge);
@@ -508,6 +566,7 @@ void RoomPageWidget::updateDetailPanel(const std::shared_ptr<Room>& room) {
         m_detailPanel->setVisible(false);
         m_editRoomBtn->setEnabled(false);
         m_deleteRoomBtn->setEnabled(false);
+        m_markRoomReadyBtn->setVisible(false);
         return;
     }
 
@@ -539,27 +598,34 @@ void RoomPageWidget::updateDetailPanel(const std::shared_ptr<Room>& room) {
         }
     }
 
+    const QDateTime now = QDateTime::currentDateTime();
+    const bool isCleaning = hasActiveCleaning(m_manager, room->getRoomNumber(), now);
+    // Modified: Expose the early-release control only for an active Cleaning block; scheduled Maintenance must remain a separate workflow.
+    m_markRoomReadyBtn->setVisible(isCleaning);
     const bool isUnderMaintenance = !room->getIsAvailable()
-        || m_manager->isRoomUnderMaintenance(room->getRoomNumber(), QDate::currentDate().toString(Qt::ISODate).toStdString());
+        || m_manager->isRoomBlockedAt(room->getRoomNumber(), QDateTime::currentDateTime().toString(Qt::ISODateWithMs).toStdString());
+    QString operationalDescription;
     if (isUnderMaintenance) {
-        m_detailStatusLabel->setText("Maintenance");
+        m_detailStatusLabel->setText(isCleaning ? "Cleaning" : "Maintenance");
         m_detailStatusLabel->setObjectName("detailBadgeMaint");
-        m_detailDescLabel->setText("This room is currently under scheduled maintenance. Please do not assign guests at this time.");
+        operationalDescription = isCleaning
+            ? "Cleaning is in progress after checkout. Mark the room ready only after turnover work is complete."
+            : "This room is currently under scheduled maintenance. Please do not assign guests at this time.";
     } else if (isOccupied) {
         m_detailStatusLabel->setText("Occupied");
         m_detailStatusLabel->setObjectName("detailBadgeOccupied");
-        m_detailDescLabel->setText(QString("Room is currently occupied (%1). Booking details are available in the reservation tab.").arg(QString::fromStdString(occupantName)));
+        operationalDescription = QString("Room is currently occupied (%1). Booking details are available in the reservation tab.").arg(QString::fromStdString(occupantName));
     } else if (awaitingBooking) {
         const auto customer = awaitingBooking->getCustomer();
         const QString guestName = customer ? QString::fromStdString(customer->getName()) : QStringLiteral("the booked guest");
         m_detailStatusLabel->setText("Awaiting check-in");
         m_detailStatusLabel->setObjectName("detailBadgeAwaiting");
         // Modified: Explain that an unarrived reservation still protects the room's inventory for its booked date range.
-        m_detailDescLabel->setText(QString("Awaiting check-in for %1. The room remains reserved and cannot be assigned to another booking for this stay.").arg(guestName));
+        operationalDescription = QString("Awaiting check-in for %1. The room remains reserved and cannot be assigned to another booking for this stay.").arg(guestName);
     } else {
         m_detailStatusLabel->setText("Available");
         m_detailStatusLabel->setObjectName("detailBadgeAvailable");
-        m_detailDescLabel->setText("This room is available for a booking during eligible dates.");
+        operationalDescription = "This room is available for a booking during eligible dates.";
     }
     // Refresh label styles to apply name changes
     m_detailStatusLabel->style()->unpolish(m_detailStatusLabel);
@@ -569,7 +635,11 @@ void RoomPageWidget::updateDetailPanel(const std::shared_ptr<Room>& room) {
     m_detailSizeLabel->setText(QString("📏 %1m²").arg(room->getArea()));
     m_detailBedLabel->setText(QString("🛏 %1").arg(QString::fromStdString(room->getBedType())));
     m_detailGuestLabel->setText(QString("👤 %1 Guests").arg(room->getMaximumGuests()));
-    m_detailDescLabel->setText(QString::fromStdString(room->getDescription()));
+    // Modified: Keep the live operational explanation visible and append the static room description instead of overwriting the current room state.
+    const QString roomDescription = QString::fromStdString(room->getDescription()).trimmed();
+    m_detailDescLabel->setText(roomDescription.isEmpty()
+        ? operationalDescription
+        : operationalDescription + "\n\nRoom details: " + roomDescription);
 
     QStringList amenitiesList = QString::fromStdString(room->getAmenities()).split(", ", Qt::SkipEmptyParts);
     QString formattedAmenities = "<table width='100%' cellpadding='4'>";
@@ -638,14 +708,25 @@ std::shared_ptr<Booking> RoomPageWidget::getAwaitingBooking(const std::string& r
         return nullptr;
     }
 
-    const std::string today = QDate::currentDate().toString(Qt::ISODate).toStdString();
+    const QDateTime now = QDateTime::currentDateTime();
     for (const auto& booking : m_manager->getBookings()) {
         if (!booking || booking->isDeleted() || booking->isCancelled() || !booking->getRoom()) {
             continue;
         }
+        QDateTime plannedStart = QDateTime::fromString(
+            QString::fromStdString(booking->getPlannedCheckInAt()), Qt::ISODateWithMs);
+        QDateTime plannedEnd = QDateTime::fromString(
+            QString::fromStdString(booking->getPlannedCheckOutAt()), Qt::ISODateWithMs);
+        if (!plannedStart.isValid()) {
+            plannedStart = QDateTime(QDate::fromString(QString::fromStdString(booking->getCheckInDate()), Qt::ISODate), QTime(0, 0));
+        }
+        if (!plannedEnd.isValid()) {
+            plannedEnd = QDateTime(QDate::fromString(QString::fromStdString(booking->getCheckOutDate()), Qt::ISODate), QTime(0, 0));
+        }
         if (booking->getRoom()->getRoomNumber() == roomNumber
             && m_manager->getBookingState(*booking) == BookingState::UPCOMING
-            && booking->getCheckInDate() <= today && today < booking->getCheckOutDate()) {
+            && plannedStart.isValid() && plannedEnd.isValid() && plannedStart <= now && now < plannedEnd) {
+            // Modified: Derive Awaiting from the scheduled timestamp interval rather than treating every date as a full-day stay.
             return booking;
         }
     }
@@ -685,7 +766,7 @@ void RoomPageWidget::onAddRoomClicked() {
             if (dialog.shouldScheduleMaintenance() &&
                 !m_manager->scheduleRoomMaintenance(roomNum,
                     dialog.getMaintenanceStartDate().toStdString(),
-                    dialog.getMaintenanceEndDate().toStdString(),
+                    maintenanceEndExclusive(dialog.getMaintenanceEndDate()).toStdString(),
                     dialog.getMaintenanceNote().toStdString(), errMsg)) {
                 std::string discardError;
                 m_manager->deleteRoom(roomNum, discardError);
@@ -730,7 +811,7 @@ void RoomPageWidget::onEditRoomClicked() {
     std::vector<RoomMaintenance> existingSchedules;
     const std::string today = QDate::currentDate().toString(Qt::ISODate).toStdString();
     for (const RoomMaintenance& maintenance : m_manager->getRoomMaintenances()) {
-        if (maintenance.getRoomNumber() == roomNum && maintenance.getEndDate() > today) {
+        if (maintenance.isMaintenance() && maintenance.getRoomNumber() == roomNum && maintenance.getEndDate() > today) {
             existingSchedules.push_back(maintenance);
         }
     }
@@ -741,29 +822,70 @@ void RoomPageWidget::onEditRoomClicked() {
         const bool scheduleMaintenance = dialog.shouldScheduleMaintenance();
 
         std::string errorMessage;
+        bool pendingRoomMutation = false;
+        const auto restorePersistedRoomState = [this, &pendingRoomMutation]() {
+            if (pendingRoomMutation) {
+                // Modified: Rehydrate the saved snapshot when a later step fails so maintenance and room edits never remain changed only in memory.
+                DataManager::getInstance().restoreLastSavedState(*m_manager);
+                refreshData();
+            }
+        };
         if (!dialog.getMaintenanceIdToCancel().isEmpty() &&
             !m_manager->cancelRoomMaintenance(dialog.getMaintenanceIdToCancel().toStdString(), errorMessage)) {
             QMessageBox::warning(this, "Maintenance cancellation failed", QString::fromStdString(errorMessage));
             return;
         }
+        pendingRoomMutation = !dialog.getMaintenanceIdToCancel().isEmpty();
         if (!dialog.getMaintenanceIdToConfirm().isEmpty() &&
             !m_manager->confirmRoomMaintenance(dialog.getMaintenanceIdToConfirm().toStdString(), errorMessage)) {
+            restorePersistedRoomState();
             QMessageBox::warning(this, "Maintenance case still pending", QString::fromStdString(errorMessage));
             return;
         }
+        pendingRoomMutation = pendingRoomMutation || !dialog.getMaintenanceIdToConfirm().isEmpty();
+        if (scheduleMaintenance) {
+            const QString maintenanceStart = dialog.getMaintenanceStartDate();
+            const QString maintenanceEndAt = maintenanceEndExclusive(dialog.getMaintenanceEndDate());
+            const auto impacts = m_manager->getMaintenanceImpactWarnings(
+                roomNum, maintenanceStart.toStdString(), maintenanceEndAt.toStdString());
+            if (!impacts.empty()) {
+                QStringList impactLines;
+                for (const std::string& impact : impacts) {
+                    impactLines.append("• " + QString::fromStdString(impact));
+                }
+                // Modified: Show every affected stay before a Maintenance case creates a soft hold and simulated guest-contact notices.
+                CustomConfirmDialog impactConfirmation(
+                    "Maintenance affects reservations",
+                    "What will happen: this schedule creates a temporary maintenance hold and logs simulated contact notices.\n\nAffected stays:\n"
+                        + impactLines.join("\n")
+                        + "\n\nNext step: review these stays, then create the hold only if the schedule is intended.",
+                    true,
+                    this,
+                    "Create maintenance hold",
+                    "Review schedule",
+                    true);
+                if (impactConfirmation.exec() != QDialog::Accepted || !impactConfirmation.isConfirmed()) {
+                    return;
+                }
+            }
+        }
         if (scheduleMaintenance && !m_manager->scheduleRoomMaintenance(roomNum,
                 dialog.getMaintenanceStartDate().toStdString(),
-                dialog.getMaintenanceEndDate().toStdString(),
+                maintenanceEndExclusive(dialog.getMaintenanceEndDate()).toStdString(),
                 dialog.getMaintenanceNote().toStdString(), errorMessage)) {
+            restorePersistedRoomState();
             QMessageBox::warning(this, "Maintenance schedule conflict", QString::fromStdString(errorMessage));
             return;
         }
+        pendingRoomMutation = pendingRoomMutation || scheduleMaintenance;
         const QString maintenanceWorkflowMessage = QString::fromStdString(errorMessage);
         if (!scheduleMaintenance && !room->getIsAvailable() &&
             !m_manager->setRoomAvailability(roomNum, true, errorMessage)) {
+            restorePersistedRoomState();
             QMessageBox::warning(this, "Room status unavailable", QString::fromStdString(errorMessage));
             return;
         }
+        pendingRoomMutation = pendingRoomMutation || (!scheduleMaintenance && !room->getIsAvailable());
 
 
         // Modified: Schedule maintenance by date range so future bookings remain valid outside the closure interval.
@@ -775,12 +897,14 @@ void RoomPageWidget::onEditRoomClicked() {
 
         if (!m_manager->updateRoomDetails(
                 roomNum, newPrice, newExtraFee, area, bedType, maxGuests, desc, amen, errorMessage)) {
+            restorePersistedRoomState();
             QMessageBox::warning(
                 this,
                 "Room update failed",
                 QString::fromStdString(errorMessage));
             return;
         }
+        pendingRoomMutation = true;
 
         if (!DataManager::getInstance().commitChanges(*m_manager)) {
             refreshData();
@@ -795,6 +919,38 @@ void RoomPageWidget::onEditRoomClicked() {
                                 : maintenanceWorkflowMessage,
                             this).exec();
     }
+}
+
+void RoomPageWidget::onMarkRoomReadyClicked()
+{
+    auto* item = m_roomListWidget->currentItem();
+    if (!item || !m_manager) {
+        return;
+    }
+
+    const std::string roomNumber = item->data(Qt::UserRole).toString().toStdString();
+    CustomConfirmDialog confirmation(
+        "Mark room ready",
+        "Confirm that cleaning is complete and release this room for an early check-in?",
+        false,
+        this);
+    if (confirmation.exec() != QDialog::Accepted || !confirmation.isConfirmed()) {
+        return;
+    }
+
+    std::string errorMessage;
+    // Modified: An explicit staff action ends only the current Cleaning block; it never changes the scheduled Maintenance record.
+    if (!m_manager->markRoomReady(roomNumber, "Staff", errorMessage)) {
+        QMessageBox::warning(this, "Room not ready", QString::fromStdString(errorMessage));
+        return;
+    }
+    if (!DataManager::getInstance().commitChanges(*m_manager)) {
+        refreshData();
+        QMessageBox::critical(this, "Save Room Failed", "The room-ready update was not saved. The previous database state has been restored.");
+        return;
+    }
+    refreshData();
+    CustomSuccessDialog("Room marked ready for check-in.", this).exec();
 }
 
 void RoomPageWidget::onDeleteRoomClicked() {

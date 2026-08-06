@@ -11,10 +11,77 @@
 #include <QHash>
 #include <QSet>
 #include <QString>
+#include <QStringList>
 #include <utility>
 #include <vector>
 
 namespace {
+// Modified: Supply a display-only midnight placeholder for legacy planned dates without fabricating actual stay timestamps.
+std::string legacyDateToMidnight(const std::string& date)
+{
+    return date.empty() ? std::string{} : date + "T00:00:00";
+}
+
+QDateTime parseStoredDateTime(const std::string& value)
+{
+    QDateTime timestamp = QDateTime::fromString(QString::fromStdString(value), Qt::ISODateWithMs);
+    if (!timestamp.isValid()) {
+        timestamp = QDateTime::fromString(QString::fromStdString(value), Qt::ISODate);
+    }
+    return timestamp;
+}
+
+bool validateHydratedBooking(const std::shared_ptr<Booking>& booking, std::string& errorMessage)
+{
+    if (!booking) {
+        errorMessage = "Loaded booking is missing after timestamp hydration.";
+        return false;
+    }
+
+    const QDateTime plannedIn = parseStoredDateTime(booking->getPlannedCheckInAt());
+    const QDateTime plannedOut = parseStoredDateTime(booking->getPlannedCheckOutAt());
+    const QDateTime actualIn = parseStoredDateTime(booking->getActualCheckInAt());
+    const QDateTime actualOut = parseStoredDateTime(booking->getActualCheckOutAt());
+    if ((!booking->usesLegacyDateOnlySchedule()
+            && (!plannedIn.isValid() || !plannedOut.isValid() || plannedOut < plannedIn.addSecs(60 * 60)))
+        || (!booking->getActualCheckInAt().empty() && !actualIn.isValid())
+        || (!booking->getActualCheckOutAt().empty() && !actualOut.isValid())
+        || (booking->isCheckedIn() && !booking->usesLegacyDateOnlySchedule() && !actualIn.isValid())
+        || (booking->isCheckedOut() && !booking->usesLegacyDateOnlySchedule()
+            && (!actualIn.isValid() || !actualOut.isValid() || actualOut <= actualIn))) {
+        errorMessage = "Persisted booking contains inconsistent planned or actual timestamps.";
+        return false;
+    }
+    return true;
+}
+
+bool validateHydratedInvoice(const std::shared_ptr<Invoice>& invoice, std::string& errorMessage)
+{
+    if (!invoice || !invoice->isValid()) {
+        errorMessage = "Persisted invoice is invalid after restoring billing facts.";
+        return false;
+    }
+    if (invoice->usesLegacyNightlyBilling()) {
+        return true;
+    }
+
+    const QDateTime actualIn = parseStoredDateTime(invoice->getActualCheckInAtSnapshot());
+    const QDateTime actualOut = parseStoredDateTime(invoice->getActualCheckOutAtSnapshot());
+    if (!actualIn.isValid() || !actualOut.isValid() || actualOut <= actualIn) {
+        errorMessage = "Persisted hourly invoice has invalid actual stay timestamps.";
+        return false;
+    }
+    const qint64 durationSeconds = actualIn.secsTo(actualOut);
+    const int roundedHours = static_cast<int>((durationSeconds + 30 * 60) / (60 * 60));
+    if (durationSeconds != invoice->getActualDurationSeconds()
+        || invoice->getBillableHours() != (roundedHours < 1 ? 1 : roundedHours)
+        || invoice->getPaymentAmount() > invoice->calculateTotal()) {
+        errorMessage = "Persisted hourly invoice billing facts do not match its actual stay or total.";
+        return false;
+    }
+    return true;
+}
+
 bool hasCanonicalObjectGraph(const HotelManager& manager, std::string& errorMessage)
 {
     for (const auto& booking : manager.getBookings()) {
@@ -197,6 +264,11 @@ bool DataManager::initDatabase(const std::string& dataPath) {
         "   note TEXT,"
         "   status TEXT NOT NULL DEFAULT 'Confirmed',"
         "   createdAt TEXT NOT NULL DEFAULT '',"
+        "   blockType TEXT NOT NULL DEFAULT 'Maintenance',"
+        "   startAt TEXT NOT NULL DEFAULT '',"
+        "   endAt TEXT NOT NULL DEFAULT '',"
+        "   completedAt TEXT NOT NULL DEFAULT '',"
+        "   completedBy TEXT NOT NULL DEFAULT '',"
         "   FOREIGN KEY (roomNumber) REFERENCES Room(roomNumber) ON DELETE CASCADE ON UPDATE CASCADE"
         ");";
     if (!query.exec(createRoomMaintenance)) {
@@ -222,7 +294,19 @@ bool DataManager::initDatabase(const std::string& dataPath) {
         return true;
     };
     if (!ensureMaintenanceColumn("status", "status TEXT NOT NULL DEFAULT 'Confirmed'")
-        || !ensureMaintenanceColumn("createdAt", "createdAt TEXT NOT NULL DEFAULT ''")) {
+        || !ensureMaintenanceColumn("createdAt", "createdAt TEXT NOT NULL DEFAULT ''")
+        || !ensureMaintenanceColumn("blockType", "blockType TEXT NOT NULL DEFAULT 'Maintenance'")
+        || !ensureMaintenanceColumn("startAt", "startAt TEXT NOT NULL DEFAULT ''")
+        || !ensureMaintenanceColumn("endAt", "endAt TEXT NOT NULL DEFAULT ''")
+        || !ensureMaintenanceColumn("completedAt", "completedAt TEXT NOT NULL DEFAULT ''")
+        || !ensureMaintenanceColumn("completedBy", "completedBy TEXT NOT NULL DEFAULT ''")) {
+        return false;
+    }
+    // Modified: Migrate legacy date-only maintenance into full-day timestamps without changing its original interval meaning.
+    if (!schemaQuery.exec("UPDATE RoomMaintenance SET blockType = 'Maintenance' WHERE blockType = ''")
+        || !schemaQuery.exec("UPDATE RoomMaintenance SET startAt = startDate || 'T00:00:00' WHERE startAt = ''")
+        || !schemaQuery.exec("UPDATE RoomMaintenance SET endAt = endDate || 'T00:00:00' WHERE endAt = ''")) {
+        qDebug() << "Error migrating room block timestamps:" << schemaQuery.lastError().text();
         return false;
     }
 
@@ -275,7 +359,13 @@ bool DataManager::initDatabase(const std::string& dataPath) {
         "   checkedOut INTEGER NOT NULL DEFAULT 0,"
         "   actualCheckInDate TEXT NOT NULL DEFAULT '',"
         "   actualCheckOutDate TEXT NOT NULL DEFAULT '',"
+        "   plannedCheckInAt TEXT NOT NULL DEFAULT '',"
+        "   plannedCheckOutAt TEXT NOT NULL DEFAULT '',"
+        "   actualCheckInAt TEXT NOT NULL DEFAULT '',"
+        "   actualCheckOutAt TEXT NOT NULL DEFAULT '',"
         "   quotedUnitPrice REAL NOT NULL DEFAULT 0,"
+        "   quotedHourlyRate REAL NOT NULL DEFAULT 0,"
+        "   legacyDateOnly INTEGER NOT NULL DEFAULT 1,"
         "   quotedTaxRate REAL NOT NULL DEFAULT 0.10,"
         "   adultCount INTEGER NOT NULL DEFAULT 1,"
         "   childCount INTEGER NOT NULL DEFAULT 0,"
@@ -364,7 +454,13 @@ bool DataManager::initDatabase(const std::string& dataPath) {
         {"checkedIn", "checkedIn INTEGER NOT NULL DEFAULT 0"},
         {"actualCheckInDate", "actualCheckInDate TEXT NOT NULL DEFAULT ''"},
         {"actualCheckOutDate", "actualCheckOutDate TEXT NOT NULL DEFAULT ''"},
+        {"plannedCheckInAt", "plannedCheckInAt TEXT NOT NULL DEFAULT ''"},
+        {"plannedCheckOutAt", "plannedCheckOutAt TEXT NOT NULL DEFAULT ''"},
+        {"actualCheckInAt", "actualCheckInAt TEXT NOT NULL DEFAULT ''"},
+        {"actualCheckOutAt", "actualCheckOutAt TEXT NOT NULL DEFAULT ''"},
         {"quotedUnitPrice", "quotedUnitPrice REAL NOT NULL DEFAULT 0"},
+        {"quotedHourlyRate", "quotedHourlyRate REAL NOT NULL DEFAULT 0"},
+        {"legacyDateOnly", "legacyDateOnly INTEGER NOT NULL DEFAULT 1"},
         {"quotedTaxRate", "quotedTaxRate REAL NOT NULL DEFAULT 0.10"},
         {"adultCount", "adultCount INTEGER NOT NULL DEFAULT 1"},
         {"childCount", "childCount INTEGER NOT NULL DEFAULT 0"},
@@ -387,6 +483,19 @@ bool DataManager::initDatabase(const std::string& dataPath) {
             "FROM Room r WHERE r.roomNumber = Booking.roomNumber)) "
             "WHERE quotedUnitPrice <= 0")) {
         qDebug() << "Error backfilling confirmed booking rates:" << bookingMigration.lastError().text();
+        return false;
+    }
+    // Modified: Seed only planned legacy timestamps from date-only schedules; actual timestamps remain empty because their real time is unknowable.
+    if (!bookingMigration.exec(
+            "UPDATE Booking SET plannedCheckInAt = checkInDate || 'T00:00:00' "
+            "WHERE plannedCheckInAt = '' AND checkInDate <> ''")
+        || !bookingMigration.exec(
+            "UPDATE Booking SET plannedCheckOutAt = checkOutDate || 'T00:00:00' "
+            "WHERE plannedCheckOutAt = '' AND checkOutDate <> ''")
+        || !bookingMigration.exec(
+            "UPDATE Booking SET quotedHourlyRate = quotedUnitPrice "
+            "WHERE quotedHourlyRate <= 0 AND quotedUnitPrice > 0")) {
+        qDebug() << "Error migrating time-based booking facts:" << bookingMigration.lastError().text();
         return false;
     }
 
@@ -430,6 +539,10 @@ bool DataManager::initDatabase(const std::string& dataPath) {
         "   paymentAmount REAL NOT NULL DEFAULT 0,"
         "   paymentReceivedDate TEXT NOT NULL DEFAULT '',"
         "   unitPrice REAL NOT NULL DEFAULT 0,"
+        "   actualDurationSeconds INTEGER NOT NULL DEFAULT 0,"
+        "   billableHours INTEGER NOT NULL DEFAULT 0,"
+        "   hourlyRoomRateSnapshot REAL NOT NULL DEFAULT 0,"
+        "   legacyNightlyBilling INTEGER NOT NULL DEFAULT 1,"
         "   customerNameSnapshot TEXT NOT NULL DEFAULT '',"
         "   customerIdSnapshot TEXT NOT NULL DEFAULT '',"
         "   customerPhoneSnapshot TEXT NOT NULL DEFAULT '',"
@@ -437,6 +550,10 @@ bool DataManager::initDatabase(const std::string& dataPath) {
         "   roomTypeSnapshot TEXT NOT NULL DEFAULT '',"
         "   checkInDateSnapshot TEXT NOT NULL DEFAULT '',"
         "   checkOutDateSnapshot TEXT NOT NULL DEFAULT '',"
+        "   plannedCheckInAtSnapshot TEXT NOT NULL DEFAULT '',"
+        "   plannedCheckOutAtSnapshot TEXT NOT NULL DEFAULT '',"
+        "   actualCheckInAtSnapshot TEXT NOT NULL DEFAULT '',"
+        "   actualCheckOutAtSnapshot TEXT NOT NULL DEFAULT '',"
         "   FOREIGN KEY (bookingId) REFERENCES Booking(bookingId) ON DELETE CASCADE ON UPDATE CASCADE"
         ");";
     if (!query.exec(createInvoice)) {
@@ -469,6 +586,14 @@ bool DataManager::initDatabase(const std::string& dataPath) {
         {"roomTypeSnapshot", "roomTypeSnapshot TEXT NOT NULL DEFAULT ''"},
         {"checkInDateSnapshot", "checkInDateSnapshot TEXT NOT NULL DEFAULT ''"},
         {"checkOutDateSnapshot", "checkOutDateSnapshot TEXT NOT NULL DEFAULT ''"}
+        ,{"actualDurationSeconds", "actualDurationSeconds INTEGER NOT NULL DEFAULT 0"}
+        ,{"billableHours", "billableHours INTEGER NOT NULL DEFAULT 0"}
+        ,{"hourlyRoomRateSnapshot", "hourlyRoomRateSnapshot REAL NOT NULL DEFAULT 0"}
+        ,{"legacyNightlyBilling", "legacyNightlyBilling INTEGER NOT NULL DEFAULT 1"}
+        ,{"plannedCheckInAtSnapshot", "plannedCheckInAtSnapshot TEXT NOT NULL DEFAULT ''"}
+        ,{"plannedCheckOutAtSnapshot", "plannedCheckOutAtSnapshot TEXT NOT NULL DEFAULT ''"}
+        ,{"actualCheckInAtSnapshot", "actualCheckInAtSnapshot TEXT NOT NULL DEFAULT ''"}
+        ,{"actualCheckOutAtSnapshot", "actualCheckOutAtSnapshot TEXT NOT NULL DEFAULT ''"}
         ,{"paymentMethod", "paymentMethod TEXT NOT NULL DEFAULT 'Legacy payment'"}
         ,{"paymentAmount", "paymentAmount REAL NOT NULL DEFAULT 0"}
         ,{"paymentReceivedDate", "paymentReceivedDate TEXT NOT NULL DEFAULT ''"}
@@ -480,6 +605,21 @@ bool DataManager::initDatabase(const std::string& dataPath) {
     }
     if (!query.exec("UPDATE Invoice SET paymentAmount = nights * unitPrice * (1 + taxRate), paymentReceivedDate = paymentDate WHERE paymentAmount <= 0 OR paymentReceivedDate = ''")) {
         qDebug() << "Error backfilling legacy invoice payment facts:" << query.lastError().text();
+        return false;
+    }
+    // Modified: Preserve legacy invoice totals while preparing immutable hourly snapshots for future time-based invoices.
+    if (!query.exec(
+            "UPDATE Invoice SET hourlyRoomRateSnapshot = unitPrice "
+            "WHERE hourlyRoomRateSnapshot <= 0 AND unitPrice > 0")
+        || !query.exec(
+            "UPDATE Invoice SET plannedCheckInAtSnapshot = COALESCE("
+            "(SELECT plannedCheckInAt FROM Booking WHERE Booking.bookingId = Invoice.bookingId), '' ) "
+            "WHERE plannedCheckInAtSnapshot = ''")
+        || !query.exec(
+            "UPDATE Invoice SET plannedCheckOutAtSnapshot = COALESCE("
+            "(SELECT plannedCheckOutAt FROM Booking WHERE Booking.bookingId = Invoice.bookingId), '' ) "
+            "WHERE plannedCheckOutAtSnapshot = ''")) {
+        qDebug() << "Error migrating time-based invoice facts:" << query.lastError().text();
         return false;
     }
 
@@ -515,6 +655,7 @@ bool DataManager::initDatabase(const std::string& dataPath) {
 
     const QStringList indexStatements = {
         "CREATE INDEX IF NOT EXISTS idx_booking_room_dates ON Booking(roomNumber, checkInDate, checkOutDate)",
+        "CREATE INDEX IF NOT EXISTS idx_booking_room_planned_time ON Booking(roomNumber, plannedCheckInAt, plannedCheckOutAt)",
         "CREATE INDEX IF NOT EXISTS idx_booking_customer ON Booking(customerId)",
         "CREATE INDEX IF NOT EXISTS idx_maintenance_room_dates ON RoomMaintenance(roomNumber, startDate, endDate)"
     };
@@ -525,13 +666,11 @@ bool DataManager::initDatabase(const std::string& dataPath) {
         }
     }
 
-    if (!reconcileCustomerDuplicates()) {
-        return false;
-    }
-    // Modified: Enforce the customer phone uniqueness rule in SQLite after safe legacy reconciliation.
-    if (!query.exec("DROP INDEX IF EXISTS idx_customer_phone") ||
-        !query.exec("CREATE UNIQUE INDEX IF NOT EXISTS uq_customer_phone ON Customer(phoneNumber) WHERE phoneNumber IS NOT NULL AND phoneNumber <> ''")) {
-        qDebug() << "Error enforcing unique customer phone numbers:" << query.lastError().text();
+    // Modified: Do not rewrite or delete customer records during normal startup. Historical duplicate reconciliation is an explicit maintenance operation,
+    // while application-level validation remains responsible for preventing new duplicate phone numbers.
+    if (!query.exec("DROP INDEX IF EXISTS uq_customer_phone") ||
+        !query.exec("CREATE INDEX IF NOT EXISTS idx_customer_phone ON Customer(phoneNumber)")) {
+        qDebug() << "Error creating customer phone lookup index:" << query.lastError().text();
         return false;
     }
 
@@ -623,7 +762,7 @@ bool DataManager::loadAll(HotelManager& manager, const std::string& dataPath) {
     int maxBookingNumber = 1000;
 
     // Modified: Load explicit operational facts and audit timestamps so occupancy and history do not infer state from calendar dates.
-    if (query.exec("SELECT bookingId, customerId, roomNumber, checkInDate, checkOutDate, cancelled, deleted, checkedIn, checkedOut, actualCheckInDate, actualCheckOutDate, quotedUnitPrice, quotedTaxRate, adultCount, childCount, cancellationReason, cancelledAt, createdAt, updatedAt FROM Booking")) {
+    if (query.exec("SELECT bookingId, customerId, roomNumber, checkInDate, checkOutDate, cancelled, deleted, checkedIn, checkedOut, actualCheckInDate, actualCheckOutDate, plannedCheckInAt, plannedCheckOutAt, actualCheckInAt, actualCheckOutAt, quotedUnitPrice, quotedHourlyRate, legacyDateOnly, quotedTaxRate, adultCount, childCount, cancellationReason, cancelledAt, createdAt, updatedAt FROM Booking")) {
         while (query.next()) {
             std::string bookingId = query.value(0).toString().toStdString();
             std::string custId = query.value(1).toString().toStdString();
@@ -636,14 +775,20 @@ bool DataManager::loadAll(HotelManager& manager, const std::string& dataPath) {
             bool checkedOut = query.value(8).toInt() == 1;
             std::string actualCheckIn = query.value(9).toString().toStdString();
             std::string actualCheckOut = query.value(10).toString().toStdString();
-            double quotedUnitPrice = query.value(11).toDouble();
-            double quotedTaxRate = query.value(12).toDouble();
-            int adultCount = query.value(13).toInt();
-            int childCount = query.value(14).toInt();
-            std::string cancellationReason = query.value(15).toString().toStdString();
-            std::string cancelledAt = query.value(16).toString().toStdString();
-            std::string createdAt = query.value(17).toString().toStdString();
-            std::string updatedAt = query.value(18).toString().toStdString();
+            std::string plannedCheckInAt = query.value(11).toString().toStdString();
+            std::string plannedCheckOutAt = query.value(12).toString().toStdString();
+            std::string actualCheckInAt = query.value(13).toString().toStdString();
+            std::string actualCheckOutAt = query.value(14).toString().toStdString();
+            double quotedUnitPrice = query.value(15).toDouble();
+            double quotedHourlyRate = query.value(16).toDouble();
+            bool legacyDateOnly = query.value(17).toInt() == 1;
+            double quotedTaxRate = query.value(18).toDouble();
+            int adultCount = query.value(19).toInt();
+            int childCount = query.value(20).toInt();
+            std::string cancellationReason = query.value(21).toString().toStdString();
+            std::string cancelledAt = query.value(22).toString().toStdString();
+            std::string createdAt = query.value(23).toString().toStdString();
+            std::string updatedAt = query.value(24).toString().toStdString();
 
             if (bookingId.rfind("BK", 0) == 0) {
                 bool ok = false;
@@ -659,6 +804,23 @@ bool DataManager::loadAll(HotelManager& manager, const std::string& dataPath) {
                 qDebug() << "Failed to restore booking during load:" << QString::fromStdString(errorMsg);
                 return false;
             }
+            // Modified: Restore datetime facts after legacy validation so date-only data stays loadable until the new workflow is enabled.
+            const auto booking = loadedManager.findBookingById(bookingId);
+            if (!booking) {
+                qDebug() << "Failed to resolve restored booking for datetime facts:" << QString::fromStdString(bookingId);
+                return false;
+            }
+            booking->setPlannedCheckInAt(plannedCheckInAt);
+            booking->setPlannedCheckOutAt(plannedCheckOutAt);
+            booking->setActualCheckInAt(actualCheckInAt);
+            booking->setActualCheckOutAt(actualCheckOutAt);
+            booking->setQuotedHourlyRate(quotedHourlyRate);
+            booking->setLegacyDateOnlySchedule(legacyDateOnly);
+            // Modified: Validate timestamp facts after hydration so malformed database rows cannot bypass the legacy-compatible restore path.
+            if (!validateHydratedBooking(booking, errorMsg)) {
+                qDebug() << "Failed to validate restored booking timestamps:" << QString::fromStdString(errorMsg);
+                return false;
+            }
 
         }
     } else {
@@ -666,7 +828,7 @@ bool DataManager::loadAll(HotelManager& manager, const std::string& dataPath) {
         return false;
     }
 
-    if (query.exec("SELECT maintenanceId, roomNumber, startDate, endDate, note, status, createdAt FROM RoomMaintenance")) {
+    if (query.exec("SELECT maintenanceId, roomNumber, startDate, endDate, note, status, createdAt, blockType, startAt, endAt, completedAt, completedBy FROM RoomMaintenance")) {
         while (query.next()) {
             const std::string maintenanceId = query.value(0).toString().toStdString();
             const std::string roomNumber = query.value(1).toString().toStdString();
@@ -675,9 +837,15 @@ bool DataManager::loadAll(HotelManager& manager, const std::string& dataPath) {
             const std::string note = query.value(4).toString().toStdString();
             const std::string status = query.value(5).toString().toStdString();
             const std::string createdAt = query.value(6).toString().toStdString();
+            const std::string blockType = query.value(7).toString().toStdString();
+            const std::string startAt = query.value(8).toString().toStdString();
+            const std::string endAt = query.value(9).toString().toStdString();
+            const std::string completedAt = query.value(10).toString().toStdString();
+            const std::string completedBy = query.value(11).toString().toStdString();
 
             if (!loadedManager.restoreRoomMaintenanceFromDatabase(
-                    maintenanceId, roomNumber, startDate, endDate, note, status, createdAt, errorMsg)) {
+                    maintenanceId, roomNumber, startDate, endDate, note, status, createdAt,
+                    blockType, startAt, endAt, completedAt, completedBy, errorMsg)) {
                 qDebug() << "Failed to restore room maintenance during load:" << QString::fromStdString(errorMsg);
                 return false;
             }
@@ -704,7 +872,7 @@ bool DataManager::loadAll(HotelManager& manager, const std::string& dataPath) {
 
     // Reconstruct invoices directly back into the core system memory.
     // Legacy rows with a cancelled flag are ignored by deleting them during migration.
-    if (query.exec("SELECT invoiceId, bookingId, taxRate, nights, paymentDate, paymentMethod, paymentAmount, paymentReceivedDate, unitPrice, customerNameSnapshot, customerIdSnapshot, customerPhoneSnapshot, roomNumberSnapshot, roomTypeSnapshot, checkInDateSnapshot, checkOutDateSnapshot FROM Invoice")) {
+    if (query.exec("SELECT invoiceId, bookingId, taxRate, nights, paymentDate, paymentMethod, paymentAmount, paymentReceivedDate, unitPrice, customerNameSnapshot, customerIdSnapshot, customerPhoneSnapshot, roomNumberSnapshot, roomTypeSnapshot, checkInDateSnapshot, checkOutDateSnapshot, actualDurationSeconds, billableHours, hourlyRoomRateSnapshot, legacyNightlyBilling, plannedCheckInAtSnapshot, plannedCheckOutAtSnapshot, actualCheckInAtSnapshot, actualCheckOutAtSnapshot FROM Invoice")) {
         while (query.next()) {
             std::string invId = query.value(0).toString().toStdString();
             std::string bookId = query.value(1).toString().toStdString();
@@ -722,12 +890,39 @@ bool DataManager::loadAll(HotelManager& manager, const std::string& dataPath) {
             std::string roomTypeSnapshot = query.value(13).toString().toStdString();
             std::string checkInDateSnapshot = query.value(14).toString().toStdString();
             std::string checkOutDateSnapshot = query.value(15).toString().toStdString();
+            long long actualDurationSeconds = query.value(16).toLongLong();
+            int billableHours = query.value(17).toInt();
+            double hourlyRoomRateSnapshot = query.value(18).toDouble();
+            bool legacyNightlyBilling = query.value(19).toInt() == 1;
+            std::string plannedCheckInAtSnapshot = query.value(20).toString().toStdString();
+            std::string plannedCheckOutAtSnapshot = query.value(21).toString().toStdString();
+            std::string actualCheckInAtSnapshot = query.value(22).toString().toStdString();
+            std::string actualCheckOutAtSnapshot = query.value(23).toString().toStdString();
 
             if (!loadedManager.restoreInvoiceFromDatabase(invId, bookId, tax, nightsCount, payDate, paymentMethod, paymentAmount, paymentReceivedDate, unitPrice,
                                                           customerNameSnapshot, customerIdSnapshot, customerPhoneSnapshot,
                                                           roomNumberSnapshot, roomTypeSnapshot, checkInDateSnapshot,
                                                           checkOutDateSnapshot, errorMsg)) {
                 qDebug() << "Failed to restore invoice during load:" << QString::fromStdString(errorMsg);
+                return false;
+            }
+            // Modified: Restore time-based invoice facts without recalculating historical nightly totals.
+            const auto invoice = loadedManager.findInvoiceById(invId);
+            if (!invoice) {
+                qDebug() << "Failed to resolve restored invoice for datetime facts:" << QString::fromStdString(invId);
+                return false;
+            }
+            invoice->setActualDurationSeconds(actualDurationSeconds);
+            invoice->setBillableHours(billableHours);
+            invoice->setHourlyRoomRateSnapshot(hourlyRoomRateSnapshot);
+            invoice->setLegacyNightlyBilling(legacyNightlyBilling);
+            invoice->setPlannedCheckInAtSnapshot(plannedCheckInAtSnapshot);
+            invoice->setPlannedCheckOutAtSnapshot(plannedCheckOutAtSnapshot);
+            invoice->setActualCheckInAtSnapshot(actualCheckInAtSnapshot);
+            invoice->setActualCheckOutAtSnapshot(actualCheckOutAtSnapshot);
+            // Modified: Reconcile persisted hourly seconds, rounded hours, and payment total before publishing an invoice into the object graph.
+            if (!validateHydratedInvoice(invoice, errorMsg)) {
+                qDebug() << "Failed to validate restored invoice billing facts:" << QString::fromStdString(errorMsg);
                 return false;
             }
         }
@@ -960,41 +1155,11 @@ bool DataManager::saveAll(HotelManager& manager, const std::string& dataPath) {
         return false;
     }
 
-    // 1. Wipe old database entries completely before overwriting fresh model data records
-    // Modified: Clear dependent records before replacing the database snapshot.
-    if (!query.exec("DELETE FROM Invoice")) {
-        m_db.rollback(); // Rollback transaction if anything happened that fails to maintain database integrity
-        qDebug() << "Can't delete from Invoice: " << query.lastError().text();
-        return false; // Always return false if the database is not in a valid state after a transaction, not allowing partial saves to occur
-    } 
-    if (!query.exec("DELETE FROM MaintenanceGuestNotice")) {
-        m_db.rollback();
-        qDebug() << "Can't delete from MaintenanceGuestNotice:" << query.lastError().text();
-        return false;
-    }
-    if (!query.exec("DELETE FROM Booking")) {
-        m_db.rollback(); 
-        qDebug() << "Can't delete from Booking: " << query.lastError().text();
-        return false;
-    } 
-    if (!query.exec("DELETE FROM RoomMaintenance")) {
-        m_db.rollback();
-        qDebug() << "Can't delete from RoomMaintenance:" << query.lastError().text();
-        return false;
-    }
-    if (!query.exec("DELETE FROM Room")) {
-        m_db.rollback(); 
-        qDebug() << "Can't delete from Room: " << query.lastError().text();
-        return false;
-    } 
-    if (!query.exec("DELETE FROM Customer")) {
-        m_db.rollback(); 
-        qDebug() << "Can't delete from Customer: " << query.lastError().text();
-        return false;
-    }
-
-    // 2. Persist Customer object lists
-    query.prepare("INSERT INTO Customer (customerId, documentType, issuingCountry, documentNumber, name, phoneNumber, archived) VALUES (?, ?, ?, ?, ?, ?, ?)");
+    // Modified: Upsert canonical records inside one transaction instead of wiping and rebuilding the whole database on every save.
+    // This preserves SQLite row identity and scales much better while DataVersion still rejects stale concurrent writers.
+    query.prepare("INSERT INTO Customer (customerId, documentType, issuingCountry, documentNumber, name, phoneNumber, archived) VALUES (?, ?, ?, ?, ?, ?, ?) "
+                  "ON CONFLICT(customerId) DO UPDATE SET documentType=excluded.documentType, issuingCountry=excluded.issuingCountry, "
+                  "documentNumber=excluded.documentNumber, name=excluded.name, phoneNumber=excluded.phoneNumber, archived=excluded.archived");
     for (const auto& customer : manager.getCustomers()) {
         if (customer) {
             query.addBindValue(QString::fromStdString(customer->getCustomerId()));
@@ -1012,8 +1177,10 @@ bool DataManager::saveAll(HotelManager& manager, const std::string& dataPath) {
         }
     }
 
-    // 3. Persist Room lists (Inspect polymorphism variables to save correct individual fee items)
-    query.prepare("INSERT INTO Room (roomNumber, basePrice, isAvailable, archived, roomType, premiumServiceFee, miniBarFee, area, bedType, maxGuests, description, amenities) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    query.prepare("INSERT INTO Room (roomNumber, basePrice, isAvailable, archived, roomType, premiumServiceFee, miniBarFee, area, bedType, maxGuests, description, amenities) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+                  "ON CONFLICT(roomNumber) DO UPDATE SET basePrice=excluded.basePrice, isAvailable=excluded.isAvailable, archived=excluded.archived, "
+                  "roomType=excluded.roomType, premiumServiceFee=excluded.premiumServiceFee, miniBarFee=excluded.miniBarFee, area=excluded.area, "
+                  "bedType=excluded.bedType, maxGuests=excluded.maxGuests, description=excluded.description, amenities=excluded.amenities");
     for (const auto& room : manager.getRooms()) {
         if (room) {
             query.addBindValue(QString::fromStdString(room->getRoomNumber()));
@@ -1051,8 +1218,11 @@ bool DataManager::saveAll(HotelManager& manager, const std::string& dataPath) {
         }
     }
 
-    // Modified: Persist dated maintenance intervals separately from permanent room availability.
-    query.prepare("INSERT INTO RoomMaintenance (maintenanceId, roomNumber, startDate, endDate, note, status, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)");
+    // Modified: Persist Maintenance and Cleaning blocks with separate operational types and effective timestamp boundaries.
+    query.prepare("INSERT INTO RoomMaintenance (maintenanceId, roomNumber, startDate, endDate, note, status, createdAt, blockType, startAt, endAt, completedAt, completedBy) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+                  "ON CONFLICT(maintenanceId) DO UPDATE SET roomNumber=excluded.roomNumber, startDate=excluded.startDate, endDate=excluded.endDate, "
+                  "note=excluded.note, status=excluded.status, createdAt=excluded.createdAt, blockType=excluded.blockType, startAt=excluded.startAt, "
+                  "endAt=excluded.endAt, completedAt=excluded.completedAt, completedBy=excluded.completedBy");
     for (const RoomMaintenance& maintenance : manager.getRoomMaintenances()) {
         query.addBindValue(QString::fromStdString(maintenance.getMaintenanceId()));
         query.addBindValue(QString::fromStdString(maintenance.getRoomNumber()));
@@ -1061,6 +1231,11 @@ bool DataManager::saveAll(HotelManager& manager, const std::string& dataPath) {
         query.addBindValue(QString::fromStdString(maintenance.getNote()));
         query.addBindValue(QString::fromStdString(maintenance.getStatus()));
         query.addBindValue(QString::fromStdString(maintenance.getCreatedAt()));
+        query.addBindValue(QString::fromStdString(maintenance.getBlockType()));
+        query.addBindValue(QString::fromStdString(maintenance.getStartAt()));
+        query.addBindValue(QString::fromStdString(maintenance.getEndAt()));
+        query.addBindValue(QString::fromStdString(maintenance.getCompletedAt()));
+        query.addBindValue(QString::fromStdString(maintenance.getCompletedBy()));
         if (!query.exec()) {
             m_db.rollback();
             qDebug() << "Error saving RoomMaintenance:" << query.lastError().text();
@@ -1069,7 +1244,14 @@ bool DataManager::saveAll(HotelManager& manager, const std::string& dataPath) {
     }
 
     // Modified: Persist explicit stay, pricing, occupancy, cancellation, and timestamp audit facts with each booking snapshot.
-    query.prepare("INSERT INTO Booking (bookingId, customerId, roomNumber, checkInDate, checkOutDate, cancelled, deleted, checkedIn, checkedOut, actualCheckInDate, actualCheckOutDate, quotedUnitPrice, quotedTaxRate, adultCount, childCount, cancellationReason, cancelledAt, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    query.prepare("INSERT INTO Booking (bookingId, customerId, roomNumber, checkInDate, checkOutDate, cancelled, deleted, checkedIn, checkedOut, actualCheckInDate, actualCheckOutDate, plannedCheckInAt, plannedCheckOutAt, actualCheckInAt, actualCheckOutAt, quotedUnitPrice, quotedHourlyRate, legacyDateOnly, quotedTaxRate, adultCount, childCount, cancellationReason, cancelledAt, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+                  "ON CONFLICT(bookingId) DO UPDATE SET customerId=excluded.customerId, roomNumber=excluded.roomNumber, checkInDate=excluded.checkInDate, "
+                  "checkOutDate=excluded.checkOutDate, cancelled=excluded.cancelled, deleted=excluded.deleted, checkedIn=excluded.checkedIn, checkedOut=excluded.checkedOut, "
+                  "actualCheckInDate=excluded.actualCheckInDate, actualCheckOutDate=excluded.actualCheckOutDate, plannedCheckInAt=excluded.plannedCheckInAt, "
+                  "plannedCheckOutAt=excluded.plannedCheckOutAt, actualCheckInAt=excluded.actualCheckInAt, actualCheckOutAt=excluded.actualCheckOutAt, "
+                  "quotedUnitPrice=excluded.quotedUnitPrice, quotedHourlyRate=excluded.quotedHourlyRate, legacyDateOnly=excluded.legacyDateOnly, "
+                  "quotedTaxRate=excluded.quotedTaxRate, adultCount=excluded.adultCount, childCount=excluded.childCount, cancellationReason=excluded.cancellationReason, "
+                  "cancelledAt=excluded.cancelledAt, createdAt=excluded.createdAt, updatedAt=excluded.updatedAt");
     for (const auto& booking : manager.getBookings()) {
         if (!booking) {
             continue;
@@ -1097,7 +1279,20 @@ bool DataManager::saveAll(HotelManager& manager, const std::string& dataPath) {
         query.addBindValue(booking->isCheckedOut() ? 1 : 0);
         query.addBindValue(QString::fromStdString(booking->getActualCheckInDate()));
         query.addBindValue(QString::fromStdString(booking->getActualCheckOutDate()));
+        // Modified: Keep legacy saves compatible while persisting future datetime facts for the next conversion phase.
+        const std::string plannedCheckInAt = booking->getPlannedCheckInAt().empty()
+            ? legacyDateToMidnight(booking->getCheckInDate()) : booking->getPlannedCheckInAt();
+        const std::string plannedCheckOutAt = booking->getPlannedCheckOutAt().empty()
+            ? legacyDateToMidnight(booking->getCheckOutDate()) : booking->getPlannedCheckOutAt();
+        const double quotedHourlyRate = booking->getQuotedHourlyRate() > 0.0
+            ? booking->getQuotedHourlyRate() : booking->getQuotedUnitPrice();
+        query.addBindValue(QString::fromStdString(plannedCheckInAt));
+        query.addBindValue(QString::fromStdString(plannedCheckOutAt));
+        query.addBindValue(QString::fromStdString(booking->getActualCheckInAt()));
+        query.addBindValue(QString::fromStdString(booking->getActualCheckOutAt()));
         query.addBindValue(booking->getQuotedUnitPrice());
+        query.addBindValue(quotedHourlyRate);
+        query.addBindValue(booking->usesLegacyDateOnlySchedule() ? 1 : 0);
         query.addBindValue(booking->getQuotedTaxRate());
         query.addBindValue(booking->getAdultCount());
         query.addBindValue(booking->getChildCount());
@@ -1114,7 +1309,9 @@ bool DataManager::saveAll(HotelManager& manager, const std::string& dataPath) {
     }
 
     // Modified: Persist internal, simulated guest-contact records only after their booking and maintenance foreign keys exist.
-    query.prepare("INSERT INTO MaintenanceGuestNotice (noticeId, maintenanceId, bookingId, channel, status, loggedAt) VALUES (?, ?, ?, ?, ?, ?)");
+    query.prepare("INSERT INTO MaintenanceGuestNotice (noticeId, maintenanceId, bookingId, channel, status, loggedAt) VALUES (?, ?, ?, ?, ?, ?) "
+                  "ON CONFLICT(noticeId) DO UPDATE SET maintenanceId=excluded.maintenanceId, bookingId=excluded.bookingId, channel=excluded.channel, "
+                  "status=excluded.status, loggedAt=excluded.loggedAt");
     for (const MaintenanceGuestNotice& notice : manager.getMaintenanceGuestNotices()) {
         query.addBindValue(QString::fromStdString(notice.getNoticeId()));
         query.addBindValue(QString::fromStdString(notice.getMaintenanceId()));
@@ -1130,7 +1327,14 @@ bool DataManager::saveAll(HotelManager& manager, const std::string& dataPath) {
     }
 
     // Modified: Persist immutable invoice snapshots with every financial record.
-    query.prepare("INSERT INTO Invoice (invoiceId, bookingId, taxRate, nights, paymentDate, paymentMethod, paymentAmount, paymentReceivedDate, unitPrice, customerNameSnapshot, customerIdSnapshot, customerPhoneSnapshot, roomNumberSnapshot, roomTypeSnapshot, checkInDateSnapshot, checkOutDateSnapshot) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    query.prepare("INSERT INTO Invoice (invoiceId, bookingId, taxRate, nights, paymentDate, paymentMethod, paymentAmount, paymentReceivedDate, unitPrice, actualDurationSeconds, billableHours, hourlyRoomRateSnapshot, legacyNightlyBilling, customerNameSnapshot, customerIdSnapshot, customerPhoneSnapshot, roomNumberSnapshot, roomTypeSnapshot, checkInDateSnapshot, checkOutDateSnapshot, plannedCheckInAtSnapshot, plannedCheckOutAtSnapshot, actualCheckInAtSnapshot, actualCheckOutAtSnapshot) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+                  "ON CONFLICT(invoiceId) DO UPDATE SET bookingId=excluded.bookingId, taxRate=excluded.taxRate, nights=excluded.nights, paymentDate=excluded.paymentDate, "
+                  "paymentMethod=excluded.paymentMethod, paymentAmount=excluded.paymentAmount, paymentReceivedDate=excluded.paymentReceivedDate, unitPrice=excluded.unitPrice, "
+                  "actualDurationSeconds=excluded.actualDurationSeconds, billableHours=excluded.billableHours, hourlyRoomRateSnapshot=excluded.hourlyRoomRateSnapshot, "
+                  "legacyNightlyBilling=excluded.legacyNightlyBilling, customerNameSnapshot=excluded.customerNameSnapshot, customerIdSnapshot=excluded.customerIdSnapshot, "
+                  "customerPhoneSnapshot=excluded.customerPhoneSnapshot, roomNumberSnapshot=excluded.roomNumberSnapshot, roomTypeSnapshot=excluded.roomTypeSnapshot, "
+                  "checkInDateSnapshot=excluded.checkInDateSnapshot, checkOutDateSnapshot=excluded.checkOutDateSnapshot, plannedCheckInAtSnapshot=excluded.plannedCheckInAtSnapshot, "
+                  "plannedCheckOutAtSnapshot=excluded.plannedCheckOutAtSnapshot, actualCheckInAtSnapshot=excluded.actualCheckInAtSnapshot, actualCheckOutAtSnapshot=excluded.actualCheckOutAtSnapshot");
     for (const auto& invoice : manager.getInvoices()) {
         if (!invoice) {
             continue;
@@ -1151,6 +1355,17 @@ bool DataManager::saveAll(HotelManager& manager, const std::string& dataPath) {
         query.addBindValue(invoice->getPaymentAmount());
         query.addBindValue(QString::fromStdString(invoice->getPaymentReceivedDate()));
         query.addBindValue(invoice->getUnitPrice());
+        // Modified: Persist zero-valued hourly facts for legacy invoices without changing their immutable nightly calculation.
+        const double hourlyRoomRate = invoice->getHourlyRoomRateSnapshot() > 0.0
+            ? invoice->getHourlyRoomRateSnapshot() : invoice->getUnitPrice();
+        const std::string plannedCheckInAt = invoice->getPlannedCheckInAtSnapshot().empty()
+            ? legacyDateToMidnight(invoice->getCheckInDateSnapshot()) : invoice->getPlannedCheckInAtSnapshot();
+        const std::string plannedCheckOutAt = invoice->getPlannedCheckOutAtSnapshot().empty()
+            ? legacyDateToMidnight(invoice->getCheckOutDateSnapshot()) : invoice->getPlannedCheckOutAtSnapshot();
+        query.addBindValue(invoice->getActualDurationSeconds());
+        query.addBindValue(invoice->getBillableHours());
+        query.addBindValue(hourlyRoomRate);
+        query.addBindValue(invoice->usesLegacyNightlyBilling() ? 1 : 0);
         query.addBindValue(QString::fromStdString(invoice->getCustomerNameSnapshot()));
         query.addBindValue(QString::fromStdString(invoice->getCustomerIdSnapshot()));
         query.addBindValue(QString::fromStdString(invoice->getCustomerPhoneSnapshot()));
@@ -1158,12 +1373,71 @@ bool DataManager::saveAll(HotelManager& manager, const std::string& dataPath) {
         query.addBindValue(QString::fromStdString(invoice->getRoomTypeSnapshot()));
         query.addBindValue(QString::fromStdString(invoice->getCheckInDateSnapshot()));
         query.addBindValue(QString::fromStdString(invoice->getCheckOutDateSnapshot()));
+        query.addBindValue(QString::fromStdString(plannedCheckInAt));
+        query.addBindValue(QString::fromStdString(plannedCheckOutAt));
+        query.addBindValue(QString::fromStdString(invoice->getActualCheckInAtSnapshot()));
+        query.addBindValue(QString::fromStdString(invoice->getActualCheckOutAtSnapshot()));
         if (!query.exec()) {
             m_db.rollback();
             qDebug() << "Error saving Invoice: " << query.lastError().text();
             return false;
         }
     }
+
+    const auto deleteRowsAbsentFromMemory = [this](const QString& tableName, const QString& keyColumn,
+                                                   const QStringList& retainedIds) {
+        QSqlQuery deleteQuery(m_db);
+        if (retainedIds.isEmpty()) {
+            return deleteQuery.exec("DELETE FROM " + tableName);
+        }
+        QStringList placeholders;
+        placeholders.fill("?", retainedIds.size());
+        deleteQuery.prepare("DELETE FROM " + tableName + " WHERE " + keyColumn
+                            + " NOT IN (" + placeholders.join(",") + ")");
+        for (const QString& id : retainedIds) {
+            deleteQuery.addBindValue(id);
+        }
+        return deleteQuery.exec();
+    };
+
+    QStringList invoiceIds;
+    for (const auto& invoice : manager.getInvoices()) {
+        if (invoice) invoiceIds.append(QString::fromStdString(invoice->getInvoiceId()));
+    }
+    QStringList noticeIds;
+    for (const auto& notice : manager.getMaintenanceGuestNotices()) {
+        noticeIds.append(QString::fromStdString(notice.getNoticeId()));
+    }
+    QStringList bookingIds;
+    for (const auto& booking : manager.getBookings()) {
+        if (booking) bookingIds.append(QString::fromStdString(booking->getBookingId()));
+    }
+    QStringList maintenanceIds;
+    for (const auto& maintenance : manager.getRoomMaintenances()) {
+        maintenanceIds.append(QString::fromStdString(maintenance.getMaintenanceId()));
+    }
+    QStringList roomIds;
+    for (const auto& room : manager.getRooms()) {
+        if (room) roomIds.append(QString::fromStdString(room->getRoomNumber()));
+    }
+    QStringList customerIds;
+    for (const auto& customer : manager.getCustomers()) {
+        if (customer) customerIds.append(QString::fromStdString(customer->getCustomerId()));
+    }
+
+    // Modified: Remove only records explicitly absent from memory, in child-first order, rather than destroying every table before each save.
+    const bool removedObsoleteRows = deleteRowsAbsentFromMemory("Invoice", "invoiceId", invoiceIds)
+        && deleteRowsAbsentFromMemory("MaintenanceGuestNotice", "noticeId", noticeIds)
+        && deleteRowsAbsentFromMemory("Booking", "bookingId", bookingIds)
+        && deleteRowsAbsentFromMemory("RoomMaintenance", "maintenanceId", maintenanceIds)
+        && deleteRowsAbsentFromMemory("Room", "roomNumber", roomIds)
+        && deleteRowsAbsentFromMemory("Customer", "customerId", customerIds);
+    if (!removedObsoleteRows) {
+        m_db.rollback();
+        qDebug() << "Could not remove obsolete records after incremental save:" << m_db.lastError().text();
+        return false;
+    }
+
     if (!query.exec("UPDATE DataVersion SET revision = revision + 1 WHERE id = 1")) {
         m_db.rollback();
         qDebug() << "Failed to advance database revision:" << query.lastError().text();

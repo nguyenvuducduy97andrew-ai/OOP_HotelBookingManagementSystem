@@ -6,9 +6,79 @@
 #include "RoomStatusPageWidget.h"
 #include "StatisticsPageWidget.h"
 #include "ui_mainwindow.h"
+#include <QApplication>
 #include <QStyle>
 #include <QTimer>
 #include <QDateTime>
+
+namespace {
+// Modified: Apply one unobtrusive scrollbar and focus treatment across pages so tables, lists, and combo popups feel consistent.
+void applyGlobalPresentationStyle()
+{
+    qApp->setStyleSheet(R"(
+        QAbstractScrollArea { background: transparent; }
+        QAbstractScrollArea::corner { background: transparent; }
+        QAbstractScrollArea::viewport { background: transparent; }
+        QScrollBar:vertical {
+            background: transparent;
+            width: 10px;
+            margin: 4px 2px 4px 2px;
+        }
+        QScrollBar::handle:vertical {
+            background: #C7D4E7;
+            border-radius: 5px;
+            min-height: 42px;
+        }
+        QScrollBar::handle:vertical:hover { background: #8FB0E8; }
+        QScrollBar::handle:vertical:pressed { background: #5F8FE0; }
+        QScrollBar:horizontal {
+            background: transparent;
+            height: 10px;
+            margin: 2px 4px 2px 4px;
+        }
+        QScrollBar::handle:horizontal {
+            background: #C7D4E7;
+            border-radius: 5px;
+            min-width: 42px;
+        }
+        QScrollBar::handle:horizontal:hover { background: #8FB0E8; }
+        QScrollBar::handle:horizontal:pressed { background: #5F8FE0; }
+        QScrollBar::add-line, QScrollBar::sub-line { width: 0; height: 0; }
+        QScrollBar::add-page, QScrollBar::sub-page { background: transparent; }
+        QComboBox QAbstractItemView {
+            background: #FFFFFF;
+            color: #2B3674;
+            border: 1px solid #DCE6F5;
+            border-radius: 8px;
+            outline: none;
+            padding: 4px;
+        }
+        QComboBox QAbstractItemView::item {
+            min-height: 28px;
+            padding: 4px 8px;
+        }
+        QComboBox QAbstractItemView::item:selected {
+            background: #EAF2FF;
+            color: #155EEF;
+            border-radius: 5px;
+        }
+        QLineEdit:focus, QComboBox:focus, QDateTimeEdit:focus, QSpinBox:focus {
+            border-color: #2B7BFF;
+        }
+        QLineEdit:disabled, QComboBox:disabled, QDateTimeEdit:disabled, QSpinBox:disabled {
+            color: #8FA0BD;
+            background: #F4F7FE;
+        }
+        QToolTip {
+            background: #FFFFFF;
+            color: #2B3674;
+            border: 1px solid #DCE6F5;
+            border-radius: 7px;
+            padding: 6px 9px;
+        }
+    )");
+}
+}
 
 MainWindow::MainWindow(HotelManager* manager, QWidget *parent)
     : QMainWindow(parent)
@@ -16,6 +86,7 @@ MainWindow::MainWindow(HotelManager* manager, QWidget *parent)
     , m_manager(manager)
 {
     ui->setupUi(this);
+    applyGlobalPresentationStyle();
     this->setMinimumSize(1180, 700);
     const QRect availableScreen = QGuiApplication::primaryScreen()->availableGeometry();
     const int restoredWidth = qBound(1180, availableScreen.width() - 48, 1360);
@@ -61,12 +132,13 @@ MainWindow::MainWindow(HotelManager* manager, QWidget *parent)
 
     // Modified and optimized performance: keep navigation separate from booking persistence by routing selected rooms through MainWindow.
     connect(m_roomStatusPage, &RoomStatusPageWidget::bookingRequested,
-            this, [this](const QString& roomNumber) {
+            this, [this](const QString& roomNumber, const QDateTime& checkIn, const QDateTime& checkOut,
+                         int adults, int children) {
                 ui->stackedWidget->setCurrentWidget(m_reservationsPage);
                 ui->btnReservation->setChecked(true);
                 updateButtonStyle(ui->btnReservation);
                 m_reservationsPage->refreshData();
-                m_reservationsPage->startNewReservationForRoom(roomNumber);
+                m_reservationsPage->startNewReservationForRoom(roomNumber, checkIn, checkOut, adults, children);
             });
 
     connect(m_reservationsPage, &ReservationsPageWidget::bookingChanged,

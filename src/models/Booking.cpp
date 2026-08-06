@@ -27,11 +27,18 @@ Booking::Booking() {
     this->checkedOut = false;
     this->checkOutDate = "";
     this->checkInDate = "";
+    this->plannedCheckInAt = "";
+    this->plannedCheckOutAt = "";
     this->actualCheckInDate = "";
     this->actualCheckOutDate = "";
+    this->actualCheckInAt = "";
+    this->actualCheckOutAt = "";
     this->createdAt = "";
     this->updatedAt = "";
     this->quotedUnitPrice = 0.0;
+    // Modified: New fields default to legacy-safe values until the datetime workflow supplies authoritative facts.
+    this->quotedHourlyRate = 0.0;
+    this->legacyDateOnlySchedule = true;
     this->quotedTaxRate = 0.10;
     this->adultCount = 1;
     this->childCount = 0;
@@ -89,6 +96,11 @@ void Booking::setCheckOutDate(const std::string& checkOutDate) {
     this->checkOutDate = checkOutDate;
 }
 
+std::string Booking::getPlannedCheckInAt() const { return plannedCheckInAt; }
+void Booking::setPlannedCheckInAt(const std::string& value) { plannedCheckInAt = value; }
+std::string Booking::getPlannedCheckOutAt() const { return plannedCheckOutAt; }
+void Booking::setPlannedCheckOutAt(const std::string& value) { plannedCheckOutAt = value; }
+
 bool Booking::isCancelled() const {
     return cancelled;
 }
@@ -120,6 +132,10 @@ std::string Booking::getActualCheckInDate() const { return actualCheckInDate; }
 void Booking::setActualCheckInDate(const std::string& value) { actualCheckInDate = value; }
 std::string Booking::getActualCheckOutDate() const { return actualCheckOutDate; }
 void Booking::setActualCheckOutDate(const std::string& value) { actualCheckOutDate = value; }
+std::string Booking::getActualCheckInAt() const { return actualCheckInAt; }
+void Booking::setActualCheckInAt(const std::string& value) { actualCheckInAt = value; }
+std::string Booking::getActualCheckOutAt() const { return actualCheckOutAt; }
+void Booking::setActualCheckOutAt(const std::string& value) { actualCheckOutAt = value; }
 
 std::string Booking::getEffectiveCheckOutDate() const {
     return actualCheckOutDate.empty() ? checkOutDate : actualCheckOutDate;
@@ -127,6 +143,10 @@ std::string Booking::getEffectiveCheckOutDate() const {
 
 double Booking::getQuotedUnitPrice() const { return quotedUnitPrice; }
 void Booking::setQuotedUnitPrice(double value) { quotedUnitPrice = value; }
+double Booking::getQuotedHourlyRate() const { return quotedHourlyRate; }
+void Booking::setQuotedHourlyRate(double value) { quotedHourlyRate = value; }
+bool Booking::usesLegacyDateOnlySchedule() const { return legacyDateOnlySchedule; }
+void Booking::setLegacyDateOnlySchedule(bool value) { legacyDateOnlySchedule = value; }
 double Booking::getQuotedTaxRate() const { return quotedTaxRate; }
 void Booking::setQuotedTaxRate(double value) { quotedTaxRate = value; }
 

@@ -14,6 +14,10 @@ private:
     std::weak_ptr<Booking> booking;  // Weak reference to booking (owned by HotelManager)
     double taxRate;
     int nights;                      // Number of nights stayed (passed down from MainWindow)
+    // Modified: Retain future actual-duration billing facts while legacy invoices continue to use their immutable nightly totals.
+    long long actualDurationSeconds;
+    int billableHours;
+    bool legacyNightlyBilling;
     // Modified: This is the invoice issue date, not evidence that the balance has been paid.
     std::string invoiceIssuedDate;   // ISO date format string "YYYY-MM-DD"
     std::string paymentMethod;
@@ -21,6 +25,7 @@ private:
     std::string paymentReceivedDate;
     // Modified: Store immutable billing snapshots so completed invoices do not depend on mutable model records.
     double unitPrice;
+    double hourlyRoomRateSnapshot;
     std::string customerNameSnapshot;
     std::string customerIdSnapshot;
     std::string customerPhoneSnapshot;
@@ -28,6 +33,10 @@ private:
     std::string roomTypeSnapshot;
     std::string checkInDateSnapshot;
     std::string checkOutDateSnapshot;
+    std::string plannedCheckInAtSnapshot;
+    std::string plannedCheckOutAtSnapshot;
+    std::string actualCheckInAtSnapshot;
+    std::string actualCheckOutAtSnapshot;
 
 public:
     Invoice();
@@ -57,6 +66,12 @@ public:
     // Getters & Setters for the number of nights stayed
     int getNights() const;
     void setNights(int nights);
+    long long getActualDurationSeconds() const;
+    void setActualDurationSeconds(long long value);
+    int getBillableHours() const;
+    void setBillableHours(int value);
+    bool usesLegacyNightlyBilling() const;
+    void setLegacyNightlyBilling(bool value);
 
     std::string getInvoiceIssuedDate() const;
     void setInvoiceIssuedDate(const std::string& invoiceIssuedDate);
@@ -70,6 +85,8 @@ public:
 
     double getUnitPrice() const;
     void setUnitPrice(double value);
+    double getHourlyRoomRateSnapshot() const;
+    void setHourlyRoomRateSnapshot(double value);
     std::string getCustomerNameSnapshot() const;
     void setCustomerNameSnapshot(const std::string& value);
     std::string getCustomerIdSnapshot() const;
@@ -84,6 +101,14 @@ public:
     void setCheckInDateSnapshot(const std::string& value);
     std::string getCheckOutDateSnapshot() const;
     void setCheckOutDateSnapshot(const std::string& value);
+    std::string getPlannedCheckInAtSnapshot() const;
+    void setPlannedCheckInAtSnapshot(const std::string& value);
+    std::string getPlannedCheckOutAtSnapshot() const;
+    void setPlannedCheckOutAtSnapshot(const std::string& value);
+    std::string getActualCheckInAtSnapshot() const;
+    void setActualCheckInAtSnapshot(const std::string& value);
+    std::string getActualCheckOutAtSnapshot() const;
+    void setActualCheckOutAtSnapshot(const std::string& value);
 
     // Modified: Changed return type from QString to std::string to keep Core decoupled from Qt
     std::string generateInvoiceDetails() const;

@@ -153,7 +153,8 @@ void StatisticsPageWidget::setupTopChartsUI(QWidget* parent, QVBoxLayout* mainLa
 
     auto* barLayout = new QVBoxLayout();
     barLayout->setContentsMargins(0, 0, 0, 0);
-    barLayout->addWidget(createSectionHeader("📈 Montly Revenue", parent));
+    // Modified: Name finance charts after issued invoices so the statistical view does not imply planned-booking revenue.
+    barLayout->addWidget(createSectionHeader("📈 Monthly invoiced revenue", parent));
     auto* barChartView = new QChartView(m_barChart);
     barChartView->setRenderHint(QPainter::Antialiasing);
     barChartView->setStyleSheet("background-color: #FFFFFF; border-radius: 12px; border: 1px solid #E2E8F0;");
@@ -162,7 +163,7 @@ void StatisticsPageWidget::setupTopChartsUI(QWidget* parent, QVBoxLayout* mainLa
 
     auto* pieLayout = new QVBoxLayout();
     pieLayout->setContentsMargins(0, 0, 0, 0);
-    pieLayout->addWidget(createSectionHeader("🍩 Today's Revenue Structure", parent));
+    pieLayout->addWidget(createSectionHeader("🍩 Selected-period invoiced revenue structure", parent));
     auto* pieChartView = new QChartView(m_pieChart);
     pieChartView->setRenderHint(QPainter::Antialiasing);
     pieChartView->setStyleSheet("background-color: #FFFFFF; border-radius: 12px; border: 1px solid #E2E8F0;");
@@ -180,7 +181,7 @@ void StatisticsPageWidget::setupBottomChartsUI(QWidget* parent, QVBoxLayout* mai
 
     auto* dowLayout = new QVBoxLayout();
     dowLayout->setContentsMargins(0, 0, 0, 0);
-    dowLayout->addWidget(createSectionHeader("📅 Weekly Bookings Quantity", parent));
+    dowLayout->addWidget(createSectionHeader("📅 Weekly actual arrivals", parent));
     auto* dowChartView = new QChartView(m_dowChart);
     dowChartView->setRenderHint(QPainter::Antialiasing);
     dowChartView->setStyleSheet("background-color: #FFFFFF; border-radius: 12px; border: 1px solid #E2E8F0;");
@@ -189,7 +190,7 @@ void StatisticsPageWidget::setupBottomChartsUI(QWidget* parent, QVBoxLayout* mai
 
     auto* roomTypeLayout = new QVBoxLayout();
     roomTypeLayout->setContentsMargins(0, 0, 0, 0);
-    roomTypeLayout->addWidget(createSectionHeader("🛏️ Most Booked Rooms", parent));
+    roomTypeLayout->addWidget(createSectionHeader("🛏️ Room types by completed stay", parent));
     auto* roomTypeChartView = new QChartView(m_roomTypeChart);
     roomTypeChartView->setRenderHint(QPainter::Antialiasing);
     roomTypeChartView->setStyleSheet("background-color: #FFFFFF; border-radius: 12px; border: 1px solid #E2E8F0;");
@@ -216,19 +217,19 @@ void StatisticsPageWidget::setupUI() {
     mainLayout->setContentsMargins(20, 20, 20, 20);
     mainLayout->setSpacing(20);
 
-    // Tiêu đề trang
+    // Page title.
     auto* pageTitle = new QLabel("Invoice & Booking Statistics", scrollWidget);
     pageTitle->setStyleSheet("font-size: 24px; font-weight: 900; color: #2B3674;");
     mainLayout->addWidget(pageTitle);
 
-    // Khu vực Biểu đồ
+    // Chart area.
     setupCharts();
     setupTopChartsUI(scrollWidget, mainLayout);
     setupBottomChartsUI(scrollWidget, mainLayout);
 
     setupFilterBar(mainLayout);
 
-    // Khu vực Bảng dữ liệu (Bottom)
+    // Invoice table area.
     mainLayout->addWidget(createSectionHeader("📋 Invoice List", scrollWidget));
     setupTable();
     m_invoiceTable->setMinimumHeight(400);
@@ -239,14 +240,14 @@ void StatisticsPageWidget::setupUI() {
 }
 
 void StatisticsPageWidget::setupCharts() {
-    // --- Thiết lập Biểu đồ Cột ---
+    // Revenue bar chart.
     m_barChart = new QChart();
     // Modified: localize revenue-axis labels with comma-separated currency grouping.
     m_barChart->setLocale(QLocale(QLocale::English, QLocale::UnitedStates));
     m_barChart->setLocalizeNumbers(true);
     m_barSeries = new QBarSeries();
     m_barChart->addSeries(m_barSeries);
-    // Bỏ title mặc định của QChart vì đã dùng QLabel
+    // The section QLabel already supplies the title.
     m_barChart->setAnimationOptions(QChart::SeriesAnimations);
 
     m_barAxisX = new QBarCategoryAxis();
@@ -258,18 +259,18 @@ void StatisticsPageWidget::setupCharts() {
     m_barChart->legend()->setVisible(true);
     m_barChart->legend()->setAlignment(Qt::AlignBottom);
 
-    // --- Thiết lập Biểu đồ Tròn ---
+    // Selected-period revenue donut chart.
     m_pieChart = new QChart();
     m_pieSeries = new QPieSeries();
 
-    m_pieSeries->setHoleSize(0.45); // <--- Điểm nhấn làm thành Donut Chart rỗng ruột
+    m_pieSeries->setHoleSize(0.45); // Display a donut chart.
 
     m_pieChart->addSeries(m_pieSeries);
-    // Bỏ title mặc định của QChart vì đã dùng QLabel
+    // The section QLabel already supplies the title.
     m_pieChart->setAnimationOptions(QChart::SeriesAnimations);
     m_pieChart->legend()->setAlignment(Qt::AlignBottom);
 
-    // --- Thiết lập Biểu đồ Thứ ---
+    // Actual-arrival weekday chart.
     m_dowChart = new QChart();
     m_dowSeries = new QBarSeries();
     m_dowChart->addSeries(m_dowSeries);
@@ -281,9 +282,9 @@ void StatisticsPageWidget::setupCharts() {
     m_dowChart->addAxis(m_dowAxisY, Qt::AlignLeft);
     m_dowSeries->attachAxis(m_dowAxisX);
     m_dowSeries->attachAxis(m_dowAxisY);
-    m_dowChart->legend()->setVisible(false); // Không cần legend cho cột đơn giản
+    m_dowChart->legend()->setVisible(false); // A single series does not need a legend.
 
-    // --- Thiết lập Biểu đồ Loại Phòng ---
+    // Room-type distribution chart.
     m_roomTypeChart = new QChart();
     m_roomTypeSeries = new QPieSeries();
     m_roomTypeSeries->setHoleSize(0.45);
@@ -299,20 +300,20 @@ void StatisticsPageWidget::setupFilterBar(QVBoxLayout* parentLayout) {
     QString commonInputStyle = "background-color: #F4F7FE; border: 1px solid #E9EDF7; border-radius: 10px; padding: 8px 16px; font-size: 13px; color: #2B3674;";
     QString labelStyle = "color: #2B3674; font-size: 13px; font-weight: 600;";
 
-    // Ô tìm kiếm
+    // Search input.
     m_searchEdit = new QLineEdit(this);
     m_searchEdit->setPlaceholderText("Find Invoice ID, Booking...");
     m_searchEdit->setStyleSheet("QLineEdit { " + commonInputStyle + " min-width: 200px; }"
                                 "QLineEdit:focus { border: 1px solid #005BFE; }");
 
-    // Lọc theo khoảng giá
+    // Amount filter.
     m_amountFilter = new QComboBox(this);
     m_amountFilter->addItems({ "All Price Ranges", "Below 1,000,000 VND", "1,000,000 VND - 5,000,000 VND", "Above 5,000,000 VND" });
     m_amountFilter->setStyleSheet("QComboBox { " + commonInputStyle + " }"
                                   "QComboBox QAbstractItemView { background-color: #FFFFFF; color: #2B3674; selection-background-color: #005BFE; selection-color: #FFFFFF; border: 1px solid #E9EDF7; }");
 
-    // Lọc theo ngày
-    m_dateFrom = new QDateEdit(QDate::currentDate().addMonths(-1), this); // Mặc định từ 1 tháng trước
+    // Invoice issue-date filter.
+    m_dateFrom = new QDateEdit(QDate::currentDate().addMonths(-1), this); // Default to one month ago.
     m_dateFrom->setCalendarPopup(true);
     m_dateFrom->setStyleSheet("QDateEdit { " + commonInputStyle + " }");
     m_dateFrom->calendarWidget()->setStyleSheet(calendarPopupStyle);
@@ -342,17 +343,18 @@ void StatisticsPageWidget::setupFilterBar(QVBoxLayout* parentLayout) {
 
     parentLayout->addLayout(filterLayout);
 
-    // Kết nối sự kiện lọc
-    connect(m_searchEdit, &QLineEdit::textChanged, this, &StatisticsPageWidget::applyFilters);
-    connect(m_amountFilter, &QComboBox::currentIndexChanged, this, &StatisticsPageWidget::applyFilters);
-    connect(m_dateFrom, &QDateEdit::dateChanged, this, &StatisticsPageWidget::applyFilters);
-    connect(m_dateTo, &QDateEdit::dateChanged, this, &StatisticsPageWidget::applyFilters);
+    // Modified: Rebuild both invoice rows and charts from the same selected filter scope, avoiding a table/chart mismatch.
+    connect(m_searchEdit, &QLineEdit::textChanged, this, &StatisticsPageWidget::refreshData);
+    connect(m_amountFilter, &QComboBox::currentIndexChanged, this, &StatisticsPageWidget::refreshData);
+    connect(m_dateFrom, &QDateEdit::dateChanged, this, &StatisticsPageWidget::refreshData);
+    connect(m_dateTo, &QDateEdit::dateChanged, this, &StatisticsPageWidget::refreshData);
 }
 
 void StatisticsPageWidget::setupTable() {
     m_invoiceTable = new QTableWidget(this);
-    m_invoiceTable->setColumnCount(7); // Thêm cột thứ 7 cho nút Hành động
-    m_invoiceTable->setHorizontalHeaderLabels({ "Invoice ID", "Booking ID", "Payment Date", "Room Charge", "Service Charge", "Total Amount", "Actions" });
+    m_invoiceTable->setColumnCount(7); // Include the action column.
+    // Modified: Present invoice issue time, because revenue statistics are based on issued invoices rather than payment-settlement timing.
+    m_invoiceTable->setHorizontalHeaderLabels({ "Invoice ID", "Booking ID", "Invoice Issued", "Room Charge", "Service Charge", "Total Amount", "Actions" });
 
     for (int i = 0; i < 6; ++i) {
         m_invoiceTable->horizontalHeader()->setSectionResizeMode(i, QHeaderView::Stretch);
@@ -360,8 +362,8 @@ void StatisticsPageWidget::setupTable() {
     m_invoiceTable->horizontalHeader()->setSectionResizeMode(6, QHeaderView::Fixed);
     m_invoiceTable->setColumnWidth(6, 100);
 
-    m_invoiceTable->verticalHeader()->setVisible(false); // Xóa cột số thứ tự màu đen bên trái
-    m_invoiceTable->verticalHeader()->setDefaultSectionSize(42); // Đặt kích cỡ dòng giống bên Reservations
+    m_invoiceTable->verticalHeader()->setVisible(false); // Hide the row-number header.
+    m_invoiceTable->verticalHeader()->setDefaultSectionSize(42); // Match reservation row height.
     m_invoiceTable->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_invoiceTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_invoiceTable->setStyleSheet(
@@ -384,44 +386,72 @@ void StatisticsPageWidget::refreshData() {
     for (int i = 1; i <= 7; ++i) dowCount[i] = 0;
     std::map<QString, int> roomTypeCount;
 
-    double todayRoomFee = 0.0;
-    double todayServiceFee = 0.0;
-    QString todayStr = QDate::currentDate().toString("yyyy-MM-dd");
+    double filteredRoomFee = 0.0;
+    double filteredServiceFee = 0.0;
+    const QString searchText = m_searchEdit->text().trimmed().toLower();
+    const int amountFilter = m_amountFilter->currentIndex();
+    const QDate fromDate = m_dateFrom->date();
+    const QDate toDate = m_dateTo->date();
 
     for (const auto& inv : invoices) {
         if (!inv) continue;
 
         QString invId = QString::fromStdString(inv->getInvoiceId());
         QString bookId = QString::fromStdString(inv->getBookingId());
-        QString payDate = QString::fromStdString(inv->getPaymentReceivedDate());
+        // Modified: Aggregate finance by the immutable invoice issue date so charts never treat planned reservations as revenue.
+        QString payDate = QString::fromStdString(inv->getInvoiceIssuedDate());
+        if (payDate.isEmpty()) {
+            payDate = QString::fromStdString(inv->getPaymentReceivedDate());
+        }
+        const QDate issuedDate = QDate::fromString(payDate, Qt::ISODate);
+        const double totalAmount = inv->calculateTotal();
+        const bool matchesSearch = searchText.isEmpty()
+            || invId.toLower().contains(searchText) || bookId.toLower().contains(searchText);
+        const bool matchesAmount = amountFilter == 0
+            || (amountFilter == 1 && totalAmount < 1000000)
+            || (amountFilter == 2 && totalAmount >= 1000000 && totalAmount <= 5000000)
+            || (amountFilter == 3 && totalAmount > 5000000);
+        // Modified: Treat an invalid selected range or invoice date as out of scope instead of displaying inconsistent table and chart data.
+        const bool matchesDate = issuedDate.isValid() && fromDate <= toDate
+            && issuedDate >= fromDate && issuedDate <= toDate;
+        if (!matchesSearch || !matchesAmount || !matchesDate) {
+            continue;
+        }
 
-        double roomCharge = 0.0;
+        // Modified: Use Invoice's immutable subtotal so time-based bills show their rounded hourly room charge instead of the retired nights × unit-price calculation.
+        double roomCharge = inv->calculateSubtotal();
         double serviceCharge = 0.0;
 
         auto lockedBooking = inv->getBooking();
-        if (lockedBooking) {
-            QDate checkIn = QDate::fromString(QString::fromStdString(lockedBooking->getCheckInDate()), "yyyy-MM-dd");
-            if (checkIn.isValid()) {
-                dowCount[checkIn.dayOfWeek()]++;
-            }
-
-            auto lockedRoom = lockedBooking->getRoom();
-            if (lockedRoom) {
-                roomCharge = inv->getNights() * inv->getUnitPrice();
-                QString rType = "Standard";
-                if (lockedRoom->getRoomTypeName() == "Deluxe") rType = "Deluxe";
-                else if (lockedRoom->getRoomTypeName() == "Suite") rType = "Suite";
-                roomTypeCount[rType]++;
+        // Modified: Weekly arrival statistics use the invoice's actual check-in snapshot, avoiding planned-date inflation.
+        QDateTime actualCheckIn = QDateTime::fromString(
+            QString::fromStdString(inv->getActualCheckInAtSnapshot()), Qt::ISODateWithMs);
+        if (!actualCheckIn.isValid() && lockedBooking) {
+            actualCheckIn = QDateTime::fromString(
+                QString::fromStdString(lockedBooking->getActualCheckInAt()), Qt::ISODateWithMs);
+            if (!actualCheckIn.isValid()) {
+                actualCheckIn = QDateTime(
+                    QDate::fromString(QString::fromStdString(lockedBooking->getActualCheckInDate()), Qt::ISODate),
+                    QTime(0, 0));
             }
         }
+        if (actualCheckIn.isValid()) {
+            dowCount[actualCheckIn.date().dayOfWeek()]++;
+        }
 
-        double totalAmount = inv->calculateTotal();
+        // Modified: Prefer the immutable room-type snapshot so historic chart data cannot change after a room is edited or archived.
+        QString roomType = QString::fromStdString(inv->getRoomTypeSnapshot()).trimmed();
+        if (roomType.isEmpty() && lockedBooking && lockedBooking->getRoom()) {
+            roomType = QString::fromStdString(lockedBooking->getRoom()->getRoomTypeName());
+        }
+        if (!roomType.isEmpty()) {
+            roomTypeCount[roomType]++;
+        }
 
-        // Thêm vào bảng
+        // Modified: The table and every chart below now use exactly the same filtered invoice set.
         int row = m_invoiceTable->rowCount();
         m_invoiceTable->insertRow(row);
 
-        // Căn giữa text cho đẹp
         auto createCenteredItem = [](const QString& text) {
             auto* item = new QTableWidgetItem(text);
             item->setTextAlignment(Qt::AlignCenter);
@@ -435,16 +465,13 @@ void StatisticsPageWidget::refreshData() {
         m_invoiceTable->setItem(row, 3, createCenteredItem(formatMoney(roomCharge) + " VND"));
         m_invoiceTable->setItem(row, 4, createCenteredItem(formatMoney(serviceCharge) + " VND"));
 
-        // Lưu giá trị số thực vào cột tổng cộng để lát nữa bộ lọc tính toán dễ hơn
         auto* totalItem = createCenteredItem(formatMoney(totalAmount) + " VND");
-        totalItem->setData(Qt::UserRole, totalAmount); // Lưu ngầm data dạng số
+        totalItem->setData(Qt::UserRole, totalAmount);
         m_invoiceTable->setItem(row, 5, totalItem);
 
-        // Nhúng nút vào bảng
         QWidget* widgetContainer = new QWidget();
         QHBoxLayout* layout = new QHBoxLayout(widgetContainer);
 
-        // Tạo nút "Xem Hóa Đơn"
         QPushButton* btnView = new QPushButton("💳", widgetContainer);
         btnView->setToolTip(QString());
         auto* tooltipFilter = new InvoiceActionTooltipFilter(
@@ -464,7 +491,6 @@ void StatisticsPageWidget::refreshData() {
             "}"
         );
 
-        // Bắt sự kiện nút bấm truyền id hóa đơn
         connect(btnView, &QPushButton::clicked, this, [this, invId]() {
             this->onViewInvoiceClicked(invId);
             });
@@ -476,19 +502,13 @@ void StatisticsPageWidget::refreshData() {
         layout->setContentsMargins(0, 0, 0, 0);
         m_invoiceTable->setCellWidget(row, 6, widgetContainer);
 
-        // Tính toán biểu đồ
-        QDate date = QDate::fromString(payDate, "yyyy-MM-dd");
-        if (date.isValid() && date.year() == QDate::currentDate().year()) {
-            monthlyRevenue[date.month()] += totalAmount;
+        if (issuedDate.year() == QDate::currentDate().year()) {
+            monthlyRevenue[issuedDate.month()] += totalAmount;
         }
-        if (payDate == todayStr) {
-            todayRoomFee += roomCharge;
-            todayServiceFee += serviceCharge;
-        }
+        filteredRoomFee += roomCharge;
+        filteredServiceFee += serviceCharge;
     }
 
-    // (Code cập nhật 2 Biểu đồ m_barSeries và m_pieSeries giữ y chang như phiên bản trước)
-    // ...
     m_barSeries->clear();
     m_barAxisX->clear();
     QBarSet* revSet = new QBarSet("Revenue (VNĐ)");
@@ -506,15 +526,15 @@ void StatisticsPageWidget::refreshData() {
     m_barAxisY->setRange(0, maxVal + (maxVal * 0.1));
 
     m_pieSeries->clear();
-    if (todayRoomFee > 0 || todayServiceFee > 0) {
-        auto* roomFeeSlice = m_pieSeries->append("Room Fee", todayRoomFee);
+    if (filteredRoomFee > 0 || filteredServiceFee > 0) {
+        auto* roomFeeSlice = m_pieSeries->append("Room Fee", filteredRoomFee);
         roomFeeSlice->setColor(QColor("#05CD99"));
         roomFeeSlice->setLabel(QString("Room Fee: %1 VND")
-            .arg(formatMoney(todayRoomFee)));
-        auto* serviceFeeSlice = m_pieSeries->append("Service Fee", todayServiceFee);
+            .arg(formatMoney(filteredRoomFee)));
+        auto* serviceFeeSlice = m_pieSeries->append("Service Fee", filteredServiceFee);
         serviceFeeSlice->setColor(QColor("#F59E0B"));
         serviceFeeSlice->setLabel(QString("Service Fee: %1 VND")
-            .arg(formatMoney(todayServiceFee)));
+            .arg(formatMoney(filteredServiceFee)));
         for (auto slice : m_pieSeries->slices()) {
             slice->setLabelVisible(true);
             slice->setLabelPosition(QPieSlice::LabelOutside);
@@ -524,11 +544,11 @@ void StatisticsPageWidget::refreshData() {
         m_pieSeries->append("No Data Available", 1)->setColor(QColor("#E2E8F0"));
     }
 
-    // --- Cập nhật Biểu đồ Thứ ---
+    // Update actual-arrival weekday chart.
     m_dowSeries->clear();
     m_dowAxisX->clear();
     QBarSet* dowSet = new QBarSet("Bookings");
-    dowSet->setColor(QColor("#8B5CF6")); // Tím
+    dowSet->setColor(QColor("#8B5CF6")); // Purple.
     QStringList days = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"};
     int maxDow = 0;
     for (int i = 1; i <= 7; ++i) {
@@ -541,7 +561,7 @@ void StatisticsPageWidget::refreshData() {
     m_dowAxisY->setRange(0, maxDow + (maxDow * 0.2));
     m_dowAxisY->setLabelFormat("%d");
 
-    // --- Cập nhật Biểu đồ Loại Phòng ---
+    // Update room-type distribution chart.
     m_roomTypeSeries->clear();
     if (!roomTypeCount.empty()) {
         QList<QColor> colors = {QColor("#EF4444"), QColor("#3B82F6"), QColor("#10B981"), QColor("#F59E0B"), QColor("#6366F1"), QColor("#EC4899")};
@@ -557,51 +577,24 @@ void StatisticsPageWidget::refreshData() {
         m_roomTypeSeries->append("No Data Available", 1)->setColor(QColor("#E2E8F0"));
     }
 
-    applyFilters();
 }
 
 void StatisticsPageWidget::applyFilters() {
-    QString searchTxt = m_searchEdit->text().toLower();
-    int amountIdx = m_amountFilter->currentIndex();
-    QDate fromDate = m_dateFrom->date();
-    QDate toDate = m_dateTo->date();
-
-    for (int row = 0; row < m_invoiceTable->rowCount(); ++row) {
-        bool match = true;
-
-        QString invId = m_invoiceTable->item(row, 0)->text().toLower();
-        QString bookId = m_invoiceTable->item(row, 1)->text().toLower();
-        if (!searchTxt.isEmpty() && !invId.contains(searchTxt) && !bookId.contains(searchTxt)) {
-            match = false;
-        }
-
-        double totalAmount = m_invoiceTable->item(row, 5)->data(Qt::UserRole).toDouble();
-        if (amountIdx == 1 && totalAmount >= 1000000) match = false; // Dưới 1tr
-        if (amountIdx == 2 && (totalAmount < 1000000 || totalAmount > 5000000)) match = false; // 1tr - 5tr
-        if (amountIdx == 3 && totalAmount <= 5000000) match = false; // Trên 5tr
-
-        // 3. Lọc Ngày tháng
-        QDate payDate = QDate::fromString(m_invoiceTable->item(row, 2)->text(), "yyyy-MM-dd");
-        if (payDate.isValid() && (payDate < fromDate || payDate > toDate)) {
-            match = false;
-        }
-
-        // Hiện/Ẩn dòng dựa trên kết quả lọc
-        m_invoiceTable->setRowHidden(row, !match);
-    }
+    // Modified: Keep this compatibility slot, but refresh the complete presentation so filters never update only table rows.
+    refreshData();
 }
 
 void StatisticsPageWidget::onViewInvoiceClicked(const QString& invoiceId) {
     if (!m_manager) return;
 
-    // Tìm hóa đơn thật trong Backend
+    // Resolve the canonical invoice from the backend.
     auto invoices = m_manager->getInvoices();
     for (const auto& inv : invoices) {
         if (inv && QString::fromStdString(inv->getInvoiceId()) == invoiceId) {
-            // Lấy chuỗi HTML chi tiết từ class Invoice của bạn
+            // Use the invoice's immutable HTML snapshot.
             std::string detailsHTML = inv->generateInvoiceDetails();
 
-            // Hiển thị lên InvoiceDialog giống như khi check-out
+            // Present the same read-only invoice view used after checkout.
             InvoiceDialog dialog(QString::fromStdString(detailsHTML), this);
             dialog.exec();
             return;

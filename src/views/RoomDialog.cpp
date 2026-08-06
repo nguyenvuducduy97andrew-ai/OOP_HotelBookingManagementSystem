@@ -1,4 +1,5 @@
 #include "RoomDialog.h"
+#include "DialogWindowBehavior.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QFormLayout>
@@ -132,9 +133,13 @@ RoomDialog::RoomDialog(const QString& roomNum, double basePrice, RoomType type, 
 }
 
 void setupDialogStyle(QDialog* dialog) {
+    // Modified: Use opaque in-app room dialog chrome instead of the platform-dark title bar.
+    dialog->setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint);
     dialog->setStyleSheet(R"(
         QDialog {
-            background-color: #FFFFFF;
+            background-color: #EFF6FF;
+            border: 2px solid #93C5FD;
+            border-radius: 18px;
         }
         QCheckBox {
             font-size: 13px;
@@ -145,6 +150,8 @@ void setupDialogStyle(QDialog* dialog) {
             font-size: 13px;
             color: #2B3674;
             font-weight: 600;
+            background: transparent;
+            border: none;
         }
         QLineEdit, QComboBox, QDoubleSpinBox, QSpinBox, QDateEdit, QTextEdit {
             background-color: #F4F7FE;
@@ -250,30 +257,63 @@ void setupDialogStyle(QDialog* dialog) {
         QPushButton#btnAddAmenity:hover {
             background-color: #2B7BFF;
         }
+        QLabel#roomDialogTitle {
+            font-size: 20px;
+            font-weight: 800;
+            color: #1B3F83;
+        }
+        QFrame#roomDialogHeader { background:#FFFFFF; border:none; border-bottom:1px solid #E7EDF7; border-top-left-radius:13px; border-top-right-radius:13px; }
+        QPushButton#roomDialogClose { background:transparent; color:#64748B; border:none; border-radius:8px; font-size:20px; }
+        QPushButton#roomDialogClose:hover { background:#F1F5F9; color:#1B3F83; }
     )");
 }
 
 void RoomDialog::setupUI() {
     setupDialogStyle(this);
-    setMinimumWidth(700); // Make dialog wider horizontally
+    // Modified: Keep room editing inside the application work area; scrolling belongs to the content rather than a resizable outer window.
+    lockDialogToWorkingArea(this, QSize(760, 650));
 
     auto* mainLayout = new QVBoxLayout(this);
-    mainLayout->setContentsMargins(0, 0, 0, 0);
+    // Modified: Leave a light-blue perimeter visible around the Room dialog header and scrollable surface.
+    mainLayout->setContentsMargins(3, 3, 3, 3);
     mainLayout->setSpacing(0);
+
+    auto* header = new QFrame(this);
+    header->setObjectName("roomDialogHeader");
+    header->setFixedHeight(52);
+    auto* headerLayout = new QHBoxLayout(header);
+    headerLayout->setContentsMargins(24, 0, 12, 0);
+    // Modified: Use an unmistakable pencil icon when editing an existing room instead of reusing the room/add icon.
+    auto* roomDialogIcon = new QLabel(m_isEditMode ? "✎" : "⌂", header);
+    roomDialogIcon->setStyleSheet("color:#005BFE; font-size:18px; background:transparent; border:none;");
+    auto* roomDialogTitle = new QLabel(m_isEditMode ? "Edit room" : "Add a new room", header);
+    roomDialogTitle->setObjectName("roomDialogTitle");
+    auto* roomDialogClose = new QPushButton("×", header);
+    roomDialogClose->setObjectName("roomDialogClose");
+    roomDialogClose->setFixedSize(30, 30);
+    headerLayout->addWidget(roomDialogIcon);
+    headerLayout->addSpacing(8);
+    headerLayout->addWidget(roomDialogTitle);
+    headerLayout->addStretch();
+    headerLayout->addWidget(roomDialogClose);
+    connect(roomDialogClose, &QPushButton::clicked, this, &QDialog::reject);
+    enableDialogHeaderDrag(this, header);
+    mainLayout->addWidget(header);
     
     QScrollArea* mainScrollArea = new QScrollArea(this);
     mainScrollArea->setWidgetResizable(true);
     mainScrollArea->setFrameShape(QFrame::NoFrame);
-    mainScrollArea->setStyleSheet("QScrollArea { background-color: transparent; border: none; }");
+    mainScrollArea->setStyleSheet("QScrollArea { background-color: #FFFFFF; border: none; }");
     
     QWidget* scrollContentWidget = new QWidget(mainScrollArea);
     scrollContentWidget->setObjectName("scrollContent");
-    scrollContentWidget->setStyleSheet("QWidget#scrollContent { background-color: transparent; }");
+    scrollContentWidget->setStyleSheet("QWidget#scrollContent { background-color: #FFFFFF; }");
     mainScrollArea->setWidget(scrollContentWidget);
 
     auto* formLayout = new QFormLayout(scrollContentWidget);
     formLayout->setContentsMargins(24, 24, 24, 8);
     formLayout->setSpacing(12);
+
 
     m_roomNumberEdit = new QLineEdit(this);
     m_roomNumberEdit->setPlaceholderText("Example: 101, 302");
@@ -289,7 +329,9 @@ void RoomDialog::setupUI() {
     m_basePriceSpin->setDecimals(0);
     m_basePriceSpin->setLocale(moneyLocale);
     m_basePriceSpin->setGroupSeparatorShown(true);
-    formLayout->addRow("Base Price (per night):", m_basePriceSpin);
+    m_basePriceSpin->setProperty("allowMouseWheelValueChange", true);
+    // Modified: Present the room rate as an hourly rate because timestamp invoices bill actual elapsed stay time in rounded hours.
+    formLayout->addRow("Base Price (per hour):", m_basePriceSpin);
 
     m_typeCombo = new QComboBox(this);
     m_typeCombo->addItems({"Standard", "Deluxe", "Suite"});
@@ -307,9 +349,9 @@ void RoomDialog::setupUI() {
     m_maintenanceStartDateEdit->setDisplayFormat("dd MMM yyyy");
     formLayout->addRow(m_maintenanceStartLabel, m_maintenanceStartDateEdit);
 
-    m_maintenanceEndLabel = new QLabel("Available again on:", this);
-    m_maintenanceEndDateEdit = new QDateEdit(QDate::currentDate().addDays(1), this);
-    m_maintenanceEndDateEdit->setMinimumDate(QDate::currentDate().addDays(1));
+    m_maintenanceEndLabel = new QLabel("Maintenance ends:", this);
+    m_maintenanceEndDateEdit = new QDateEdit(QDate::currentDate(), this);
+    m_maintenanceEndDateEdit->setMinimumDate(QDate::currentDate());
     m_maintenanceEndDateEdit->setCalendarPopup(true);
     m_maintenanceEndDateEdit->setDisplayFormat("dd MMM yyyy");
     formLayout->addRow(m_maintenanceEndLabel, m_maintenanceEndDateEdit);
@@ -344,6 +386,7 @@ void RoomDialog::setupUI() {
     m_extraFeeSpin->setDecimals(0);
     m_extraFeeSpin->setLocale(moneyLocale);
     m_extraFeeSpin->setGroupSeparatorShown(true);
+    m_extraFeeSpin->setProperty("allowMouseWheelValueChange", true);
     formLayout->addRow(m_extraFeeLabel, m_extraFeeSpin);
 
     m_areaSpin = new QDoubleSpinBox(this);
@@ -408,10 +451,10 @@ void RoomDialog::setupUI() {
     m_deleteAmenityBtn->setStyleSheet("QPushButton { background-color: #FEE2E2; color: #DC2626; border-radius: 8px; padding: 6px 12px; font-weight: bold; } QPushButton:hover { background-color: #FCA5A5; }");
     m_resetAmenityBtn->setStyleSheet("QPushButton { background-color: #F1F5F9; color: #475569; border-radius: 8px; padding: 6px 12px; font-weight: bold; } QPushButton:hover { background-color: #E2E8F0; }");
     
+    // Modified: Amenities are direct toggles; a separate Choose action made selection ambiguous and added an unnecessary step.
     m_chooseAmenityBtn->setVisible(false);
     m_deleteAmenityBtn->setVisible(false);
     
-    actionsLayout->addWidget(m_chooseAmenityBtn);
     actionsLayout->addWidget(m_deleteAmenityBtn);
     actionsLayout->addWidget(m_resetAmenityBtn);
     
@@ -448,6 +491,13 @@ void RoomDialog::setupUI() {
 
     connect(m_typeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &RoomDialog::onTypeChanged);
     connect(m_availabilityCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &RoomDialog::onStatusChanged);
+    connect(m_maintenanceStartDateEdit, &QDateEdit::dateChanged, this, [this](const QDate& startDate) {
+        // Modified: Keep the inclusive full-day Maintenance end date selectable from its start date onward.
+        m_maintenanceEndDateEdit->setMinimumDate(startDate);
+        if (m_maintenanceEndDateEdit->date() < startDate) {
+            m_maintenanceEndDateEdit->setDate(startDate);
+        }
+    });
     connect(m_cancelMaintenanceBtn, &QPushButton::clicked, this, &RoomDialog::markSelectedMaintenanceForCancellation);
     connect(m_confirmMaintenanceBtn, &QPushButton::clicked, this, &RoomDialog::markSelectedMaintenanceForConfirmation);
     connect(m_addAmenityBtn, &QPushButton::clicked, this, &RoomDialog::onAddCustomAmenity);
@@ -457,13 +507,6 @@ void RoomDialog::setupUI() {
     });
     connect(cancelBtn, &QPushButton::clicked, this, &QDialog::reject);
     connect(saveBtn, &QPushButton::clicked, this, &RoomDialog::onAccept);
-    
-    connect(m_chooseAmenityBtn, &QPushButton::clicked, this, [this]() {
-        if (m_activeAmenity) {
-            m_activeAmenity->setChosen(!m_activeAmenity->isChosen());
-            m_chooseAmenityBtn->setText(m_activeAmenity->isChosen() ? "Unchoose" : "Choose");
-        }
-    });
     
     connect(m_deleteAmenityBtn, &QPushButton::clicked, this, [this]() {
         if (m_activeAmenity) {
@@ -477,6 +520,7 @@ void RoomDialog::setupUI() {
     
     connect(m_resetAmenityBtn, &QPushButton::clicked, this, &RoomDialog::resetAmenities);
     
+    disableNonMoneyWheelChanges(this);
     onStatusChanged(m_availabilityCombo->currentIndex());
 }
 
@@ -527,8 +571,9 @@ void RoomDialog::onAccept() {
         QMessageBox::warning(this, "Invalid value", "Please enter a room price greater than 0.");
         return;
     }
-    if (shouldScheduleMaintenance() && m_maintenanceEndDateEdit->date() <= m_maintenanceStartDateEdit->date()) {
-        QMessageBox::warning(this, "Invalid maintenance dates", "The date the room becomes available again must be after the maintenance start date.");
+    if (shouldScheduleMaintenance() && m_maintenanceEndDateEdit->date() < m_maintenanceStartDateEdit->date()) {
+        // Modified: Permit a one-day Maintenance case while preserving the selected end day as fully unavailable.
+        QMessageBox::warning(this, "Invalid maintenance dates", "Maintenance cannot end before its start date.");
         return;
     }
     if ((!m_maintenanceIdToCancel.isEmpty() || !m_maintenanceIdToConfirm.isEmpty()) && shouldScheduleMaintenance()) {
@@ -595,10 +640,14 @@ void RoomDialog::setExistingMaintenanceSchedules(const std::vector<RoomMaintenan
                 ++noticeCount;
             }
         }
+        const QDate exclusiveEnd = QDate::fromString(QString::fromStdString(maintenance.getEndDate()), Qt::ISODate);
+        const QString inclusiveEnd = exclusiveEnd.isValid()
+            ? exclusiveEnd.addDays(-1).toString(Qt::ISODate)
+            : QString::fromStdString(maintenance.getEndDate());
         QString label = QString("%1 | %2 to %3")
             .arg(QString::fromStdString(maintenance.getStatus()))
             .arg(QString::fromStdString(maintenance.getStartDate()))
-            .arg(QString::fromStdString(maintenance.getEndDate()));
+            .arg(inclusiveEnd);
         if (noticeCount > 0) {
             // Modified: render maintenance-notice counts with a real singular or plural booking label.
             label += QString(" | Simulated email logged for %1 %2")
@@ -699,7 +748,6 @@ void RoomDialog::populateAmenities(const QStringList& amenities, bool checkAll) 
     }
     m_amenityButtons.clear();
     m_activeAmenity = nullptr;
-    m_chooseAmenityBtn->setVisible(false);
     m_deleteAmenityBtn->setVisible(false);
 
     // Rebuild grid (now with flow-like wrapping but we will just use grid 3 columns)
@@ -715,21 +763,14 @@ void RoomDialog::populateAmenities(const QStringList& amenities, bool checkAll) 
         m_amenityButtons.insert(am, btn);
 
         connect(btn, &QPushButton::clicked, this, [this, btn]() {
-            if (m_activeAmenity == btn) {
-                // Toggle off
-                m_activeAmenity->setActive(false);
-                m_activeAmenity = nullptr;
-                m_chooseAmenityBtn->setVisible(false);
-                m_deleteAmenityBtn->setVisible(false);
-                return;
-            }
-            if (m_activeAmenity) {
+            // Modified: Clicking an amenity now selects it and clicking again clears it, matching normal multi-select controls.
+            btn->setChosen(!btn->isChosen());
+            if (m_activeAmenity && m_activeAmenity != btn) {
                 m_activeAmenity->setActive(false);
             }
             m_activeAmenity = btn;
-            m_activeAmenity->setActive(true);
-            m_chooseAmenityBtn->setText(m_activeAmenity->isChosen() ? "Unchoose" : "Choose");
-            m_chooseAmenityBtn->setVisible(true);
+            btn->setActive(true);
+            // Deleting an amenity is only an editing aid; it is no longer part of the choose/unchoose interaction.
             m_deleteAmenityBtn->setVisible(true);
         });
 

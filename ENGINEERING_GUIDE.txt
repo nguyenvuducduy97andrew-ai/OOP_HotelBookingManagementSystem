@@ -10,10 +10,18 @@ ARCHITECTURE.md, and DATABASE_GUIDE.md.
 
 The application is a Qt 6 desktop system using C++17 and SQLite. It manages
 rooms, customers, reservations, maintenance, checkout, invoices, dashboards,
-PDF reporting, staff sign-in context, and transactional snapshot persistence.
+PDF reporting, staff sign-in context, and transactional upsert persistence.
 
 The refactor was structural. Existing validation order, error messages, model
 semantics, database schema, and view workflows are intended to remain stable.
+
+Time-based operations are now authoritative. Planned booking timestamps use hourly
+slots; actual check-in and checkout timestamps use seconds; invoices round actual
+duration half-up to billable hours with a one-hour minimum. A completed checkout
+creates a two-hour Cleaning block. Confirmed Maintenance and Cleaning reduce
+saleable report capacity, while an awaiting Maintenance case is a soft scheduling
+hold only. Do not reintroduce nightly calculations or a separate no-show state:
+a missed arrival is a cancelled booking with an explanatory reason.
 
 
 2. PROJECT MAP
@@ -41,7 +49,7 @@ src/controllers/report/
 
 src/database/
     DataManager singleton: SQLite schema, migration, staged load, revision
-    checking, full-snapshot save, rollback, and recovery.
+    checking, transactional upsert persistence, rollback, and recovery.
 
 src/views/
     Qt widgets, dialogs, navigation, dashboard, Statistics visualization,
@@ -139,7 +147,7 @@ and unfinished-booking checks before destructive or archival commands.
 
 BookingManager owns booking and invoice behavior:
 - booking creation/update from canonical Customer and Room pointers;
-- lifecycle state, check-in, checkout, cancellation, and no-show;
+- lifecycle state, check-in, checkout, and cancellation (including a missed-arrival reason);
 - arrivals, departures, status filters, and history queries;
 - room overlap and excluded-booking checks;
 - date-range availability using rooms/maintenance passed per call;
@@ -168,14 +176,26 @@ exclusion.
 5.2 Availability
 
 BookingManager is the only date-range availability authority. ReservationDialog
-and RoomStatusPageWidget call HotelManager::getAvailableRoomsForDates().
+and RoomStatusPageWidget call HotelManager::getAvailableRoomsForPeriod().
+
+The view sequence is RoomStatusPageWidget -> RoomInfoDialog -> MainWindow ->
+ReservationDialog. A card click never creates or edits a booking. It opens the
+read-only room review only after the selected timestamp/capacity remains valid.
+RoomInfoDialog accepts only through Booking; its Cancel/close path must not emit
+bookingRequested. ReservationDialog performs the final authoritative validation.
+
+SchedulePickerDialog is the shared timestamp-entry component. In Check-in mode,
+each date/hour click replaces the arrival and resets provisional checkout to one
+hour later. It never retains a stale checkout to infer a range. Check-out becomes
+editable only after the user selects Check-out mode. The calendar hides week
+numbers and the hour surface is a centered 6 x 4 grid containing all 24 slots.
 
 Overlap uses half-open intervals:
 
     requestedCheckIn < existingCheckOut
     && existingCheckIn < requestedCheckOut
 
-Cancelled, deleted, completed, and no-show records do not block. An active stay
+Cancelled, deleted, and completed records do not block. An active stay
 blocks a request covering today until checkout. Maintenance uses the same interval
 semantics and only blocks its associated room.
 
@@ -196,8 +216,8 @@ the existing rejection messages.
 
 Checkout changes booking lifecycle state. Invoice creation remains a separate
 command. BookingManager enforces completed state, uniqueness, valid issue/payment
-dates, locked rate/tax, actual stay nights, payment limits, and immutable customer,
-room, and stay snapshots.
+timestamps, locked hourly rate/tax, actual elapsed seconds, rounded billable hours,
+payment limits, and immutable customer, room, and stay snapshots.
 
 
 6. MODEL RULES
@@ -220,11 +240,10 @@ improves feedback; CustomerManager remains authoritative.
 Booking persists planned dates, actual dates, checked-in/out facts, cancellation
 facts, occupancy, locked pricing/tax, and audit timestamps. BookingState is derived:
 
-1. cancellation reason begins with "No-show:" -> NO_SHOW
-2. cancelled -> CANCELLED
-3. checked out -> COMPLETED
-4. checked in -> ACTIVE
-5. otherwise -> UPCOMING
+1. cancelled -> CANCELLED (the reason may explain a missed arrival)
+2. checked out -> COMPLETED
+3. checked in -> ACTIVE
+4. otherwise -> UPCOMING
 
 6.4 Invoice
 
@@ -256,9 +275,11 @@ Invalid input leaves live state unchanged.
 
 7.2 Save and recovery
 
-saveAll writes one complete snapshot inside one SQLite transaction. DataVersion
-prevents a stale process from overwriting a newer snapshot. Any SQL failure rolls
-back. commitChanges restores the last committed database snapshot if saving fails.
+saveAll writes the canonical records with INSERT-or-UPDATE statements and deletes
+only records that are absent from their canonical collections, all inside one
+SQLite transaction. DataVersion prevents a stale process from overwriting a newer
+revision. Any SQL failure rolls back. commitChanges restores the last committed
+database state if saving fails.
 
 Keep schema, migration, load order, save order, revision handling, and rollback
 behavior synchronized whenever persistence changes.
@@ -276,6 +297,19 @@ HotelManager, constructs chart series and invoice filters locally, and opens
 InvoiceDialog for details. Keep business mutations in HotelManager commands and
 refresh Statistics after booking or checkout changes that affect its source data.
 
+DialogWindowBehavior.h is a view-only presentation helper. It centralizes three
+contracts for custom dialogs:
+- fixed geometry bounded by the owner window or available screen;
+- dragging through an explicit custom header; and
+- suppression of mouse-wheel value changes for non-monetary combo/spin inputs.
+
+Price and fee widgets that intentionally support wheel adjustment set the
+allowMouseWheelValueChange property before disableNonMoneyWheelChanges() runs.
+Do not mark dates, times, occupancy, room measurements, lifecycle selectors, or
+identity selectors as monetary. Custom dialog surfaces remain opaque, use the
+light-blue perimeter around the entire title/content surface, and keep header
+corner styling consistent.
+
 
 
 9. CHANGE CHECKLIST
@@ -292,6 +326,7 @@ Before changing a controller workflow:
 [ ] Verify canonical pointer identity after load.
 [ ] Confirm views and ReportService still use HotelManager only.
 [ ] Run Debug and Release builds.
+[ ] Run `ctest --test-dir build --output-on-failure` with `BUILD_TESTING=ON`.
 [ ] Run git diff --check.
 
 When adding a field:
@@ -303,7 +338,33 @@ When adding a field:
 [ ] Update reporting and documentation where relevant.
 
 
-10. PROHIBITED REGRESSIONS
+10. BUSINESS TEST SUITE
+-----------------------
+
+`tests/BusinessWorkflowTests.cpp` is a headless CTest runner. It covers same-day
+and overnight bookings, exact adjacent turnover, Cleaning/early-ready, full-day
+Maintenance, early check-in/checkout, 29/30/31-minute half-up rounding, room
+changes, self-excluding edits, cancellation, customer reuse/new-customer rollback,
+locked base rates after later room/optional-fee edits, and legacy SQLite migration. It creates only a temporary legacy
+database and never touches `data/hotel_data.db`.
+
+Run it after configuring CMake with `-DBUILD_TESTING=ON`:
+
+    cmake --build build --target HotelBookingManagementBusinessTests
+    ctest --test-dir build --output-on-failure
+
+Do not replace these with widget-driven tests. Keep domain tests deterministic and
+headless; test visual layout, focus, tooltips, pagination, and dialog wording by
+manual UI checklist.
+
+Manual dialog checks must also cover: all seven weekdays visible without horizontal
+scrolling; all 24 hour slots visible without overlap; repeated Check-in selection
+not preserving a stale Check-out; Room Info appearing before Reservation; header
+dragging; fixed/bounded geometry; rounded header corners; and page scrolling that
+does not alter a hovered non-monetary input.
+
+
+11. PROHIBITED REGRESSIONS
 --------------------------
 
 Do not reintroduce:
@@ -318,7 +379,7 @@ Do not reintroduce:
 - reference members that make HotelManager move-assignment unsafe.
 
 
-11. FINAL VERIFICATION COMMANDS
+12. FINAL VERIFICATION COMMANDS
 -------------------------------
 
 Search for obsolete architecture:

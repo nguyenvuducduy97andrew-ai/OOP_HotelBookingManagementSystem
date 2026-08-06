@@ -25,8 +25,21 @@ struct ReportBookingEntry
     QString roomType;
     QString status;
     QString operationalReason;
-    QDate checkIn;
-    QDate checkOut;
+    QDateTime plannedCheckInAt;
+    QDateTime plannedCheckOutAt;
+    QDateTime actualCheckInAt;
+    QDateTime actualCheckOutAt;
+};
+
+struct ReportOperationalBlockEntry
+{
+    QString roomNumber;
+    QString roomType;
+    QString blockType;
+    QString status;
+    QString note;
+    QDateTime startsAt;
+    QDateTime endsAt;
 };
 
 struct DashboardReportData
@@ -43,22 +56,25 @@ struct DashboardReportData
     int activeBookings = 0;
     int completedBookings = 0;
     int cancelledBookingsCount = 0;
-    int noShowBookingsCount = 0;
     int bookingsThisMonth = 0;
     int bookingsThisYear = 0;
-    int periodOccupiedRoomNights = 0;
-    int periodAvailableRoomNights = 0;
-    int periodDaysToDate = 0;
+    double periodOccupiedRoomHours = 0.0;
+    double periodCleaningRoomHours = 0.0;
+    double periodMaintenanceRoomHours = 0.0;
+    double periodSaleableRoomHours = 0.0;
     double occupancyRate = 0.0;
     double periodOccupancyRate = 0.0;
     double invoicedRevenue = 0.0;
-    double averageDailyRate = 0.0;
-    double revenuePerAvailableRoom = 0.0;
+    double averageBilledHourlyRate = 0.0;
+    double revenuePerSaleableRoomHour = 0.0;
     std::vector<ReportRoomEntry> topRooms;
-    std::vector<ReportBookingEntry> openBookings;
-    std::vector<ReportBookingEntry> completedStays;
+    std::vector<ReportBookingEntry> plannedArrivals;
+    std::vector<ReportBookingEntry> plannedDepartures;
+    std::vector<ReportOperationalBlockEntry> scheduledCleaning;
+    std::vector<ReportOperationalBlockEntry> maintenanceWindows;
+    std::vector<ReportBookingEntry> actualCheckIns;
+    std::vector<ReportBookingEntry> actualCheckOuts;
     std::vector<ReportBookingEntry> cancelledBookings;
-    std::vector<ReportBookingEntry> noShowBookings;
 };
 
 class ReportService

@@ -16,6 +16,9 @@ private:
     std::weak_ptr<Room> room;          // Weak reference to room (owned by HotelManager)
     std::string checkInDate;
     std::string checkOutDate;
+    // Modified: Preserve planned datetime facts separately from legacy date-only fields during the staged time-based migration.
+    std::string plannedCheckInAt;
+    std::string plannedCheckOutAt;
     bool cancelled; 
     bool deleted;
     // Modified: Persist explicit arrival and departure facts separately from the reservation's planned dates.
@@ -23,8 +26,14 @@ private:
     bool checkedOut;
     std::string actualCheckInDate;
     std::string actualCheckOutDate;
+    // Modified: Store precise operational timestamps without inventing times for legacy records.
+    std::string actualCheckInAt;
+    std::string actualCheckOutAt;
     // Modified: Lock the confirmed room rate and tax at reservation time for stable billing.
     double quotedUnitPrice;
+    // Modified: Keep the future hourly quote independent from legacy nightly pricing until hourly billing is activated.
+    double quotedHourlyRate;
+    bool legacyDateOnlySchedule;
     double quotedTaxRate;
     // Modified: Persist reservation occupancy so capacity validation is enforceable beyond the UI.
     int adultCount;
@@ -65,6 +74,11 @@ public:
     std::string getCheckOutDate() const;
     void setCheckOutDate(const std::string &checkOutDate);
 
+    std::string getPlannedCheckInAt() const;
+    void setPlannedCheckInAt(const std::string& value);
+    std::string getPlannedCheckOutAt() const;
+    void setPlannedCheckOutAt(const std::string& value);
+
     bool isCancelled() const;
     void setCancelled(bool cancelled);
 
@@ -82,10 +96,18 @@ public:
     void setActualCheckInDate(const std::string& value);
     std::string getActualCheckOutDate() const;
     void setActualCheckOutDate(const std::string& value);
+    std::string getActualCheckInAt() const;
+    void setActualCheckInAt(const std::string& value);
+    std::string getActualCheckOutAt() const;
+    void setActualCheckOutAt(const std::string& value);
     std::string getEffectiveCheckOutDate() const;
 
     double getQuotedUnitPrice() const;
     void setQuotedUnitPrice(double value);
+    double getQuotedHourlyRate() const;
+    void setQuotedHourlyRate(double value);
+    bool usesLegacyDateOnlySchedule() const;
+    void setLegacyDateOnlySchedule(bool value);
     double getQuotedTaxRate() const;
     void setQuotedTaxRate(double value);
 

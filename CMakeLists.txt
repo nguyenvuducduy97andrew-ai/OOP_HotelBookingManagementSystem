@@ -10,6 +10,7 @@ set(CMAKE_AUTORCC ON)
 file(MAKE_DIRECTORY "${CMAKE_SOURCE_DIR}/data")
 
 find_package(Qt6 REQUIRED COMPONENTS Core Sql Widgets Charts Svg)
+include(CTest)
 
 # Modified and optimized performance: reconfigure automatically when a new controller or view source file is added.
 file(GLOB_RECURSE SOURCE_FILES CONFIGURE_DEPENDS
@@ -50,3 +51,52 @@ target_link_libraries(HotelBookingManagement PRIVATE
     Qt6::Charts
     Qt6::Svg
 )
+
+if(BUILD_TESTING)
+    # Modified: Keep automated business tests independent from QWidget code so lifecycle, availability,
+    # billing, and SQLite migration rules can run headlessly through CTest.
+    file(GLOB_RECURSE BUSINESS_TEST_SOURCES CONFIGURE_DEPENDS
+        "src/models/*.cpp"
+        "src/controllers/hotel/*.cpp"
+        "src/controllers/booking/*.cpp"
+        "src/controllers/customer/*.cpp"
+        "src/controllers/room/*.cpp"
+        "src/database/*.cpp"
+    )
+
+    add_executable(HotelBookingManagementBusinessTests
+        tests/BusinessWorkflowTests.cpp
+        ${BUSINESS_TEST_SOURCES}
+    )
+
+    target_include_directories(HotelBookingManagementBusinessTests PRIVATE
+        src/models
+        src/controllers
+        src/controllers/hotel
+        src/controllers/booking
+        src/controllers/customer
+        src/controllers/room
+        src/database
+        src/views
+    )
+
+    target_link_libraries(HotelBookingManagementBusinessTests PRIVATE
+        Qt6::Core
+        Qt6::Sql
+    )
+
+    # Modified: CTest does not inherit Qt Creator's runtime DLL path on Windows. Resolve the Qt and
+    # compiler runtime directories from the configured toolchain so `ctest` works from a terminal too.
+    get_target_property(QT_CORE_RUNTIME Qt6::Core IMPORTED_LOCATION_DEBUG)
+    if(NOT QT_CORE_RUNTIME)
+        get_target_property(QT_CORE_RUNTIME Qt6::Core IMPORTED_LOCATION_RELEASE)
+    endif()
+    get_filename_component(QT_RUNTIME_DIRECTORY "${QT_CORE_RUNTIME}" DIRECTORY)
+    get_filename_component(MINGW_RUNTIME_DIRECTORY "${CMAKE_CXX_COMPILER}" DIRECTORY)
+    string(REPLACE ";" "\\;" EXISTING_TEST_PATH "$ENV{PATH}")
+
+    add_test(NAME HotelBookingManagement.BusinessWorkflow
+             COMMAND "${CMAKE_COMMAND}" -E env
+                     "PATH=${QT_RUNTIME_DIRECTORY};${MINGW_RUNTIME_DIRECTORY};${EXISTING_TEST_PATH}"
+                     "$<TARGET_FILE:HotelBookingManagementBusinessTests>")
+endif()

@@ -4,6 +4,7 @@
 #include <QLineEdit>
 #include <QPushButton>
 #include <QLabel>
+#include <QTimer>
 #include <unordered_set>
 #include "HotelManager.h"
 
@@ -22,6 +23,7 @@ private slots:
     void onAddRoomClicked();
     void onEditRoomClicked();
     void onDeleteRoomClicked();
+    void onMarkRoomReadyClicked();
     void onRoomSelectionChanged();
 
 private:
@@ -61,4 +63,6 @@ private:
     QLabel* m_detailAmenitiesLabel;
     QPushButton* m_editRoomBtn;
     QPushButton* m_deleteRoomBtn;
+    QPushButton* m_markRoomReadyBtn;
+    QTimer* m_statusRefreshTimer = nullptr;
 };

@@ -60,31 +60,24 @@ public:
 
     // Read-only domain queries.
     std::vector<std::shared_ptr<Room>> getAvailableRooms() const;
-    std::vector<std::shared_ptr<Room>> getAvailableRoomsForDates(
-        const std::string& checkInDate,
-        const std::string& checkOutDate,
+    // Modified: New callers must use timestamp-based availability so hourly holds and Cleaning buffers cannot be bypassed.
+    std::vector<std::shared_ptr<Room>> getAvailableRoomsForPeriod(
+        const std::string& plannedCheckInAt,
+        const std::string& plannedCheckOutAt,
         std::string& errorMessage,
         const std::string& excludedBookingId = "") const;
-    bool isRoomFreeForDates(const std::string& roomNumber,
-                            const std::string& checkInDate,
-                            const std::string& checkOutDate,
-                            std::string& errorMessage,
-                            const std::string& excludedBookingId = "") const;
     std::vector<std::shared_ptr<Booking>> getBookingsForCustomer(const std::string& customerId) const;
-    std::vector<std::shared_ptr<Booking>> getTodayCheckIns() const;
-    std::vector<std::shared_ptr<Booking>> getTodayCheckOuts() const;
     BookingState getBookingState(const Booking &booking) const;
     std::vector<std::shared_ptr<Room>> getRoomsByOccupancy(bool occupied) const;
     bool isRoomUnderMaintenance(const std::string& roomNumber, const std::string& date) const;
+    bool isRoomBlockedAt(const std::string& roomNumber, const std::string& at) const;
+    std::vector<std::string> getCheckoutConflictWarnings(const std::string& bookingId,
+                                                         const std::string& actualCheckoutAt) const;
     bool hasRoomMaintenanceConflict(const std::string& roomNumber, const std::string& startDate,
                                     const std::string& endDate, std::string& errorMessage) const;
 
     // Booking filters used by the UI and reports.
     std::vector<std::shared_ptr<Booking>> getBookingsByStatus(BookingState state) const;
-
-    // Date-specific arrival and departure queries.
-    std::vector<std::shared_ptr<Booking>> getArrivalsByDate(const std::string& dateStr) const;
-    std::vector<std::shared_ptr<Booking>> getDeparturesByDate(const std::string& dateStr) const;
 
     // View-facing facade methods.
     bool registerRoom(
@@ -167,6 +160,35 @@ public:
         const std::string& checkoutDate,
         std::string& errorMessage
         );
+    bool createBookingAt(const std::string& customerId,
+                         const std::string& roomNumber,
+                         const std::string& plannedCheckInAt,
+                         const std::string& plannedCheckOutAt,
+                         int adultCount,
+                         int childCount,
+                         std::string& errorMessage);
+    bool createBookingForNewCustomer(const std::string& customerId,
+                                     const std::string& customerName,
+                                     const std::string& customerPhone,
+                                     const std::string& roomNumber,
+                                     const std::string& plannedCheckInAt,
+                                     const std::string& plannedCheckOutAt,
+                                     int adultCount,
+                                     int childCount,
+                                     std::string& errorMessage);
+    bool updateBookingAt(const std::string& bookingId,
+                         const std::string& customerId,
+                         const std::string& roomNumber,
+                         const std::string& plannedCheckInAt,
+                         const std::string& plannedCheckOutAt,
+                         int adultCount,
+                         int childCount,
+                         std::string& errorMessage);
+    bool extendActiveBookingAt(const std::string& bookingId,
+                               const std::string& plannedCheckOutAt,
+                               std::string& errorMessage);
+    bool completeBookingAt(const std::string& bookingId, const std::string& actualCheckoutAt,
+                           std::string& errorMessage);
 
     // Legacy permanent availability switch. New maintenance should use a dated interval below.
     bool setRoomAvailability(
@@ -178,9 +200,16 @@ public:
     // Maintenance and lifecycle workflow methods.
     bool checkInBooking(const std::string& bookingId, const std::string& checkInDate,
                         std::string& errorMessage);
+    bool checkInBookingAt(const std::string& bookingId, const std::string& actualCheckInAt,
+                          std::string& errorMessage);
+    bool markRoomReady(const std::string& roomNumber, const std::string& completedBy,
+                       std::string& errorMessage);
     bool scheduleRoomMaintenance(const std::string& roomNumber, const std::string& startDate,
                                  const std::string& endDate, const std::string& note,
                                  std::string& errorMessage);
+    std::vector<std::string> getMaintenanceImpactWarnings(const std::string& roomNumber,
+                                                           const std::string& startDate,
+                                                           const std::string& endDate) const;
     bool cancelRoomMaintenance(const std::string& maintenanceId, std::string& errorMessage);
     bool confirmRoomMaintenance(const std::string& maintenanceId, std::string& errorMessage);
 
@@ -244,7 +273,10 @@ public:
     bool restoreRoomMaintenanceFromDatabase(const std::string& maintenanceId, const std::string& roomNumber,
                                             const std::string& startDate, const std::string& endDate,
                                             const std::string& note, const std::string& status,
-                                            const std::string& createdAt, std::string& errorMessage);
+                                            const std::string& createdAt, const std::string& blockType,
+                                            const std::string& startAt, const std::string& endAt,
+                                            const std::string& completedAt, const std::string& completedBy,
+                                            std::string& errorMessage);
     bool restoreMaintenanceGuestNoticeFromDatabase(const std::string& noticeId, const std::string& maintenanceId,
                                                    const std::string& bookingId, const std::string& channel,
                                                    const std::string& status, const std::string& loggedAt,

@@ -46,21 +46,23 @@ delete that file to solve an ordinary mistake without a backup and authorization
 
 Room Status states:
 - Available: sellable for the date or range being viewed.
-- Awaiting check-in: an arrival is due today or overdue, but staff has not checked
-  the guest in. It is not Occupied, but it must not be booked over.
+- Awaiting check-in: a reservation is due within its planned time interval, but staff
+  has not checked the guest in. It is not Occupied, but it must not be booked over.
 - Occupied: staff recorded a real check-in. It remains occupied until a real
   checkout is recorded.
+- Cleaning: created immediately after checkout for two hours by default. Staff uses
+  Mark room ready only when the room is physically ready earlier.
 - Maintenance: a maintenance period has been confirmed and blocks normal use.
 
 Reservation states:
 - Upcoming: reserved, not checked in.
 - Active: actually checked in.
 - Completed: checked out; listed in Booking History/reporting.
-- Cancelled: cancelled before arrival; history remains.
-- No-show: guest did not arrive on/after planned arrival.
+- Cancelled: cancelled before actual check-in; history remains. A guest who did not
+  arrive is recorded in the cancellation reason, not as a separate lifecycle state.
 
 The program uses the local computer date. Verify computer date/time at the start
-of every shift. A wrong date can make check-in, checkout, no-show, and reports
+of every shift. A wrong date/time can make check-in, checkout, cancellation reasons, and reports
 incorrect.
 
 ===============================================================================
@@ -84,8 +86,8 @@ counts. Use Search, Active/Archived, document-type and issuing-country filters b
 adding a record. Click a table header to sort; its arrow shows the active direction.
 
 Select a customer row to show Customer reservations below the list. It contains every
-non-deleted booking for that guest: Upcoming, Active, Completed, Cancelled, and
-No-show. The table shows room, planned dates, actual checkout where applicable,
+non-deleted booking for that guest: Upcoming, Active, Completed, and Cancelled.
+The table shows room, planned dates, actual checkout where applicable,
 status, and the recorded reason. This differs from Dashboard Booking History, which
 only contains completed stays for the selected reporting period. This is a lookup view; use Reservation Management
 for check-in, checkout, cancellation, or editing.
@@ -172,22 +174,36 @@ Never confirm maintenance simply because the simulated notice exists.
 New reservations begin from Room Status, not a separate New Reservation button.
 
 1. Open Room Status.
-2. Choose filters/dates if available and review room status.
-3. Click an appropriate room to view details.
-4. Choose Book/Reserve. Reservation form opens with that room preselected.
-5. For an existing guest, search and select Existing customer by document number,
+2. Choose `Choose dates & times`. While Check-in is active, repeated selections
+   replace only the current arrival and keep a provisional one-hour minimum stay.
+   Switch to Check-out before choosing the departure date/time. Week numbers are
+   hidden; all seven weekdays and all 24 hour slots should be visible.
+3. Select adults/children and apply the availability filter.
+4. Click an appropriate room. Room Info opens first with type, capacity, bed,
+   hourly rate, description, and amenities. Closing/cancelling this review does
+   not open the booking form.
+5. Choose Booking in Room Info. Reservation opens with the room and schedule set.
+6. For an existing guest, search and select Existing customer by document number,
    name, or phone. For a new guest, select `New customer — enter details manually`
    and use the country selectors and format hints.
-6. Enter planned check-in/check-out. Checkout must be after check-in. New
+7. Review planned check-in/check-out. Checkout must be after check-in. New
    reservations cannot start in the past.
-7. Enter adults and children. At least one adult is required and the total cannot
+8. Review adults and children. At least one adult is required and the total cannot
    exceed the selected room type capacity.
-8. Confirm/Save.
-9. Verify the new record appears as Upcoming in Reservation Management and that
+9. Confirm/Save.
+10. Verify the new record appears as Upcoming in Reservation Management and that
    Room Status refreshed.
 
 The program validates availability again immediately before creation. Do not assume
 a room remains free merely because an older screen showed it as free.
+
+DIALOG AND MOUSE-WHEEL CONVENTIONS:
+- Functional dialogs use a pale-blue shell around the complete title/content
+  surface, an opaque white interior, and fixed geometry bounded by the main window.
+  Drag them by the title; they are not freely resizable.
+- The mouse wheel does not change country/type/status/date/time/count/area fields,
+  because the same gesture scrolls the containing page. Click or use the keyboard.
+- Monetary inputs such as Base Price and Extra Fee retain wheel adjustment.
 
 ===============================================================================
 8. RESERVATION MANAGEMENT
@@ -212,22 +228,19 @@ Check-in is valid only today, on/after planned arrival and before planned depart
 A booking is not Occupied solely because its arrival date arrived.
 
 Cancel:
-Use Cancel only before planned check-in date and enter a useful reason. The record
-remains Cancelled history. On arrival day or later, an unarrived guest must use
-No-show rather than Cancel.
-
-No-show:
-On or after planned arrival, if guest has not arrived and was not checked in,
-select No-show and enter a reason. Do not use it before arrival or on an Active
-stay.
+Use Cancel only while the reservation remains Upcoming, including when a guest has
+not arrived on or after planned arrival. Enter a useful reason such as `Guest did
+not arrive`. The record remains Cancelled history. There is no separate No-show
+action or state. An Active stay cannot be cancelled; it must be checked out or
+early checked out.
 
 Check out and invoice:
 1. Confirm the guest is actually departing.
 2. Select the Active reservation and choose Check out.
 3. Actual checkout cannot be before actual check-in and cannot be future. A
-   same-day checkout is accepted and billed as one night.
+   same-day checkout is accepted and billed as at least one billable hour.
 4. Confirm. Booking becomes Completed and the system issues one invoice from
-   locked rate/tax and actual nights.
+locked rate/tax and actual duration rounded half-up to hours.
 5. Verify Booking History for the selected reporting period.
 
 Financial warning: checkout requires one positive payment method, amount and received
@@ -243,8 +256,8 @@ full; inspect the recorded amount and balance, then use approved accounting proc
 Dashboard has selectable Today/week/month/year periods. It shows two different
 occupancy concepts:
 - Current occupancy: rooms with guests actually checked in now.
-- Period occupancy to date: actual occupied room-nights from start of selected
-  period through today divided by available room-nights during that elapsed time.
+- Period occupancy to date: actual occupied room-hours from start of selected
+  period through the current time divided by saleable room-hours during that elapsed time.
 
 Do not read these as the same KPI. A property can be busy right now while period
 occupancy is low, or quiet right now after a busy month.
@@ -257,8 +270,8 @@ If a stay seems missing, first check actual checkout date and reporting range.
 Export Report creates a landscape PDF in cohesive blocks: a section heading, note,
 and table remain together when they fit on a page; otherwise the whole block moves
 to the next page. Only a block taller than one physical page continues across pages.
-The Cancelled & no-show table has a dedicated `Reason` column; no-show rows display
-the reason entered by staff. Confirm the range and review personal data before
+The Cancelled table has a dedicated `Reason` column with the staff-recorded reason.
+Confirm the range and review personal data before
 printing or sharing.
 
 9.1 STATISTICS AND INVOICE EXPLORATION
@@ -277,7 +290,7 @@ The default date range is the previous month through today. Hover over the actio
 button for its description, then select it to open the complete invoice details.
 
 Statistics is a visualization and lookup page. Use Reservation Management for
-check-in, cancellation, no-show, checkout, and other booking actions.
+check-in, cancellation, checkout, and other booking actions.
 
 ===============================================================================
 10. WHAT NOT TO DO
@@ -289,7 +302,7 @@ Do not:
 - mark permanent room unavailability for a short repair; use dated maintenance;
 - confirm maintenance while conflicting bookings remain;
 - check in a guest before arrival or check out with a future date;
-- cancel on/after arrival when the correct state is no-show;
+- cancel an Active or Completed reservation; only Upcoming reservations can be cancelled;
 - assume an invoice means the balance was paid in full;
 - rely on an old screenshot/report instead of refreshing the page;
 - force-close the app while saving or copy live DB during a write;
@@ -313,8 +326,8 @@ Check computer date/time and actual arrival. Normal reception flow does not perm
 retrospective check-in.
 
 “Checkout date cannot be before actual check-in”:
-Check that you selected the correct booking and computer date. Same-day checkout
-is allowed and billed as one night; only a departure before arrival is rejected.
+Check that you selected the correct booking and computer date/time. Same-day checkout
+is allowed and billed as at least one billable hour; actual departure must be after actual arrival.
 
 Maintenance conflict or rejected confirmation:
 A live booking still overlaps. Move/reschedule/cancel it through approved process,
@@ -349,9 +362,9 @@ Guest changes room/date before arrival:
    workflow and manager direction.
 
 Guest does not arrive:
-1. Confirm reservation is Upcoming and today is planned arrival or later.
-2. Mark No-show with a useful reason.
-3. Do not Cancel on/after arrival.
+1. Confirm reservation is still Upcoming and was not checked in.
+2. Select Cancel and enter a useful reason such as `Guest did not arrive`.
+3. There is no separate No-show state; do not cancel an Active or Completed stay.
 4. Apply any penalty or follow-up payment through approved accounting because the
    current invoice supports only its one checkout payment entry.
 

@@ -103,7 +103,7 @@ It stores no reference to another manager or to `HotelManager`.
 
 ### ReportService
 
-`ReportService` stores a `const HotelManager*` and performs read-only aggregation. It builds `DashboardReportData`, including occupancy, booking status, room demand, completed stays, cancellation/no-show details, and invoice-based revenue metrics. It does not receive mutable manager access.
+`ReportService` stores a `const HotelManager*` and performs read-only aggregation. It builds `DashboardReportData`, including actual room-hour occupancy, saleable room-hour capacity after confirmed Cleaning/Maintenance blocks, booking status, room demand, completed stays, cancellations, and invoice-based hourly revenue metrics. It does not receive mutable manager access.
 
 ### DataManager
 
@@ -128,14 +128,14 @@ Update availability passes the current booking ID as an exclusion so a booking d
 
 `BookingManager` is the single date-range availability authority. `HotelManager` supplies read-only room and maintenance collections for each call. Reservation and Room Status use the `HotelManager` facade, so they cannot disagree by bypassing the booking rules.
 
-Cancelled, deleted, completed, and no-show records do not block future stays. Active stays and unfinished overlapping bookings block according to the existing half-open interval rule:
+Cancelled, deleted, and completed records do not block future stays. Active stays and unfinished overlapping bookings use planned/actual timestamps and block according to the half-open interval rule:
 
 ```text
 requestedCheckIn < existingCheckOut
 && existingCheckIn < requestedCheckOut
 ```
 
-Maintenance intervals use the same `[start, end)` semantics.
+Bookings additionally reserve a two-hour planned turnover buffer. Confirmed Maintenance, active Cleaning, and `Awaiting guest response` Maintenance soft holds use the same `[start, end)` semantics for final availability validation.
 
 ### Maintenance
 
@@ -147,17 +147,16 @@ Maintenance intervals use the same `[start, end)` semantics.
 
 ### Invoice creation
 
-`BookingManager` validates that checkout is complete, enforces one invoice per booking, derives nights and locked pricing/tax, captures immutable customer/room/stay snapshots, and stores the invoice. Checkout and invoice creation remain separate calls because combining them would change the workflow.
+`BookingManager` validates that checkout is complete, enforces one invoice per booking, derives billable hours from actual elapsed seconds, captures immutable customer/room/stay/rate snapshots, and stores the invoice. Checkout and invoice creation remain separate calls because combining them would change the workflow.
 
 ## Booking state
 
 Booking state is derived from persisted facts:
 
-1. cancellation with a `No-show:` reason -> `NO_SHOW`;
-2. other cancellation -> `CANCELLED`;
-3. checked out -> `COMPLETED`;
-4. checked in -> `ACTIVE`;
-5. otherwise -> `UPCOMING`.
+1. cancellation -> `CANCELLED` (the reason may record that the guest did not arrive);
+2. checked out -> `COMPLETED`;
+3. checked in -> `ACTIVE`;
+4. otherwise -> `UPCOMING`.
 
 The database does not store a separate authoritative state column.
 
@@ -187,13 +186,29 @@ Before publication, DataManager validates the complete object graph:
 - every maintenance case refers to an existing room;
 - every maintenance notice refers to an existing booking.
 
-Any invalid row or graph aborts loading before live state is replaced. Save operations retain revision checking, a single SQLite transaction, rollback on failure, and restoration of the last committed snapshot through `commitChanges()`.
+Any invalid row or graph aborts loading before live state is replaced. Save operations retain revision checking, a single SQLite transaction, rollback on failure, and restoration of the last committed state through `commitChanges()`. Persistence upserts canonical records and removes only records explicitly absent from their owner collections; it does not wipe every table before an ordinary save.
 
 ## View and report boundary
 
 Views store or receive `HotelManager*`; none includes a domain manager. No public mutable manager getter exists. `ReportService` is read-only.
 
+The reservation-entry view flow is deliberately staged:
+
+```text
+RoomStatusPageWidget -> RoomInfoDialog -> bookingRequested -> MainWindow -> ReservationDialog
+```
+
+`RoomInfoDialog` is read-only and returns `Accepted` only from its Booking action. `RoomStatusPageWidget` rechecks timestamp availability and capacity before opening it; `ReservationDialog` performs authoritative validation again before mutation. `SchedulePickerDialog` is shared by Room Status, reservation create/edit, and active-stay extension so endpoint-selection semantics cannot diverge between screens.
+
+Custom dialog chrome is a view-only concern. `DialogWindowBehavior.h` bounds and locks dialog geometry, enables dragging from custom headers, and blocks accidental mouse-wheel changes on non-monetary selectors/spin boxes. It does not access `HotelManager`, model objects, or persistence. Price/fee controls opt into wheel adjustment explicitly.
+
 `StatisticsPageWidget` is a read-only visualization and invoice-exploration view. It reads bookings and invoices through the `HotelManager` facade, builds its chart series and filtered table locally, and opens `InvoiceDialog` for invoice details. Booking changes and completed checkout events trigger `refreshData()` so its visualizations remain synchronized with the shared manager state.
+
+## Automated business verification
+
+`tests/BusinessWorkflowTests.cpp` is a headless executable, intentionally outside the view layer. It links only the model, Hotel/Booking/Customer/Room managers, and `DataManager` with Qt Core/SQL. CTest launches it with the configured Qt and compiler runtime paths on Windows.
+
+The suite protects the cross-domain contracts most likely to regress: timestamp availability, the two-hour turnover buffer, Cleaning release, full-day Maintenance semantics, explicit lifecycle transitions, hourly rounding, room-change/self-exclusion behavior, customer reuse/new-customer rollback, quote immutability, and SQLite migration of a legacy Customer table. Add a test here whenever a domain rule is changed; visual layout and user-journey checks remain manual UI verification.
 
 
 ## Dependency rules
