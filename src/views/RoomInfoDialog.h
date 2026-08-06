@@ -38,7 +38,8 @@ private:
     QLabel* m_sizeLabel;
     QLabel* m_bedLabel;
     QLabel* m_guestLabel;
-    
+
+    QLabel* m_basePriceLabel;
     QLabel* m_extraFeeLabel;
     QTextEdit* m_descLabel;
     QWidget* m_amContainer;

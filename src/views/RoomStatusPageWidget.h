@@ -32,6 +32,8 @@ private slots:
     void setFilterType(QString type);
 
 private:
+    void openSchedulePicker(bool startInCheckOutMode);
+    void updateScheduleFields();
     void setupUI();
     void setAvailabilityMode(bool enabled);
     // RoomCard already provides the room status card UI.
@@ -45,6 +47,7 @@ private:
     QDateTime m_selectedCheckIn;
     QDateTime m_selectedCheckOut;
     QPushButton* m_scheduleButton = nullptr;
-    QLabel* m_scheduleSummary = nullptr;
+    QPushButton* m_checkInScheduleField = nullptr;
+    QPushButton* m_checkOutScheduleField = nullptr;
 
 };

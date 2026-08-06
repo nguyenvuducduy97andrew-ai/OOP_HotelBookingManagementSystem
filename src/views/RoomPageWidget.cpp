@@ -84,6 +84,10 @@ void setupRoomPageStyle(QWidget* widget) {
             margin-bottom: 12px;
             padding: 10px;
         }
+        QListWidget::item:hover {
+            background-color: #F8FAFF;
+            border: none;
+        }
         QListWidget::item:selected {
             background-color: #F1F5F9;
             border: 1px solid #005BFE;

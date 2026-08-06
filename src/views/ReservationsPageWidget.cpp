@@ -26,9 +26,60 @@
 #include <QLabel>
 #include <QFormLayout>
 #include <QStringList>
+#include <QStyledItemDelegate>
+#include <QTableWidget>
+#include <QMouseEvent>
+#include <QEvent>
 #include <algorithm>
 
 namespace {
+class FullRowHoverDelegate : public QStyledItemDelegate {
+public:
+    explicit FullRowHoverDelegate(QTableWidget* table)
+        : QStyledItemDelegate(table), m_table(table)
+    {
+        m_table->viewport()->installEventFilter(this);
+        m_table->setMouseTracking(true);
+    }
+
+    void paint(QPainter* painter, const QStyleOptionViewItem& option,
+               const QModelIndex& index) const override
+    {
+        QStyleOptionViewItem rowOption(option);
+        rowOption.state &= ~QStyle::State_HasFocus;
+        if (index.row() == m_hoveredRow) {
+            rowOption.state |= QStyle::State_MouseOver;
+        } else {
+            rowOption.state &= ~QStyle::State_MouseOver;
+        }
+        QStyledItemDelegate::paint(painter, rowOption, index);
+    }
+
+protected:
+    bool eventFilter(QObject* watched, QEvent* event) override
+    {
+        if (watched == m_table->viewport()) {
+            int hoveredRow = m_hoveredRow;
+            if (event->type() == QEvent::MouseMove) {
+                const auto* mouseEvent = static_cast<QMouseEvent*>(event);
+                const QModelIndex index = m_table->indexAt(mouseEvent->position().toPoint());
+                hoveredRow = index.isValid() ? index.row() : -1;
+            } else if (event->type() == QEvent::Leave) {
+                hoveredRow = -1;
+            }
+            if (hoveredRow != m_hoveredRow) {
+                m_hoveredRow = hoveredRow;
+                m_table->viewport()->update();
+            }
+        }
+        return QStyledItemDelegate::eventFilter(watched, event);
+    }
+
+private:
+    QTableWidget* m_table;
+    int m_hoveredRow = -1;
+};
+
 // Modified: Format checkout totals locally with comma thousands separators for readable VND values.
 QString formatMoney(double value)
 {
@@ -476,9 +527,24 @@ void setupReservationsPageStyle(QWidget* widget) {
             background-color: #FFFFFF;
             font-size: 13px;
             color: #2B3674;
+            selection-background-color: #EAF2FF;
+            selection-color: #2B3674;
         }
         QTableWidget::item {
             padding: 4px 10px;
+        }
+        QTableWidget::item:hover {
+            background-color: #F8FAFF;
+            color: #2B3674;
+            border: none;
+        }
+        QTableWidget::item:selected,
+        QTableWidget::item:selected:active,
+        QTableWidget::item:selected:!active,
+        QTableWidget::item:selected:hover {
+            background-color: #EAF2FF;
+            color: #2B3674;
+            border: none;
         }
         QHeaderView::section {
             background-color: #F8FAFC;
@@ -553,6 +619,7 @@ void ReservationsPageWidget::setupUI() {
     m_tableWidget->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_tableWidget->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_tableWidget->setSelectionMode(QAbstractItemView::SingleSelection);
+    m_tableWidget->setItemDelegate(new FullRowHoverDelegate(m_tableWidget));
     m_tableWidget->verticalHeader()->setDefaultSectionSize(42);
     m_tableWidget->verticalHeader()->setVisible(false);
     mainLayout->addWidget(m_tableWidget);

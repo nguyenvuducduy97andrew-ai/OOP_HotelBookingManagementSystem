@@ -72,7 +72,11 @@ void RoomInfoDialog::setupUI() {
     specsLayout->addStretch();
     specsLayout->addWidget(m_guestLabel);
     
-    // Extra fee
+    // Hourly base price and optional room-type fee
+    m_basePriceLabel = new QLabel(this);
+    m_basePriceLabel->setObjectName("basePriceLabel");
+    m_basePriceLabel->setAlignment(Qt::AlignCenter);
+
     m_extraFeeLabel = new QLabel(this);
     m_extraFeeLabel->setObjectName("extraFeeLabel");
     m_extraFeeLabel->setAlignment(Qt::AlignCenter);
@@ -115,6 +119,7 @@ void RoomInfoDialog::setupUI() {
     frameLayout->addLayout(headerLayout);
     frameLayout->addWidget(m_imageLabel);
     frameLayout->addLayout(specsLayout);
+    frameLayout->addWidget(m_basePriceLabel);
     frameLayout->addWidget(m_extraFeeLabel);
     frameLayout->addWidget(descTitle);
     frameLayout->addWidget(m_descLabel);
@@ -166,6 +171,16 @@ void RoomInfoDialog::setupStyle() {
             border-radius: 8px;
             font-weight: 700;
             font-size: 14px;
+            margin-top: 10px;
+        }
+        QLabel#basePriceLabel {
+            background-color: #EFF6FF;
+            color: #1D4ED8;
+            border: 1px solid #BFDBFE;
+            padding: 10px;
+            border-radius: 8px;
+            font-weight: 800;
+            font-size: 15px;
             margin-top: 10px;
         }
         QLabel#sectionTitle {
@@ -278,6 +293,8 @@ void RoomInfoDialog::populateData() {
     m_bedLabel->setText(QString("🛏 %1").arg(bedType));
     
     m_guestLabel->setText(QString("👤 %1 Guests").arg(m_room->getMaximumGuests()));
+    m_basePriceLabel->setText(QString("Base price: %1 VND / hour")
+        .arg(formatMoney(m_room->getBasePrice())));
 
     if (typeName == "Standard") {
         m_extraFeeLabel->setVisible(false);

@@ -30,7 +30,8 @@ SchedulePickerDialog::SchedulePickerDialog(const QDateTime& initialCheckIn,
                                            const QDateTime& initialCheckOut,
                                            AvailabilityPredicate availabilityPredicate,
                                            QWidget* parent,
-                                           bool checkOutOnly)
+                                           bool checkOutOnly,
+                                           bool startInCheckOutMode)
     : QDialog(parent),
       m_availabilityPredicate(std::move(availabilityPredicate)),
       m_checkIn(checkOutOnly ? initialCheckIn : wholeHour(initialCheckIn)),
@@ -54,8 +55,8 @@ SchedulePickerDialog::SchedulePickerDialog(const QDateTime& initialCheckIn,
         QDialog { background: #EFF6FF; border: 2px solid #93C5FD; border-radius: 18px; }
         QFrame#dialogHeader { background: #FFFFFF; border: none; border-bottom: 1px solid #E7EDF7;border-top-left-radius: 13px; border-top-right-radius: 13px; }
         QLabel#pickerTitle { color: #163779; font-size: 19px; font-weight: 800; background: transparent; border: none; }
-        QPushButton#windowClose { background: #9d2f2f; color: #8a3333; border: none; border-radius: 8px; font-size: 20px; }
-        QPushButton#windowClose:hover { background: #F1F5F9; color: #1B3F83; }
+        QPushButton#windowClose { background: #f7f2f2; color: #8a3333; border: 1px solid #ff7c7c; border-radius: 8px; font-size: 20px; }
+        QPushButton#windowClose:hover { background: #f59e9e; color: #1B3F83; }
         QLabel { color: #2B3674; background: transparent; border: none; font-size: 13px; font-weight: 600; }
         QLabel#pickerHint { color: #6B7FA8; font-weight: 500; }
         QLabel#pickerHint[error="true"] { color: #B45309; }
@@ -130,7 +131,7 @@ SchedulePickerDialog::SchedulePickerDialog(const QDateTime& initialCheckIn,
     m_modeGroup->setExclusive(true);
     m_modeGroup->addButton(checkInMode, 0);
     m_modeGroup->addButton(checkOutMode, 1);
-    checkInMode->setChecked(true);
+    (startInCheckOutMode ? checkOutMode : checkInMode)->setChecked(true);
     if (m_checkOutOnly) {
         // Modified: Active-stay extension reuses the shared picker but locks actual arrival, leaving only planned check-out editable.
         checkInMode->hide();
@@ -144,7 +145,7 @@ SchedulePickerDialog::SchedulePickerDialog(const QDateTime& initialCheckIn,
     // Modified: Constrain the calendar itself to a centered, self-contained grid so all seven weekdays are visible without horizontal scrolling.
     m_calendar->setFixedSize(500, 276);
     m_calendar->setMinimumDate(QDate::currentDate());
-    m_calendar->setSelectedDate(m_checkIn.date());
+    m_calendar->setSelectedDate(m_modeGroup->checkedId() == 0 ? m_checkIn.date() : m_checkOut.date());
     // Modified: Keep week numbers available to Qt internally but remove the non-actionable column from reservation scheduling.
     m_calendar->setVerticalHeaderFormat(QCalendarWidget::NoVerticalHeader);
     layout->addWidget(m_calendar, 0, Qt::AlignHCenter);

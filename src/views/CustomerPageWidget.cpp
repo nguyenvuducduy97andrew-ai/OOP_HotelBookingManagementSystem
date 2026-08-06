@@ -58,65 +58,46 @@ private:
     int m_value;
 };
 
-class HoverRowDelegate : public QStyledItemDelegate {
+class FullRowHoverDelegate : public QStyledItemDelegate {
 public:
-    explicit HoverRowDelegate(QTableWidget* table)
+    explicit FullRowHoverDelegate(QTableWidget* table)
         : QStyledItemDelegate(table), m_table(table)
     {
         m_table->viewport()->installEventFilter(this);
         m_table->setMouseTracking(true);
     }
 
-    void paint(QPainter* painter,
-               const QStyleOptionViewItem& option,
+    void paint(QPainter* painter, const QStyleOptionViewItem& option,
                const QModelIndex& index) const override
     {
-        QStyleOptionViewItem cleanOption(option);
-        cleanOption.state &= ~QStyle::State_HasFocus;
-        QStyledItemDelegate::paint(painter, cleanOption, index);
-
-        if (index.row() != m_hoveredRow) {
-            return;
+        QStyleOptionViewItem rowOption(option);
+        rowOption.state &= ~QStyle::State_HasFocus;
+        if (index.row() == m_hoveredRow) {
+            rowOption.state |= QStyle::State_MouseOver;
+        } else {
+            rowOption.state &= ~QStyle::State_MouseOver;
         }
-
-        painter->save();
-        painter->setRenderHint(QPainter::Antialiasing, false);
-        painter->setPen(QPen(QColor("#005BFE"), 2));
-
-        QRect borderRect = option.rect.adjusted(1, 1, -1, -1);
-        painter->drawLine(borderRect.topLeft(), borderRect.topRight());
-        painter->drawLine(borderRect.bottomLeft(), borderRect.bottomRight());
-
-        if (index.column() == 0) {
-            painter->drawLine(borderRect.topLeft(), borderRect.bottomLeft());
-        }
-        if (index.column() == m_table->columnCount() - 1) {
-            painter->drawLine(borderRect.topRight(), borderRect.bottomRight());
-        }
-
-        painter->restore();
+        QStyledItemDelegate::paint(painter, rowOption, index);
     }
 
 protected:
     bool eventFilter(QObject* watched, QEvent* event) override
     {
         if (watched == m_table->viewport()) {
-            int newHoveredRow = m_hoveredRow;
-
+            int hoveredRow = m_hoveredRow;
             if (event->type() == QEvent::MouseMove) {
-                auto* mouseEvent = static_cast<QMouseEvent*>(event);
+                const auto* mouseEvent = static_cast<QMouseEvent*>(event);
                 const QModelIndex index = m_table->indexAt(mouseEvent->position().toPoint());
-                newHoveredRow = index.isValid() ? index.row() : -1;
+                hoveredRow = index.isValid() ? index.row() : -1;
             } else if (event->type() == QEvent::Leave) {
-                newHoveredRow = -1;
+                hoveredRow = -1;
             }
 
-            if (newHoveredRow != m_hoveredRow) {
-                m_hoveredRow = newHoveredRow;
+            if (hoveredRow != m_hoveredRow) {
+                m_hoveredRow = hoveredRow;
                 m_table->viewport()->update();
             }
         }
-
         return QStyledItemDelegate::eventFilter(watched, event);
     }
 
@@ -307,10 +288,12 @@ void CustomerPageWidget::setupStyle() {
             padding: 8px 10px;
         }
         QTableWidget::item:hover {
-            background-color: transparent;
+            background-color: #F8FAFF;
+            border: none;
         }
         QTableWidget::item:selected {
             background-color: #EAF2FF;
+            border: none;
             color: #2B3674;
         }
         QTableWidget::item:selected:active,
@@ -351,6 +334,10 @@ void CustomerPageWidget::setupStyle() {
         }
         QTableWidget#customerBookingHistoryTable::item {
             padding: 7px 9px;
+        }
+        QTableWidget#customerBookingHistoryTable::item:hover {
+            background-color: #F8FAFF;
+            border: none;
         }
     )");
 }
@@ -447,7 +434,7 @@ void CustomerPageWidget::setupUI() {
     m_tableWidget->verticalHeader()->setVisible(false);
     m_tableWidget->setAlternatingRowColors(true);
     m_tableWidget->setShowGrid(true);
-    m_tableWidget->setItemDelegate(new HoverRowDelegate(m_tableWidget));
+    m_tableWidget->setItemDelegate(new FullRowHoverDelegate(m_tableWidget));
 
     // Modified: place the customer list and the selected customer's booking history in a resizable master-detail view.
     m_contentSplitter = new QSplitter(Qt::Vertical, this);
@@ -465,6 +452,7 @@ void CustomerPageWidget::setupUI() {
     m_bookingHistorySubtitle = new QLabel(m_bookingHistoryPanel);
     m_bookingHistorySubtitle->setObjectName("customerBookingHistorySubtitle");
     m_bookingHistoryTable = new QTableWidget(m_bookingHistoryPanel);
+    m_bookingHistoryTable->setItemDelegate(new FullRowHoverDelegate(m_bookingHistoryTable));
     m_bookingHistoryTable->setObjectName("customerBookingHistoryTable");
     m_bookingHistoryTable->setColumnCount(7);
     m_bookingHistoryTable->setHorizontalHeaderLabels({

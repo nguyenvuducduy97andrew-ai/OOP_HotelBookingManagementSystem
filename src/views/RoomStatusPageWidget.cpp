@@ -57,46 +57,34 @@ RoomStatusPageWidget::RoomStatusPageWidget(HotelManager* manager, QWidget *paren
         m_scheduleButton = new QPushButton("Choose dates & times", ui->frameFilterPanel);
         m_scheduleButton->setObjectName("btnChooseSchedule");
         // Modified: Give the shared schedule entry a dedicated visible treatment instead of inheriting an empty legacy date-field cell.
-        m_scheduleButton->setFixedSize(230, 42);
-        m_scheduleButton->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+        m_scheduleButton->setMinimumHeight(42);
+        m_scheduleButton->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
         m_scheduleButton->setStyleSheet(
             "QPushButton { background:#EFF6FF; color:#1D4ED8; border:1px solid #BFDBFE; "
             "border-radius:10px; padding:9px 14px; font-weight:700; text-align:left; }"
             "QPushButton:hover { background:#DBEAFE; border-color:#60A5FA; }");
-        m_scheduleSummary = new QLabel(ui->frameFilterPanel);
-        m_scheduleSummary->setStyleSheet("QLabel { color:#4F6694; padding:2px 0 4px 2px; font-weight:600; }");
-        m_scheduleSummary->setWordWrap(true);
-        // Modified: Keep the schedule trigger compact; only the schedule summary should use the full booking panel width.
-        filterLayout->addWidget(m_scheduleButton, 1, 0, 1, 11, Qt::AlignLeft);
-        filterLayout->addWidget(m_scheduleSummary, 2, 0, 1, 11);
-        m_scheduleSummary->setText(QString("%1 → %2")
-            .arg(m_selectedCheckIn.toString("dd MMM yyyy, HH:mm"), m_selectedCheckOut.toString("dd MMM yyyy, HH:mm")));
+        const QString fieldStyle =
+            "QPushButton { background:#FFFFFF; color:#2B3674; border:1px solid #D8E2F0; "
+            "border-radius:10px; padding:9px 12px; font-weight:600; text-align:left; }"
+            "QPushButton:hover { background: #F8FAFF; border-color: #BFDBFE; }"
+            "QPushButton:focus { border:1px solid #93C5FD; }";
+        m_checkInScheduleField = new QPushButton(ui->frameFilterPanel);
+        m_checkOutScheduleField = new QPushButton(ui->frameFilterPanel);
+        m_checkInScheduleField->setMinimumHeight(42);
+        m_checkOutScheduleField->setMinimumHeight(42);
+        m_checkInScheduleField->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+        m_checkOutScheduleField->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+        m_checkInScheduleField->setStyleSheet(fieldStyle);
+        m_checkOutScheduleField->setStyleSheet(fieldStyle);
 
-        // Modified: Room Status uses the same whole-hour picker as Reservation, so availability filtering and the booking form start from one schedule.
-        connect(m_scheduleButton, &QPushButton::clicked, this, [this]() {
-            const auto availabilityPredicate = [this](const QDateTime& start, const QDateTime& end) {
-                if (!m_manager) {
-                    return false;
-                }
-                std::string availabilityError;
-                const auto availableRooms = m_manager->getAvailableRoomsForPeriod(
-                    start.toString(Qt::ISODate).toStdString(), end.toString(Qt::ISODate).toStdString(),
-                    availabilityError);
-                const int guests = ui->lblAdultCount->text().toInt() + ui->lblChildrenCount->text().toInt();
-                return std::any_of(availableRooms.begin(), availableRooms.end(), [guests](const std::shared_ptr<Room>& room) {
-                    return room && (guests <= 0 || guests <= room->getMaximumGuests());
-                });
-            };
-            SchedulePickerDialog picker(m_selectedCheckIn, m_selectedCheckOut, availabilityPredicate, this);
-            if (picker.exec() == QDialog::Accepted) {
-                m_selectedCheckIn = picker.selectedCheckIn();
-                m_selectedCheckOut = picker.selectedCheckOut();
-                m_scheduleSummary->setText(QString("%1 → %2")
-                    .arg(m_selectedCheckIn.toString("dd MMM yyyy, HH:mm"), m_selectedCheckOut.toString("dd MMM yyyy, HH:mm")));
-                // Modified: Applying a schedule immediately activates availability filtering, so the selected time is never only displayed and ignored.
-                setAvailabilityMode(true);
-            }
-        });
+        filterLayout->addWidget(m_scheduleButton, 1, 0, 1, 3);
+        filterLayout->addWidget(m_checkInScheduleField, 1, 3, 1, 4);
+        filterLayout->addWidget(m_checkOutScheduleField, 1, 7, 1, 4);
+        updateScheduleFields();
+
+        connect(m_scheduleButton, &QPushButton::clicked, this, [this]() { openSchedulePicker(false); });
+        connect(m_checkInScheduleField, &QPushButton::clicked, this, [this]() { openSchedulePicker(false); });
+        connect(m_checkOutScheduleField, &QPushButton::clicked, this, [this]() { openSchedulePicker(true); });
     }
 
     connect(ui->btnAddAdult, &QPushButton::clicked, this, [this]() {
@@ -161,6 +149,45 @@ RoomStatusPageWidget::RoomStatusPageWidget(HotelManager* manager, QWidget *paren
         }
     });
     m_statusRefreshTimer->start();
+}
+
+void RoomStatusPageWidget::updateScheduleFields()
+{
+    if (m_checkInScheduleField) {
+        m_checkInScheduleField->setText("Check-in:   " + m_selectedCheckIn.toString("dd MMM yyyy, HH:mm"));
+    }
+    if (m_checkOutScheduleField) {
+        m_checkOutScheduleField->setText("Check-out:   " + m_selectedCheckOut.toString("dd MMM yyyy, HH:mm"));
+    }
+}
+
+void RoomStatusPageWidget::openSchedulePicker(bool startInCheckOutMode)
+{
+    const auto availabilityPredicate = [this](const QDateTime& start, const QDateTime& end) {
+        if (!m_manager) {
+            return false;
+        }
+        std::string availabilityError;
+        const auto availableRooms = m_manager->getAvailableRoomsForPeriod(
+            start.toString(Qt::ISODate).toStdString(), end.toString(Qt::ISODate).toStdString(),
+            availabilityError);
+        const int guests = ui->lblAdultCount->text().toInt() + ui->lblChildrenCount->text().toInt();
+        return std::any_of(availableRooms.begin(), availableRooms.end(), [guests](const std::shared_ptr<Room>& room) {
+            return room && (guests <= 0 || guests <= room->getMaximumGuests());
+        });
+    };
+
+    // Both entry fields edit the same pair. Opening Check-out merely selects that mode first.
+    SchedulePickerDialog picker(m_selectedCheckIn, m_selectedCheckOut, availabilityPredicate,
+                                this, false, startInCheckOutMode);
+    if (picker.exec() != QDialog::Accepted) {
+        return;
+    }
+
+    m_selectedCheckIn = picker.selectedCheckIn();
+    m_selectedCheckOut = picker.selectedCheckOut();
+    updateScheduleFields();
+    setAvailabilityMode(true);
 }
 
 void RoomStatusPageWidget::setupUI() {

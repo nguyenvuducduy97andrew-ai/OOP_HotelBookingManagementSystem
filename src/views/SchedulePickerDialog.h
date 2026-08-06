@@ -18,7 +18,8 @@ public:
                                   const QDateTime& initialCheckOut,
                                   AvailabilityPredicate availabilityPredicate,
                                   QWidget* parent = nullptr,
-                                  bool checkOutOnly = false);
+                                  bool checkOutOnly = false,
+                                  bool startInCheckOutMode = false);
 
     QDateTime selectedCheckIn() const;
     QDateTime selectedCheckOut() const;
