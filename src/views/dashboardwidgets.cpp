@@ -1,5 +1,6 @@
 #include "dashboardwidgets.h"
 #include <QLabel>
+#include <QMouseEvent>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QStyle>
@@ -53,6 +54,7 @@ MiniCard::MiniCard(QWidget *parent)
     : QFrame(parent)
 {
     setMinimumHeight(72);
+    setCursor(Qt::PointingHandCursor);
 
     auto *outer = new QHBoxLayout(this);
     outer->setContentsMargins(16, 12, 16, 12);
@@ -85,6 +87,14 @@ void MiniCard::setData(const QString &iconText, const QColor &iconBg,
                                    .arg(iconBg.name()));
     m_textLabel->setText(label);
     m_valueLabel->setText(value);
+}
+
+void MiniCard::mousePressEvent(QMouseEvent *event)
+{
+    if (event->button() == Qt::LeftButton) {
+        emit clicked();
+    }
+    QFrame::mousePressEvent(event);
 }
 
 // ---------------------------------------------------------------

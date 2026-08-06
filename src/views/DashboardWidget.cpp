@@ -17,6 +17,8 @@
 #include <QPdfWriter>
 #include <QTextDocument>
 #include <QTextBrowser>
+#include <QTableWidget>
+#include <QHeaderView>
 #include <QTextStream>
 #include <QFont>
 #include <QStringList>
@@ -112,6 +114,43 @@ DashboardWidget::DashboardWidget(HotelManager *manager, QWidget *parent)
         ui->bodyScrollArea->verticalScrollBar()->setSingleStep(18);
     }
 
+    m_reservationPanel = new QFrame(ui->scrollAreaWidgetContents);
+    m_reservationPanel->setObjectName("miniCardReservationPanel");
+    auto *reservationLayout = new QVBoxLayout(m_reservationPanel);
+    reservationLayout->setContentsMargins(14, 12, 14, 14);
+    reservationLayout->setSpacing(5);
+    m_reservationPanelTitle = new QLabel(m_reservationPanel);
+    m_reservationPanelTitle->setObjectName("miniCardReservationTitle");
+    m_reservationPanelSubtitle = new QLabel(m_reservationPanel);
+    m_reservationPanelSubtitle->setObjectName("miniCardReservationSubtitle");
+    m_reservationTable = new QTableWidget(m_reservationPanel);
+    m_reservationTable->setObjectName("miniCardReservationTable");
+    m_reservationTable->setColumnCount(7);
+    m_reservationTable->setHorizontalHeaderLabels({
+        "Booking ID", "Guest", "Room", "Planned check-in", "Planned check-out", "Status", "Reason"
+    });
+    m_reservationTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    m_reservationTable->setSelectionBehavior(QAbstractItemView::SelectRows);
+    m_reservationTable->setSelectionMode(QAbstractItemView::SingleSelection);
+    m_reservationTable->verticalHeader()->hide();
+    m_reservationTable->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
+    m_reservationTable->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
+    m_reservationTable->setMaximumHeight(250);
+    m_reservationTable->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
+    reservationLayout->addWidget(m_reservationPanelTitle);
+    reservationLayout->addWidget(m_reservationPanelSubtitle);
+    reservationLayout->addWidget(m_reservationTable);
+    const int miniRowIndex = ui->bodyLayout ? ui->bodyLayout->indexOf(ui->miniRowWidget) : -1;
+    if (ui->bodyLayout) {
+        ui->bodyLayout->insertWidget(miniRowIndex + 1, m_reservationPanel);
+    }
+    m_reservationPanel->hide();
+
+    connect(ui->miniCard1, &MiniCard::clicked, this, [this]() { toggleMiniCardReservations(1); });
+    connect(ui->miniCard2, &MiniCard::clicked, this, [this]() { toggleMiniCardReservations(2); });
+    connect(ui->miniCard3, &MiniCard::clicked, this, [this]() { toggleMiniCardReservations(3); });
+    connect(ui->miniCard4, &MiniCard::clicked, this, [this]() { toggleMiniCardReservations(4); });
+
     // ---- Build dashboard content ----
     populateData();
     buildTrendChart();
@@ -150,6 +189,80 @@ DashboardWidget::DashboardWidget(HotelManager *manager, QWidget *parent)
     QTimer::singleShot(0, this, &DashboardWidget::refreshBookingHistoryView);
 }
 
+void DashboardWidget::toggleMiniCardReservations(int cardIndex)
+{
+    if (m_selectedMiniCard == cardIndex && m_reservationPanel->isVisible()) {
+        m_selectedMiniCard = 0;
+        m_reservationPanel->hide();
+        return;
+    }
+    m_selectedMiniCard = cardIndex;
+    refreshMiniCardReservations();
+    m_reservationPanel->show();
+}
+
+void DashboardWidget::refreshMiniCardReservations()
+{
+    if (!m_reservationTable || m_selectedMiniCard == 0) return;
+
+    static const QString titles[] = {
+        QString(), "Today's upcoming check-ins", "Currently staying",
+        "Today's planned check-outs", "Cancelled reservations"
+    };
+    m_reservationPanelTitle->setText(titles[m_selectedMiniCard]);
+    m_reservationTable->clearSpans();
+    m_reservationTable->setRowCount(0);
+    if (!m_manager) {
+        m_reservationPanelSubtitle->setText("0 reservations");
+        return;
+    }
+    const QDate today = QDate::currentDate();
+    int row = 0;
+
+    for (const auto& booking : m_manager->getBookings()) {
+        if (!booking || booking->isDeleted()) continue;
+        const BookingState state = m_manager->getBookingState(*booking);
+        QDateTime plannedIn = QDateTime::fromString(QString::fromStdString(booking->getPlannedCheckInAt()), Qt::ISODateWithMs);
+        QDateTime plannedOut = QDateTime::fromString(QString::fromStdString(booking->getPlannedCheckOutAt()), Qt::ISODateWithMs);
+        if (!plannedIn.isValid()) plannedIn = QDateTime(QDate::fromString(QString::fromStdString(booking->getCheckInDate()), Qt::ISODate), QTime(0, 0));
+        if (!plannedOut.isValid()) plannedOut = QDateTime(QDate::fromString(QString::fromStdString(booking->getCheckOutDate()), Qt::ISODate), QTime(0, 0));
+
+        const bool matches =
+            (m_selectedMiniCard == 1 && state == BookingState::UPCOMING && plannedIn.date() == today)
+            || (m_selectedMiniCard == 2 && state == BookingState::ACTIVE)
+            || (m_selectedMiniCard == 3 && (state == BookingState::UPCOMING || state == BookingState::ACTIVE) && plannedOut.date() == today)
+            || (m_selectedMiniCard == 4 && (state == BookingState::CANCELLED || state == BookingState::NO_SHOW));
+        if (!matches) continue;
+
+        const auto customer = booking->getCustomer();
+        const auto room = booking->getRoom();
+        QString status;
+        if (state == BookingState::UPCOMING) status = "Upcoming";
+        else if (state == BookingState::ACTIVE) status = "Active";
+        else status = "Cancelled";
+        QString reason = QString::fromStdString(booking->getCancellationReason()).trimmed();
+
+        m_reservationTable->insertRow(row);
+        m_reservationTable->setItem(row, 0, new QTableWidgetItem(QString::fromStdString(booking->getBookingId())));
+        m_reservationTable->setItem(row, 1, new QTableWidgetItem(customer ? QString::fromStdString(customer->getName()) : "Unavailable guest"));
+        m_reservationTable->setItem(row, 2, new QTableWidgetItem(room ? QString::fromStdString(room->getRoomNumber()) : "—"));
+        m_reservationTable->setItem(row, 3, new QTableWidgetItem(plannedIn.isValid() ? plannedIn.toString("dd MMM yyyy, HH:mm") : "—"));
+        m_reservationTable->setItem(row, 4, new QTableWidgetItem(plannedOut.isValid() ? plannedOut.toString("dd MMM yyyy, HH:mm") : "—"));
+        m_reservationTable->setItem(row, 5, new QTableWidgetItem(status));
+        m_reservationTable->setItem(row, 6, new QTableWidgetItem(reason.isEmpty() ? "—" : reason));
+        ++row;
+    }
+
+    m_reservationPanelSubtitle->setText(QString("%1 reservation%2").arg(row).arg(row == 1 ? "" : "s"));
+    if (row == 0) {
+        m_reservationTable->setRowCount(1);
+        auto *empty = new QTableWidgetItem("No matching reservations.");
+        empty->setTextAlignment(Qt::AlignCenter);
+        m_reservationTable->setItem(0, 0, empty);
+        m_reservationTable->setSpan(0, 0, 1, m_reservationTable->columnCount());
+    }
+}
+
 void DashboardWidget::updateDateTime()
 {
     const QString currentTime = QDateTime::currentDateTime().toString("dddd, dd/MM/yyyy · HH:mm:ss");
@@ -164,9 +277,9 @@ void DashboardWidget::populateData()
         ui->statCard2->setData("Occupancy rate", "0%", "No data available", true);
         ui->statCard3->setData("This month's arrivals", "0", "No data available", true);
         ui->statCard4->setData("This year's arrivals", "0", "No data available", true);
-        ui->miniCard1->setData("📅", QColor("#E8F0FF"), "Upcoming", "0");
-        ui->miniCard2->setData("🛏", QColor("#E6FAF4"), "Active", "0");
-        ui->miniCard3->setData("✔", QColor("#F0EBFF"), "Completed", "0");
+        ui->miniCard1->setData("📅", QColor("#E8F0FF"), "Today's upcoming check-ins", "0");
+        ui->miniCard2->setData("🛏", QColor("#E6FAF4"), "Currently staying", "0");
+        ui->miniCard3->setData("✔", QColor("#F0EBFF"), "Today's planned check-outs", "0");
         ui->miniCard4->setData("✖", QColor("#FDE8E6"), "Cancelled", "0");
         return;
     }
@@ -180,7 +293,7 @@ void DashboardWidget::populateData()
     int bookingsThisYear = 0;
     int upcomingCount = 0;
     int activeCount = 0;
-    int completedCount = 0;
+    int plannedCheckoutCount = 0;
     int cancelledCount = 0;
     const QDate statsToday = QDate::currentDate();
 
@@ -207,10 +320,20 @@ void DashboardWidget::populateData()
         }
 
         const BookingState state = m_manager->getBookingState(*booking);
+        QDateTime plannedIn = QDateTime::fromString(QString::fromStdString(booking->getPlannedCheckInAt()), Qt::ISODateWithMs);
+        QDateTime plannedOut = QDateTime::fromString(QString::fromStdString(booking->getPlannedCheckOutAt()), Qt::ISODateWithMs);
+        if (!plannedIn.isValid()) plannedIn = QDateTime(QDate::fromString(QString::fromStdString(booking->getCheckInDate()), Qt::ISODate), QTime(0, 0));
+        if (!plannedOut.isValid()) plannedOut = QDateTime(QDate::fromString(QString::fromStdString(booking->getCheckOutDate()), Qt::ISODate), QTime(0, 0));
         switch (state) {
-        case BookingState::UPCOMING: upcomingCount++; break;
-        case BookingState::ACTIVE: activeCount++; break;
-        case BookingState::COMPLETED: completedCount++; break;
+        case BookingState::UPCOMING:
+            if (plannedIn.date() == statsToday) upcomingCount++;
+            if (plannedOut.date() == statsToday) plannedCheckoutCount++;
+            break;
+        case BookingState::ACTIVE:
+            activeCount++;
+            if (plannedOut.date() == statsToday) plannedCheckoutCount++;
+            break;
+        case BookingState::COMPLETED: break;
         case BookingState::CANCELLED: cancelledCount++; break;
         case BookingState::NO_SHOW: cancelledCount++; break;
         }
@@ -261,9 +384,9 @@ void DashboardWidget::populateData()
                            "Actual check-ins for " + QString::number(statsToday.month()), true);
     ui->statCard4->setData("This year's arrivals", QString::number(bookingsThisYear),
                            "Actual check-ins for " + QString::number(statsToday.year()), true);
-    ui->miniCard1->setData("📅", QColor("#E8F0FF"), "Upcoming", QString::number(upcomingCount));
-    ui->miniCard2->setData("🛏", QColor("#E6FAF4"), "Active", QString::number(activeCount));
-    ui->miniCard3->setData("✔", QColor("#F0EBFF"), "Completed", QString::number(completedCount));
+    ui->miniCard1->setData("📅", QColor("#E8F0FF"), "Today's upcoming check-ins", QString::number(upcomingCount));
+    ui->miniCard2->setData("🛏", QColor("#E6FAF4"), "Currently staying", QString::number(activeCount));
+    ui->miniCard3->setData("✔", QColor("#F0EBFF"), "Today's planned check-outs", QString::number(plannedCheckoutCount));
     // Modified: Present one cancelled lifecycle bucket; a guest not arriving is captured in its cancellation reason.
     ui->miniCard4->setData("✖", QColor("#FDE8E6"), "Cancelled", QString::number(cancelledCount));
 
@@ -691,6 +814,24 @@ void DashboardWidget::applyStyle()
             font-weight: 700;
             color: #1B2559;
         }
+        #MiniCard:hover { background-color:#F8FAFF; border-color:#BFDBFE; }
+        QFrame#miniCardReservationPanel {
+            background-color:#F8FAFC; border:1px solid #E0E8F5; border-radius:14px;
+        }
+        QLabel#miniCardReservationTitle { color:#1B2559; font-size:14px; font-weight:800; }
+        QLabel#miniCardReservationSubtitle { color:#7B8BA5; font-size:12px; }
+        QTableWidget#miniCardReservationTable {
+            background:#FFFFFF; border:1px solid #E7EDF6; border-radius:10px;
+            gridline-color:#EEF2F7; color:#2B3674; font-size:12px;
+            selection-background-color:#EAF2FF; selection-color:#2B3674;
+        }
+        QTableWidget#miniCardReservationTable::item { padding:7px 9px; }
+        QTableWidget#miniCardReservationTable::item:hover { background:#F8FAFF; color:#2B3674; border:none; }
+        QTableWidget#miniCardReservationTable::item:selected { background:#EAF2FF; color:#2B3674; border:none; }
+        QTableWidget#miniCardReservationTable QHeaderView::section {
+            background:#F8FAFC; color:#A3AED0; font-weight:700; border:none;
+            border-bottom:2px solid #E9EDF7; padding:8px;
+        }
         #ChartTitle, #SectionTitle {
             font-size: 15px;
             font-weight: 700;
@@ -773,6 +914,7 @@ void DashboardWidget::refreshDashboard() {
     buildTrendChart();
     buildBarChart();
     refreshBookingHistoryView();
+    if (m_selectedMiniCard != 0) refreshMiniCardReservations();
 }
 
 void DashboardWidget::refreshBookingHistoryView()

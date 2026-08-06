@@ -9,6 +9,8 @@
 #include <QTextBrowser>
 
 class QUrl;
+class QLabel;
+class QTableWidget;
 
 namespace Ui {
 class DashboardWidget;
@@ -44,9 +46,16 @@ private:
     void buildBarChart();    // Create a QChartView inside barChartHost.
     void applyStyle();       // Apply the light theme to the dashboard body.
     void refreshBookingHistoryView();
+    void toggleMiniCardReservations(int cardIndex);
+    void refreshMiniCardReservations();
     QString buildBookingHistoryHtml() const;
     QString buildReportHtml() const;
 
     QTextBrowser *bookingHistoryBrowser;
+    QFrame *m_reservationPanel = nullptr;
+    QLabel *m_reservationPanelTitle = nullptr;
+    QLabel *m_reservationPanelSubtitle = nullptr;
+    QTableWidget *m_reservationTable = nullptr;
+    int m_selectedMiniCard = 0;
     int m_historyPage = 0;
 };

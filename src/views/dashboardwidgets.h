@@ -42,6 +42,12 @@ public:
                  const QString &label,
                  const QString &value);
 
+signals:
+    void clicked();
+
+protected:
+    void mousePressEvent(QMouseEvent *event) override;
+
 private:
     QLabel *m_iconLabel;
     QLabel *m_textLabel;

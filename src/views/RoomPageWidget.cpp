@@ -935,7 +935,7 @@ void RoomPageWidget::onMarkRoomReadyClicked()
     const std::string roomNumber = item->data(Qt::UserRole).toString().toStdString();
     CustomConfirmDialog confirmation(
         "Mark room ready",
-        "Confirm that cleaning is complete and release this room for an early check-in?",
+        "Confirm that cleaning is complete and release this room for a check-in?",
         false,
         this);
     if (confirmation.exec() != QDialog::Accepted || !confirmation.isConfirmed()) {
