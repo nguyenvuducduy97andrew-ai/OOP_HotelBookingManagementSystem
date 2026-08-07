@@ -365,7 +365,6 @@ void DashboardWidget::populateData()
         switch (state) {
         case BookingState::UPCOMING:
             if (plannedIn.date() == statsToday) upcomingCount++;
-            if (plannedOut.date() == statsToday) plannedCheckoutCount++;
             break;
         case BookingState::ACTIVE:
             activeCount++;

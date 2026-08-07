@@ -16,6 +16,10 @@
 #include <QScreen>
 #include <QLocale>
 #include <map>
+#include <QtCharts/QLegendMarker>
+#include <QPropertyAnimation>
+#include <QToolTip>
+#include <QCursor>
 
 namespace {
 // Modified: Format statistics amounts locally with comma thousands separators for readable VND values.

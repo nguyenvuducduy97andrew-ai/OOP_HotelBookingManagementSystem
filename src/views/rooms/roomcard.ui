@@ -46,7 +46,7 @@ QFrame#frameStatusBadge {
     border-bottom-right-radius: 0px;
 }
 
-QLabel {
+QWidget#RoomCard QLabel {
     background-color: transparent;
     border: none;
 }

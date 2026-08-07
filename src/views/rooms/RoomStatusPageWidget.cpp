@@ -122,12 +122,12 @@ RoomStatusPageWidget::RoomStatusPageWidget(HotelManager* manager, QWidget *paren
         filterLayout->addWidget(m_roomTypeCombo, 1, 8, 1, 3);
         updateScheduleFields();
 
-    connect(ui->dateEditCheckIn, &QPushButton::clicked, this, [this]() {
-        openSchedulePicker(false);
-    });
-    connect(ui->dateEditCheckOut, &QPushButton::clicked, this, [this]() {
-        openSchedulePicker(true);
-    });
+        connect(m_scheduleButton, &QPushButton::clicked, this, [this]()
+                { openSchedulePicker(false); });
+        connect(m_checkInScheduleField, &QPushButton::clicked, this, [this]()
+                { openSchedulePicker(false); });
+        connect(m_checkOutScheduleField, &QPushButton::clicked, this, [this]()
+                { openSchedulePicker(true); });
     }
 
 
