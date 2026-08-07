@@ -8,6 +8,7 @@
 #include "InvoiceDialog.h"
 #include "SchedulePickerDialog.h"
 #include "DialogWindowBehavior.h"
+#include "SearchFieldUi.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -588,6 +589,7 @@ void ReservationsPageWidget::setupUI() {
     m_searchEdit = new QLineEdit(this);
     m_searchEdit->setObjectName("searchEdit");
     m_searchEdit->setPlaceholderText("Search by guest name, room number...");
+    addSearchIcon(m_searchEdit);
 
     m_statusCombo = new QComboBox(this);
     m_statusCombo->setObjectName("statusCombo");
@@ -648,7 +650,9 @@ void ReservationsPageWidget::startNewReservationForRoom(const QString& roomNumbe
 void ReservationsPageWidget::openReservationDialog(const QString& preselectedRoomNumber,
                                                     const QDateTime& initialCheckIn, const QDateTime& initialCheckOut,
                                                     int initialAdults, int initialChildren) {
-    ReservationDialog dialog(m_manager, this);
+    const auto previewRoom = preselectedRoomNumber.isEmpty() || !m_manager
+        ? nullptr : m_manager->findRoomByNumber(preselectedRoomNumber.toStdString());
+    ReservationDialog dialog(m_manager, this, previewRoom);
     if (initialCheckIn.isValid() && initialCheckOut.isValid()) {
         dialog.setInitialScheduleAt(initialCheckIn, initialCheckOut, initialAdults, initialChildren);
     }
@@ -864,6 +868,11 @@ void ReservationsPageWidget::onTableActionClicked() {
 
     std::string bookingId = btn->property("bookingId").toString().toStdString();
     QString actionType = btn->property("actionType").toString();
+    performBookingAction(QString::fromStdString(bookingId), actionType);
+}
+
+void ReservationsPageWidget::performBookingAction(const QString& requestedBookingId, const QString& actionType) {
+    const std::string bookingId = requestedBookingId.toStdString();
 
     auto booking = m_manager->findBookingById(bookingId);
     if (!booking || booking->isDeleted()) return;

@@ -16,6 +16,7 @@ public:
     void refreshData();
     void startNewReservationForRoom(const QString& roomNumber, const QDateTime& checkIn,
                                     const QDateTime& checkOut, int adults, int children);
+    void performBookingAction(const QString& bookingId, const QString& actionType);
 
 signals:
     // Modified and optimized performance: notify dependent dashboard data only after checkout persistence completes.

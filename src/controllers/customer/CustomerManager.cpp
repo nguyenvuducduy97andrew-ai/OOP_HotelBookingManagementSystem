@@ -11,7 +11,7 @@
 #include <utility>
 
 #include "CustomerIdentity.h"
-#include "CountryInputRules.h"
+#include "customer/CountryInputRules.h"
 
 namespace {
 std::string collapseWhitespace(const std::string& value)

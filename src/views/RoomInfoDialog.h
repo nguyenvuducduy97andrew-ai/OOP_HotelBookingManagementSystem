@@ -18,6 +18,11 @@ class RoomInfoDialog : public QDialog {
 public:
     explicit RoomInfoDialog(std::shared_ptr<Room> room, QWidget *parent = nullptr);
     ~RoomInfoDialog() override = default;
+    void setEmbeddedMode(bool embedded = true);
+
+signals:
+    void bookingClicked();
+    void cancelClicked();
 
 private slots:
     void onCancelClicked();
@@ -46,6 +51,7 @@ private:
     QGridLayout* m_amLayout;
     QPushButton* m_btnCancel;
     QPushButton* m_btnBooking;
+    bool m_embedded = false;
 };
 
 

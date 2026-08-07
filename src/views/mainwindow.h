@@ -14,6 +14,7 @@ class ReservationsPageWidget;
 class CustomerPageWidget;
 class RoomStatusPageWidget;
 class StatisticsPageWidget;
+class QStackedWidget;
 
 class MainWindow : public QMainWindow
 {
@@ -32,5 +33,10 @@ private:
     CustomerPageWidget* m_customerPage;
     RoomStatusPageWidget* m_roomStatusPage;
     StatisticsPageWidget* m_statisticsPage;
+    QWidget* m_reservationContainer = nullptr;
+    QStackedWidget* m_reservationSubPages = nullptr;
+    QPushButton* m_roomStatusTab = nullptr;
+    QPushButton* m_reservationDetailsTab = nullptr;
     void updateButtonStyle(QPushButton* activeBtn);
+    void showReservationSubPage(int index);
 };

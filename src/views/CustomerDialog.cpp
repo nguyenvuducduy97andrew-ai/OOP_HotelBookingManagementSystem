@@ -1,7 +1,7 @@
 #include "CustomerDialog.h"
 #include "Customer.h"
 #include "CustomerIdentity.h"
-#include "CountryInputRules.h"
+#include "customer/CountryInputRules.h"
 #include "HotelManager.h"
 #include "DialogWindowBehavior.h"
 #include <QLabel>

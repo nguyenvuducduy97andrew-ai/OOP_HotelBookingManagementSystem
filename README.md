@@ -88,7 +88,7 @@ Checkout and invoice creation are staged together, then persisted through one `D
 
 ## Customers and country input
 
-`src/views/CountryInputRules.h` is shared by Customer and Reservation dialogs.
+`src/models/customer/CountryInputRules.h` is shared by Customer and Reservation dialogs.
 
 - Supported countries: Vietnam, United States, Malaysia, United Kingdom, Japan, Singapore, South Korea, Thailand, Australia, and Germany.
 - Each identity document stores a type (`National ID`, `Passport`, or `Other`), issuing country, and document number. Customer identity is keyed by that combination, so the same number from different issuing countries does not collide.

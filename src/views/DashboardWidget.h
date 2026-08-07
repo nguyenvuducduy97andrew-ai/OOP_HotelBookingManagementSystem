@@ -27,6 +27,9 @@ public:
     ~DashboardWidget();
     void refreshDashboard();
 
+signals:
+    void reservationActionRequested(const QString& bookingId, const QString& actionType);
+
 private:
     Ui::DashboardWidget *ui;
     HotelManager* m_manager;

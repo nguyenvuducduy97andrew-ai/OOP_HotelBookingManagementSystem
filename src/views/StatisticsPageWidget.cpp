@@ -3,6 +3,7 @@
 #include "StandardRoom.h"
 #include "DeluxeRoom.h"
 #include "SuiteRoom.h"
+#include "SearchFieldUi.h"
 #include <QHeaderView>
 #include <QDateTime>
 #include <QMessageBox>
@@ -303,6 +304,7 @@ void StatisticsPageWidget::setupFilterBar(QVBoxLayout* parentLayout) {
     // Search input.
     m_searchEdit = new QLineEdit(this);
     m_searchEdit->setPlaceholderText("Find Invoice ID, Booking...");
+    addSearchIcon(m_searchEdit);
     m_searchEdit->setStyleSheet("QLineEdit { " + commonInputStyle + " min-width: 200px; }"
                                 "QLineEdit:focus { border: 1px solid #005BFE; }");
 

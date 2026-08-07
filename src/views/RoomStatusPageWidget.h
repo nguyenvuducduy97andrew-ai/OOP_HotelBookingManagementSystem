@@ -8,6 +8,8 @@
 
 class QLabel;
 class QPushButton;
+class QResizeEvent;
+class QComboBox;
 
 namespace Ui {
 class RoomStatusPageWidget;
@@ -36,12 +38,18 @@ private:
     void updateScheduleFields();
     void setupUI();
     void setAvailabilityMode(bool enabled);
+    int floorColumnCount() const;
+    void clearFloorSections();
+    QString roomStateSignature() const;
     // RoomCard already provides the room status card UI.
     // QWidget* createRoomStatusCard(const std::shared_ptr<Room>& room);
 
     Ui::RoomStatusPageWidget *ui;
     HotelManager* m_manager;
     QList<RoomCard*> m_roomCards;
+    QList<QWidget*> m_floorSections;
+    int m_lastFloorColumnCount = 0;
+    QString m_lastRoomStateSignature;
     bool m_isCheckAvailMode = false;
     QTimer* m_statusRefreshTimer = nullptr;
     QDateTime m_selectedCheckIn;
@@ -49,5 +57,9 @@ private:
     QPushButton* m_scheduleButton = nullptr;
     QPushButton* m_checkInScheduleField = nullptr;
     QPushButton* m_checkOutScheduleField = nullptr;
+    QComboBox* m_roomTypeCombo = nullptr;
+
+protected:
+    void resizeEvent(QResizeEvent* event) override;
 
 };

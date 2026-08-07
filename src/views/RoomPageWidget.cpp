@@ -6,6 +6,7 @@
 #include "CustomSuccessDialog.h"
 #include "CustomConfirmDialog.h"
 #include "DataManager.h"
+#include "SearchFieldUi.h"
 #include <QHBoxLayout>
 #include <QVBoxLayout>
 #include <QScrollArea>
@@ -236,6 +237,7 @@ void RoomPageWidget::setupUI() {
     m_searchEdit = new QLineEdit(this);
     m_searchEdit->setObjectName("searchEdit");
     m_searchEdit->setPlaceholderText("Search rooms...");
+    addSearchIcon(m_searchEdit);
     
     m_addRoomBtn = new QPushButton("Add Room", this);
     m_addRoomBtn->setObjectName("btnAddRoom");

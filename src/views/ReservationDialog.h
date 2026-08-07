@@ -6,17 +6,21 @@
 #include <QTimeEdit>
 #include <QComboBox>
 #include <QSpinBox>
+#include <memory>
 #include "HotelManager.h"
 
 class QLabel;
 class QPushButton;
 class QStackedLayout;
+class Room;
+class QWidget;
 
 class ReservationDialog : public QDialog {
     Q_OBJECT
 
 public:
-    explicit ReservationDialog(HotelManager* manager, QWidget *parent = nullptr);
+    explicit ReservationDialog(HotelManager* manager, QWidget *parent = nullptr,
+                               std::shared_ptr<Room> previewRoom = nullptr);
 
     void setEditBooking(const std::string& bookingId);
     void setInitialSchedule(const QDate& checkIn, const QDate& checkOut, int adults, int children);
@@ -57,6 +61,7 @@ private:
     void showValidationMessage(const QString& message);
     void updateRoomReview();
     void confirmPendingRoom();
+    void expandBookingForm();
 
     HotelManager* m_manager;
     std::string m_editingBookingId;
@@ -85,4 +90,6 @@ private:
     QLabel* m_roomReviewLabel;
     QPushButton* m_confirmRoomButton;
     QString m_confirmedRoomNumber;
+    std::shared_ptr<Room> m_previewRoom;
+    QWidget* m_reservationPanel = nullptr;
 };

@@ -1,5 +1,5 @@
 #include "ReservationDialog.h"
-#include "CountryInputRules.h"
+#include "customer/CountryInputRules.h"
 #include "CustomerIdentity.h"
 #include "Customer.h"
 #include "StandardRoom.h"
@@ -8,6 +8,8 @@
 #include "SchedulePickerDialog.h"
 #include "CustomConfirmDialog.h"
 #include "DialogWindowBehavior.h"
+#include "RoomInfoDialog.h"
+#include "SearchFieldUi.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QFormLayout>
@@ -22,8 +24,8 @@
 #include <QTimeEdit>
 #include <algorithm>
 
-ReservationDialog::ReservationDialog(HotelManager* manager, QWidget *parent)
-    : QDialog(parent), m_manager(manager), m_editingBookingId("") {
+ReservationDialog::ReservationDialog(HotelManager* manager, QWidget *parent, std::shared_ptr<Room> previewRoom)
+    : QDialog(parent), m_manager(manager), m_editingBookingId(""), m_previewRoom(std::move(previewRoom)) {
     setupUI();
     setWindowTitle("New Reservation");
     updateAvailableRooms();
@@ -171,10 +173,23 @@ void setupReservationDialogStyle(QDialog* dialog) {
 
 void ReservationDialog::setupUI() {
     setupReservationDialogStyle(this);
-    // Modified: Keep Reservation at a stable usable size; long sub-sections scroll inside the dialog rather than resizing the outer window.
-    lockDialogToWorkingArea(this, QSize(780, 700));
+    const QSize preferredSize = m_previewRoom ? QSize(500, 620) : QSize(780, 700);
+    lockDialogToWorkingArea(this, preferredSize);
 
-    auto* mainLayout = new QVBoxLayout(this);
+    auto* outerLayout = new QHBoxLayout(this);
+    outerLayout->setContentsMargins(0, 0, 0, 0);
+    outerLayout->setSpacing(0);
+
+    if (m_previewRoom) {
+        auto* roomInfo = new RoomInfoDialog(m_previewRoom, this);
+        roomInfo->setEmbeddedMode();
+        outerLayout->addWidget(roomInfo);
+        connect(roomInfo, &RoomInfoDialog::bookingClicked, this, &ReservationDialog::expandBookingForm);
+        connect(roomInfo, &RoomInfoDialog::cancelClicked, this, &QDialog::reject);
+    }
+
+    m_reservationPanel = new QWidget(this);
+    auto* mainLayout = new QVBoxLayout(m_reservationPanel);
     mainLayout->setContentsMargins(24, 24, 24, 24);
     mainLayout->setSpacing(16);
 
@@ -247,6 +262,7 @@ void ReservationDialog::setupUI() {
     m_existingCustomerCombo->setEditable(true);
     m_existingCustomerCombo->setInsertPolicy(QComboBox::NoInsert);
     m_existingCustomerCombo->lineEdit()->setPlaceholderText("Search document number, name, or phone...");
+    addSearchIcon(m_existingCustomerCombo->lineEdit());
     if (auto* completer = m_existingCustomerCombo->completer()) {
         completer->setCaseSensitivity(Qt::CaseInsensitive);
         completer->setFilterMode(Qt::MatchContains);
@@ -400,6 +416,10 @@ void ReservationDialog::setupUI() {
     btnLayout->addWidget(cancelBtn);
     btnLayout->addWidget(saveBtn);
     mainLayout->addLayout(btnLayout);
+    outerLayout->addWidget(m_reservationPanel, 1);
+    if (m_previewRoom) {
+        m_reservationPanel->hide();
+    }
 
     connect(m_checkInDateEdit, &QDateEdit::dateChanged, this, &ReservationDialog::updateAvailableRooms);
     connect(m_checkOutDateEdit, &QDateEdit::dateChanged, this, &ReservationDialog::updateAvailableRooms);
@@ -484,6 +504,28 @@ void ReservationDialog::setupUI() {
     connect(m_adultCountSpin, QOverload<int>::of(&QSpinBox::valueChanged), this, clearValidationFeedback);
     connect(m_childCountSpin, QOverload<int>::of(&QSpinBox::valueChanged), this, clearValidationFeedback);
     disableNonMoneyWheelChanges(this);
+}
+
+void ReservationDialog::expandBookingForm()
+{
+    if (!m_reservationPanel || m_reservationPanel->isVisible()) return;
+
+    const QSize available = dialogAvailableSize(this);
+    // Keep the modal compact enough that Room Status remains visible around it.
+    const QSize expanded(qMin(1100, available.width()), qMin(650, available.height()));
+    setFixedSize(expanded);
+    m_reservationPanel->show();
+
+    // Resizing a frameless window otherwise grows only toward the right. Recenter it
+    // so the retained Room Info panel visibly shifts left and makes room for the form.
+    if (QWidget* ownerWindow = parentWidget() ? parentWidget()->window() : nullptr) {
+        const QPoint ownerCenter = ownerWindow->frameGeometry().center();
+        move(ownerCenter.x() - width() / 2, ownerCenter.y() - height() / 2);
+    } else if (QScreen* screen = QGuiApplication::primaryScreen()) {
+        const QPoint screenCenter = screen->availableGeometry().center();
+        move(screenCenter.x() - width() / 2, screenCenter.y() - height() / 2);
+    }
+    setWindowTitle("Room Information & Reservation");
 }
 
 void ReservationDialog::updateIdPlaceholder() {

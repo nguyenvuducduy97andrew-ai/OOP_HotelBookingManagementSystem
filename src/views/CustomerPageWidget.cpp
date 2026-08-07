@@ -2,7 +2,8 @@
 #include "CustomerDialog.h"
 #include "CustomConfirmDialog.h"
 #include "CustomSuccessDialog.h"
-#include "CountryInputRules.h"
+#include "customer/CountryInputRules.h"
+#include "SearchFieldUi.h"
 #include "DataManager.h"
 #include <QVBoxLayout>
 #include <QLabel>
@@ -360,6 +361,7 @@ void CustomerPageWidget::setupUI() {
     m_searchEdit = new ExpandableSearchEdit(this);
     m_searchEdit->setObjectName("searchEdit");
     m_searchEdit->setPlaceholderText("Search name, document number, or phone...");
+    addSearchIcon(m_searchEdit);
     m_searchEdit->setFixedWidth(325);
 
     m_filterActiveBtn = new QPushButton("Active", this);

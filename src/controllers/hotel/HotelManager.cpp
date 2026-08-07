@@ -10,7 +10,7 @@
 #include <QString>
 #include <QStringList>
 #include "CustomerIdentity.h"
-#include "CountryInputRules.h"
+#include "customer/CountryInputRules.h"
 #include <QUuid>
 #include <algorithm>
 #include <cctype>

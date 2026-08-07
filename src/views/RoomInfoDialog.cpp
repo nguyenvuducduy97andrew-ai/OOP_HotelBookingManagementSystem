@@ -314,9 +314,28 @@ void RoomInfoDialog::populateData() {
 }
 
 void RoomInfoDialog::onCancelClicked() {
+    if (m_embedded) {
+        emit cancelClicked();
+        return;
+    }
     reject();
 }
 
 void RoomInfoDialog::onBookingClicked() {
+    if (m_embedded) {
+        emit bookingClicked();
+        return;
+    }
     accept();
+}
+
+void RoomInfoDialog::setEmbeddedMode(bool embedded) {
+    m_embedded = embedded;
+    if (!embedded) return;
+
+    setWindowFlags(Qt::Widget);
+    setMinimumSize(480, 0);
+    setMaximumSize(480, QWIDGETSIZE_MAX);
+    setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding);
+    show();
 }

@@ -57,9 +57,9 @@ QPushButton#btnFilterAll:checked, QPushButton#btnFilterStandard:checked, QPushBu
 /* Search Bar */
 QLineEdit#txtSearchRoom {
     background-color: #F8F9FA;
-    border: 1px solid #E2E8F0;
-    border-radius: 20px;
-    padding: 10px 15px;
+    border: 1px solid #005BFE;
+    border-radius: 15px;
+    padding: 4px 15px;
     color: #333333;
 }
 QLineEdit#txtSearchRoom:focus {
@@ -173,7 +173,7 @@ QLabel {
     <widget class="QLineEdit" name="txtSearchRoom">
      <property name="font">
       <font>
-       <pointsize>16</pointsize>
+       <pointsize>15</pointsize>
       </font>
      </property>
      <property name="placeholderText">
@@ -239,7 +239,7 @@ QLabel {
        <widget class="QPushButton" name="btnCheckAvailability">
         <property name="font">
          <font>
-          <pointsize>14</pointsize>
+          <pointsize>13</pointsize>
           <bold>true</bold>
          </font>
         </property>

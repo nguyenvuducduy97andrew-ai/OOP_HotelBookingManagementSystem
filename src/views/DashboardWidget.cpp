@@ -127,12 +127,13 @@ DashboardWidget::DashboardWidget(HotelManager *manager, QWidget *parent)
     m_reservationTable->setObjectName("miniCardReservationTable");
     m_reservationTable->setColumnCount(7);
     m_reservationTable->setHorizontalHeaderLabels({
-        "Booking ID", "Guest", "Room", "Planned check-in", "Planned check-out", "Status", "Reason"
+        "Booking ID", "Guest", "Room", "Planned check-in", "Planned check-out", "Status", "Actions"
     });
     m_reservationTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_reservationTable->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_reservationTable->setSelectionMode(QAbstractItemView::SingleSelection);
     m_reservationTable->verticalHeader()->hide();
+    m_reservationTable->verticalHeader()->setDefaultSectionSize(44);
     m_reservationTable->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
     m_reservationTable->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
     m_reservationTable->setMaximumHeight(250);
@@ -240,8 +241,6 @@ void DashboardWidget::refreshMiniCardReservations()
         if (state == BookingState::UPCOMING) status = "Upcoming";
         else if (state == BookingState::ACTIVE) status = "Active";
         else status = "Cancelled";
-        QString reason = QString::fromStdString(booking->getCancellationReason()).trimmed();
-
         m_reservationTable->insertRow(row);
         m_reservationTable->setItem(row, 0, new QTableWidgetItem(QString::fromStdString(booking->getBookingId())));
         m_reservationTable->setItem(row, 1, new QTableWidgetItem(customer ? QString::fromStdString(customer->getName()) : "Unavailable guest"));
@@ -249,7 +248,40 @@ void DashboardWidget::refreshMiniCardReservations()
         m_reservationTable->setItem(row, 3, new QTableWidgetItem(plannedIn.isValid() ? plannedIn.toString("dd MMM yyyy, HH:mm") : "—"));
         m_reservationTable->setItem(row, 4, new QTableWidgetItem(plannedOut.isValid() ? plannedOut.toString("dd MMM yyyy, HH:mm") : "—"));
         m_reservationTable->setItem(row, 5, new QTableWidgetItem(status));
-        m_reservationTable->setItem(row, 6, new QTableWidgetItem(reason.isEmpty() ? "—" : reason));
+
+        auto *actions = new QWidget(m_reservationTable);
+        actions->setStyleSheet("background:transparent;");
+        auto *actionLayout = new QHBoxLayout(actions);
+        actionLayout->setContentsMargins(4, 2, 4, 2);
+        actionLayout->setSpacing(6);
+        const auto addAction = [this, actions, actionLayout, booking](const QString& text,
+                                                                     const QString& actionType,
+                                                                     const QString& colors) {
+            auto *button = new QPushButton(text, actions);
+            button->setCursor(Qt::PointingHandCursor);
+            button->setMinimumHeight(26);
+            button->setMinimumWidth(text == "Check out" ? 89 : 76);
+            button->setStyleSheet("QPushButton { " + colors
+                + " border-radius:7px; padding:0 9px; font-size:12px; font-weight:700; }"
+                  "QPushButton:hover { color:#1B2559; border-color:#60A5FA; }");
+            const QString bookingId = QString::fromStdString(booking->getBookingId());
+            connect(button, &QPushButton::clicked, this, [this, bookingId, actionType]() {
+                emit reservationActionRequested(bookingId, actionType);
+            });
+            actionLayout->addWidget(button);
+        };
+        if (state == BookingState::UPCOMING) {
+            addAction("Check in", "checkin", "background: #EFF6FF; color:#1D4ED8; border:1px solid #BFDBFE;");
+            addAction("Cancel", "cancel", "background: #FFFBEB; color:#92400E; border:1px solid #FDE68A;");
+        } else if (state == BookingState::ACTIVE) {
+            addAction("Check out", "checkout", "background: #ECFDF5; color:#065F46; border:1px solid #A7F3D0;");
+        } else {
+            auto *none = new QLabel("No available actions", actions);
+            none->setStyleSheet("color: #94A3B8; background:transparent;");
+            actionLayout->addWidget(none);
+        }
+        actionLayout->addStretch();
+        m_reservationTable->setCellWidget(row, 6, actions);
         ++row;
     }
 
