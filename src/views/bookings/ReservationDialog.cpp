@@ -173,7 +173,10 @@ void setupReservationDialogStyle(QDialog* dialog) {
 
 void ReservationDialog::setupUI() {
     setupReservationDialogStyle(this);
-    const QSize preferredSize = m_previewRoom ? QSize(500, 620) : QSize(780, 700);
+    // Give the reservation form enough room to show its fields without relying on
+    // scrolling during normal use. The scroll area remains available for smaller
+    // owner windows and lower-resolution displays.
+    const QSize preferredSize = m_previewRoom ? QSize(500, 620) : QSize(880, 820);
     lockDialogToWorkingArea(this, preferredSize);
 
     auto* outerLayout = new QHBoxLayout(this);
@@ -217,10 +220,10 @@ void ReservationDialog::setupUI() {
     auto* formScroll = new QScrollArea(this);
     formScroll->setWidgetResizable(true);
     formScroll->setFrameShape(QFrame::NoFrame);
-    formScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    formScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     auto* formContent = new QWidget(formScroll);
     auto* formLayout = new QFormLayout(formContent);
-    formLayout->setContentsMargins(2, 2, 8, 2);
+    formLayout->setContentsMargins(2, 2, 2, 2);
     formLayout->setSpacing(12);
 
     auto* customerTypeRow = new QHBoxLayout();
@@ -511,8 +514,9 @@ void ReservationDialog::expandBookingForm()
     if (!m_reservationPanel || m_reservationPanel->isVisible()) return;
 
     const QSize available = dialogAvailableSize(this);
-    // Keep the modal compact enough that Room Status remains visible around it.
-    const QSize expanded(qMin(1100, available.width()), qMin(650, available.height()));
+    // Widen the reservation panel and let its scroll area extend farther toward
+    // the action buttons, while still keeping the modal inside the working area.
+    const QSize expanded(qMin(1230, available.width()), qMin(800, available.height()));
     setFixedSize(expanded);
     m_reservationPanel->show();
 

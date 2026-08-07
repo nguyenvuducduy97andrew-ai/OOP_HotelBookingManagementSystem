@@ -157,6 +157,10 @@ bool RoomCard::isTempAvailMode() const {
 }
 
 void RoomCard::setTempAvailMode(bool enabled) {
+    if (enabled && m_isTempAvail) {
+        return;
+    }
+
     if (!enabled && !m_isTempAvail) {
         return;
     }

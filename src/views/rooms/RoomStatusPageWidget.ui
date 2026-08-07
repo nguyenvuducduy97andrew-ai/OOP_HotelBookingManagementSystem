@@ -34,7 +34,7 @@ QScrollArea QWidget#scrollAreaWidgetContents {
 
 /* Base text color */
 QLabel, QCheckBox, QRadioButton {
-    color: #333333;
+    color: #2B3674;
 }
 
 /* Filter buttons (All Room, Standard, etc.) */
@@ -56,8 +56,8 @@ QPushButton#btnFilterAll:checked, QPushButton#btnFilterStandard:checked, QPushBu
 
 /* Search Bar */
 QLineEdit#txtSearchRoom {
-    background-color: #F8F9FA;
-    border: 1px solid #005BFE;
+    background-color: #FFFFFF;
+    border: 1px solid #a8a8a8;
     border-radius: 15px;
     padding: 4px 15px;
     color: #333333;
@@ -68,7 +68,7 @@ QLineEdit#txtSearchRoom:focus {
 
 /* Search Frame */
 QFrame#frameFilterPanel {
-    background-color: #F8F9FA;
+    background-color: #FFFFFF;
     border-radius: 15px;
     border: none;
 }
@@ -170,14 +170,18 @@ QLabel {
     </widget>
    </item>
    <item row="0" column="0" colspan="4">
-    <widget class="QLineEdit" name="txtSearchRoom">
+    <widget class="QLabel" name="lblPageTitle">
      <property name="font">
       <font>
-       <pointsize>15</pointsize>
+       <pointsize>18</pointsize>
+       <bold>true</bold>
       </font>
      </property>
-     <property name="placeholderText">
-      <string>Search for rooms and offers</string>
+     <property name="text">
+      <string>Room status</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignmentFlag::AlignLeading|Qt::AlignmentFlag::AlignLeft|Qt::AlignmentFlag::AlignVCenter</set>
      </property>
     </widget>
    </item>
@@ -430,21 +434,17 @@ QLabel {
         </property>
        </widget>
       </item>
-      <item row="0" column="0">
-       <widget class="QLabel" name="lblCheckInTitle">
-        <property name="font">
-         <font>
-          <pointsize>17</pointsize>
-          <bold>true</bold>
-         </font>
-        </property>
-        <property name="styleSheet">
-         <string notr="true"/>
-        </property>
-        <property name="text">
-         <string>Check In</string>
-        </property>
-       </widget>
+       <item row="0" column="0" colspan="11">
+        <widget class="QLineEdit" name="txtSearchRoom">
+         <property name="font">
+          <font>
+           <pointsize>12</pointsize>
+          </font>
+         </property>
+         <property name="placeholderText">
+          <string>Search for rooms and offers</string>
+         </property>
+        </widget>
       </item>
       <item row="1" column="5" colspan="3">
        <widget class="QDateEdit" name="dateEditCheckOut">

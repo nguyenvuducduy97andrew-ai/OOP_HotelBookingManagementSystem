@@ -212,6 +212,7 @@ void showReservationDetails(QWidget* parent, const std::shared_ptr<Booking>& boo
     const auto customer = booking->getCustomer();
     const auto room = booking->getRoom();
     QDialog dialog(parent);
+    dialog.setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint);
     dialog.setWindowTitle("Reservation details");
     dialog.setModal(true);
     dialog.setMinimumWidth(560);
@@ -285,6 +286,7 @@ bool requestReservationReason(
     QString& reason)
 {
     QDialog dialog(parent);
+    dialog.setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint);
     dialog.setWindowTitle(title);
     dialog.setModal(true);
     dialog.setMinimumWidth(380);
@@ -353,6 +355,7 @@ bool requestCheckoutPayment(QWidget* parent, double total, QString& method, doub
     dialog.setWindowTitle("Record checkout payment");
     dialog.setModal(true);
     dialog.setMinimumWidth(420);
+    dialog.setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint);
     // Modified: Give the checkout-payment dialog explicit colors so inherited page styles cannot render its controls white on white.
     dialog.setStyleSheet(
         "QDialog { background: #FFFFFF; border: 2px solid #93C5FD; border-radius: 18px; }"

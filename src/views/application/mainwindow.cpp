@@ -13,6 +13,7 @@
 #include <QButtonGroup>
 #include <QHBoxLayout>
 #include <QStackedWidget>
+#include <QSizePolicy>
 #include <QVBoxLayout>
 
 namespace {
@@ -135,14 +136,15 @@ MainWindow::MainWindow(HotelManager* manager, QWidget *parent)
     auto* reservationTabs = new QWidget(m_reservationContainer);
     reservationTabs->setObjectName("reservationBookmarkBar");
     auto* reservationTabsLayout = new QHBoxLayout(reservationTabs);
-    reservationTabsLayout->setContentsMargins(22, 10, 22, 0);
-    reservationTabsLayout->setSpacing(6);
+    reservationTabsLayout->setContentsMargins(22, 0, 22, 0);
+    reservationTabsLayout->setSpacing(0);
     m_roomStatusTab = new QPushButton("Room Status", reservationTabs);
     m_reservationDetailsTab = new QPushButton("Reservation Details", reservationTabs);
     for (QPushButton* tab : {m_roomStatusTab, m_reservationDetailsTab}) {
         tab->setCheckable(true);
-        tab->setMinimumWidth(180);
-        tab->setMinimumHeight(42);
+        tab->setMinimumHeight(52);
+        tab->setFixedWidth(165);
+        tab->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
         tab->setProperty("reservationBookmark", true);
         reservationTabsLayout->addWidget(tab);
     }
@@ -159,16 +161,29 @@ MainWindow::MainWindow(HotelManager* manager, QWidget *parent)
     reservationContainerLayout->addWidget(reservationTabs);
     reservationContainerLayout->addWidget(m_reservationSubPages, 1);
     m_reservationContainer->setStyleSheet(R"(
-        QWidget#reservationBookmarkBar { background: transparent; border-bottom: 1px solid #D7E3F4; }
-        QPushButton[reservationBookmark="true"] {
-            background: #E8EEF8; color: #66789B; border: 1px solid #D7E3F4;
-            border-bottom: none; border-top-left-radius: 12px; border-top-right-radius: 12px;
-            padding: 10px 22px; font-size: 14px; font-weight: 700;
+        QWidget#reservationBookmarkBar {
+            background: #FFFFFF;
+            border: none;
+            border-bottom: 1px solid #D7E3F4;
         }
-        QPushButton[reservationBookmark="true"]:hover { background: #EFF6FF; color: #1D4ED8; }
+        QPushButton[reservationBookmark="true"] {
+            background: #FFFFFF;
+            color: #64748B;
+            border: none;
+            border-bottom: 3px solid #a5a5a596;
+            border-radius: 0;
+            padding: 14px 20px 11px 20px;
+            font-size: 14px;
+            font-weight: 700;
+        }
+        QPushButton[reservationBookmark="true"]:hover {
+            background: #F8FAFF;
+            color: #1D4ED8;
+        }
         QPushButton[reservationBookmark="true"]:checked {
-            background: #FFFFFF; color: #005BFE; border-color: #93C5FD;
-            padding-top: 8px; border-top: 3px solid #005BFE;
+            background: #FFFFFF;
+            color: #005BFE;
+            border-bottom: 3px solid #005BFE;
         }
     )");
     connect(reservationTabGroup, &QButtonGroup::idClicked,

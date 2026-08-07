@@ -74,20 +74,19 @@ RoomStatusPageWidget::RoomStatusPageWidget(HotelManager* manager, QWidget *paren
 
     auto* filterLayout = qobject_cast<QGridLayout*>(ui->frameFilterPanel->layout());
     if (filterLayout) {
-        ui->lblCheckInTitle->setText("Booking schedule");
         ui->lblCheckOutTitle->hide();
         ui->dateEditCheckIn->hide();
         ui->dateEditCheckOut->hide();
-        m_scheduleButton = new QPushButton("Choose dates & times", ui->frameFilterPanel);
+        m_scheduleButton = new QPushButton("Schedule booking", ui->frameFilterPanel);
         m_scheduleButton->setObjectName("btnChooseSchedule");
         // Modified: Give the shared schedule entry a dedicated visible treatment instead of inheriting an empty legacy date-field cell.
         m_scheduleButton->setMinimumHeight(42);
         m_scheduleButton->setMinimumWidth(150);
         m_scheduleButton->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
         m_scheduleButton->setStyleSheet(
-            "QPushButton { background:#EFF6FF; color:#1D4ED8; border:1px solid #BFDBFE; "
+            "QPushButton { background: #EFF6FF; color: #1D4ED8; border:1px solid #BFDBFE; "
             "border-radius:10px; padding:9px 14px; font-weight:700; text-align:left; }"
-            "QPushButton:hover { background:#DBEAFE; border-color:#60A5FA; }");
+            "QPushButton:hover { background: #DBEAFE; border-color: #60A5FA; }");
         const QString fieldStyle =
             "QPushButton { background:#FFFFFF; color:#2B3674; border:1px solid #D8E2F0; "
             "border-radius:10px; padding:9px 12px; font-weight:600; text-align:left; }"
@@ -134,23 +133,27 @@ RoomStatusPageWidget::RoomStatusPageWidget(HotelManager* manager, QWidget *paren
     connect(ui->btnAddAdult, &QPushButton::clicked, this, [this]() {
         int val = ui->lblAdultCount->text().toInt();
         ui->lblAdultCount->setText(QString::number(val + 1));
-        applyFilters();
+        setAvailabilityMode(true);
     });
     connect(ui->btnMinusAdult, &QPushButton::clicked, this, [this]() {
         int val = ui->lblAdultCount->text().toInt();
-        if (val > 1) ui->lblAdultCount->setText(QString::number(val - 1));
-        applyFilters();
+        if (val > 1) {
+            ui->lblAdultCount->setText(QString::number(val - 1));
+            setAvailabilityMode(true);
+        }
     });
 
     connect(ui->btnAddChild, &QPushButton::clicked, this, [this]() {
         int val = ui->lblChildrenCount->text().toInt();
         ui->lblChildrenCount->setText(QString::number(val + 1));
-        applyFilters();
+        setAvailabilityMode(true);
     });
     connect(ui->btnMinusChild, &QPushButton::clicked, this, [this]() {
         int val = ui->lblChildrenCount->text().toInt();
-        if (val > 0) ui->lblChildrenCount->setText(QString::number(val - 1));
-        applyFilters();
+        if (val > 0) {
+            ui->lblChildrenCount->setText(QString::number(val - 1));
+            setAvailabilityMode(true);
+        }
     });
 
     // Room type filtering now lives in the schedule row instead of a separate button row.
@@ -159,8 +162,14 @@ RoomStatusPageWidget::RoomStatusPageWidget(HotelManager* manager, QWidget *paren
     ui->btnFilterDeluxe->hide();
     ui->btnFilterSuite->hide();
 
-    // Connect the search field.
-    connect(ui->txtSearchRoom, &QLineEdit::textChanged, this, &RoomStatusPageWidget::applyFilters);
+    // Debounce typing so a quick search updates the cards once instead of rebuilding on every keystroke.
+    m_searchDebounceTimer = new QTimer(this);
+    m_searchDebounceTimer->setSingleShot(true);
+    m_searchDebounceTimer->setInterval(120);
+    connect(m_searchDebounceTimer, &QTimer::timeout, this, &RoomStatusPageWidget::applyFilters);
+    connect(ui->txtSearchRoom, &QLineEdit::textChanged, this, [this]() {
+        m_searchDebounceTimer->start();
+    });
     addSearchIcon(ui->txtSearchRoom);
     // Keep the original horizontal span while reducing the search bar's vertical footprint.
     ui->txtSearchRoom->setFixedHeight(32);
@@ -170,10 +179,10 @@ RoomStatusPageWidget::RoomStatusPageWidget(HotelManager* manager, QWidget *paren
     ui->btnCheckAvailability->setMaximumWidth(220);
     ui->btnCheckAvailability->setMinimumHeight(42);
 
-    // Connect the Check Availability button.
-    connect(ui->btnCheckAvailability, &QPushButton::clicked, this, [this]() {
-        setAvailabilityMode(!m_isCheckAvailMode);
-    });
+    // Availability is applied automatically; this action only restores the neutral filter state.
+    ui->btnCheckAvailability->setText("Clear filters");
+    connect(ui->btnCheckAvailability, &QPushButton::clicked,
+            this, &RoomStatusPageWidget::clearFilters);
 
     ui->btnFilterAll->setChecked(true);
 
@@ -247,6 +256,7 @@ void RoomStatusPageWidget::refreshData() {
     QGridLayout* gridLayout = qobject_cast<QGridLayout*>(ui->scrollAreaWidgetContents->layout());
     if (!gridLayout) return;
 
+    m_availabilityCacheValid = false;
     clearFloorSections();
     // Clear old cards
     for (RoomCard* card : m_roomCards) {
@@ -337,7 +347,7 @@ void RoomStatusPageWidget::refreshData() {
         m_roomCards.append(card);
 
         connect(card, &RoomCard::cardClicked, this, [this, room, card]() {
-            if (!m_isCheckAvailMode || !m_selectedCheckIn.isValid() || !m_selectedCheckOut.isValid()) {
+            if (/*!m_isCheckAvailMode ||*/ !m_selectedCheckIn.isValid() || !m_selectedCheckOut.isValid()) {
                 return;
             }
 
@@ -361,6 +371,7 @@ void RoomStatusPageWidget::refreshData() {
 
     }
 
+    rebuildFloorSections();
     // Modified: Index active bookings once so rendering room cards no longer scans every booking for every room.
     applyFilters();
     m_lastRoomStateSignature = roomStateSignature();
@@ -381,17 +392,38 @@ void RoomStatusPageWidget::setAvailabilityMode(bool enabled)
 {
     m_isCheckAvailMode = enabled;
     if (m_isCheckAvailMode) {
-        // Modified: Keep the availability action concise so it remains fully readable at narrow window widths.
-        ui->btnCheckAvailability->setText("Clear filter");
+        ui->btnCheckAvailability->setText("Clear filters");
         ui->btnCheckAvailability->setStyleSheet(
             "QPushButton { background-color: #E53935; color: white; border-radius: 10px; padding: 10px; font-weight: bold; }"
             "QPushButton:hover { background-color: #C62828; }"
         );
     } else {
-        ui->btnCheckAvailability->setText("Check availability");
+        ui->btnCheckAvailability->setText("Clear filters");
         ui->btnCheckAvailability->setStyleSheet("");
     }
     applyFilters();
+}
+
+void RoomStatusPageWidget::clearFilters()
+{
+    const QSignalBlocker searchBlocker(ui->txtSearchRoom);
+    ui->txtSearchRoom->clear();
+
+    if (m_roomTypeCombo) {
+        const QSignalBlocker typeBlocker(m_roomTypeCombo);
+        const int allIndex = m_roomTypeCombo->findData("All");
+        if (allIndex >= 0) m_roomTypeCombo->setCurrentIndex(allIndex);
+    }
+
+    ui->lblAdultCount->setText("1");
+    ui->lblChildrenCount->setText("0");
+    const QDateTime now = QDateTime::currentDateTime();
+    m_selectedCheckIn = QDateTime(now.date(), QTime(now.time().hour(), 0)).addSecs(60 * 60);
+    m_selectedCheckOut = m_selectedCheckIn.addSecs(60 * 60);
+    updateScheduleFields();
+
+    m_availabilityCacheValid = false;
+    setAvailabilityMode(false);
 }
 
 void RoomStatusPageWidget::applyFilters() {
@@ -401,78 +433,93 @@ void RoomStatusPageWidget::applyFilters() {
     QGridLayout* gridLayout = qobject_cast<QGridLayout*>(ui->scrollAreaWidgetContents->layout());
     if (!gridLayout) return;
 
-    // Modified: Batch card reparenting and visibility changes so changing a filter or returning from the booking dialog does not visibly stutter.
+    // Keep the persistent floor widgets and only update card membership/visibility.
     ui->scrollAreaWidgetContents->setUpdatesEnabled(false);
-
-    clearFloorSections();
 
     const QDateTime reqIn = m_selectedCheckIn;
     const QDateTime reqOut = m_selectedCheckOut;
     int reqAdults = ui->lblAdultCount->text().toInt();
     int reqChildren = ui->lblChildrenCount->text().toInt();
 
-    std::unordered_set<std::string> availableRoomNumbers;
     if (m_isCheckAvailMode) {
-        std::string availabilityError;
-        const auto availableRooms = m_manager->getAvailableRoomsForPeriod(
-            reqIn.toString(Qt::ISODate).toStdString(),
-            reqOut.toString(Qt::ISODate).toStdString(), availabilityError);
-        for (const auto& room : availableRooms) {
-            if (room) {
-                availableRoomNumbers.insert(room->getRoomNumber());
+        if (!m_availabilityCacheValid
+            || m_cachedAvailabilityCheckIn != reqIn
+            || m_cachedAvailabilityCheckOut != reqOut) {
+            m_cachedAvailableRoomNumbers.clear();
+            std::string availabilityError;
+            const auto availableRooms = m_manager->getAvailableRoomsForPeriod(
+                reqIn.toString(Qt::ISODate).toStdString(),
+                reqOut.toString(Qt::ISODate).toStdString(), availabilityError);
+            for (const auto& room : availableRooms) {
+                if (room) m_cachedAvailableRoomNumbers.insert(room->getRoomNumber());
             }
+            m_cachedAvailabilityCheckIn = reqIn;
+            m_cachedAvailabilityCheckOut = reqOut;
+            m_availabilityCacheValid = true;
         }
     }
 
-    QMap<int, QList<RoomCard*>> visibleCardsByFloor;
-
-    for (RoomCard* card : m_roomCards) {
-        bool matchType = (type == "All" || card->getRoomType() == type);
-        bool matchSearch = true;
-        bool matchAvail = true;
-
-        if (!searchText.isEmpty()) {
-            matchSearch = card->getGuestName().toLower().contains(searchText) ||
-                          card->getRoomNumber().toLower().contains(searchText) ||
-                          card->getRoomType().toLower().contains(searchText) ||
-                          card->getDateIn().toLower().contains(searchText);
-        }
-
-        if (m_isCheckAvailMode) {
-            // Modified: Use the shared booking-and-maintenance availability result so Room Status cannot disagree with Reservation.
-            matchAvail = availableRoomNumbers.find(card->getRoomNumber().toStdString()) != availableRoomNumbers.end();
-
-            if (matchAvail) {
-                const auto room = m_manager->findRoomByNumber(card->getRoomNumber().toStdString());
-                // Modified: Read the configured capacity from the canonical room instead of assuming a capacity from its room type.
-                if (!room || reqAdults <= 0 || reqChildren < 0
-                    || reqAdults + reqChildren > room->getMaximumGuests()) {
-                    matchAvail = false;
-                }
-            }
-            
-            if (matchAvail) {
-                card->setTempAvailMode(true);
-            } else {
-                card->setTempAvailMode(false);
-            }
-        } else {
-            card->setTempAvailMode(false);
-        }
-
-        if (matchType && matchSearch && matchAvail) {
-            visibleCardsByFloor[floorForRoomNumber(card->getRoomNumber())].append(card);
-        } else {
-            card->hide(); 
-        }
+    for (auto* layout : m_floorLayoutByNumber) {
+        QLayoutItem* item = nullptr;
+        while ((item = layout->takeAt(0)) != nullptr) delete item;
     }
 
     const int columns = floorColumnCount();
     m_lastFloorColumnCount = columns;
+    for (auto floorIt = m_cardsByFloor.cbegin(); floorIt != m_cardsByFloor.cend(); ++floorIt) {
+        QGridLayout* roomsLayout = m_floorLayoutByNumber.value(floorIt.key(), nullptr);
+        QWidget* section = m_floorSectionByNumber.value(floorIt.key(), nullptr);
+        if (!roomsLayout || !section) continue;
+
+        int visibleIndex = 0;
+        for (RoomCard* card : floorIt.value()) {
+            const bool matchType = type == "All" || card->getRoomType() == type;
+            const bool matchSearch = searchText.isEmpty()
+                || card->getGuestName().toLower().contains(searchText)
+                || card->getRoomNumber().toLower().contains(searchText)
+                || card->getRoomType().toLower().contains(searchText)
+                || card->getDateIn().toLower().contains(searchText);
+
+            bool matchAvail = true;
+            if (m_isCheckAvailMode) {
+                matchAvail = m_cachedAvailableRoomNumbers.find(card->getRoomNumber().toStdString())
+                    != m_cachedAvailableRoomNumbers.end();
+                if (matchAvail) {
+                    const auto room = m_manager->findRoomByNumber(card->getRoomNumber().toStdString());
+                    matchAvail = room && reqAdults > 0 && reqChildren >= 0
+                        && reqAdults + reqChildren <= room->getMaximumGuests();
+                }
+            }
+
+            card->setTempAvailMode(m_isCheckAvailMode && matchAvail);
+            const bool visible = matchType && matchSearch && matchAvail;
+            card->setVisible(visible);
+            if (visible) {
+                roomsLayout->addWidget(card, visibleIndex / columns, visibleIndex % columns,
+                                       Qt::AlignTop | Qt::AlignLeft);
+                ++visibleIndex;
+            }
+        }
+        section->setVisible(visibleIndex > 0);
+    }
+
+    ui->scrollAreaWidgetContents->setUpdatesEnabled(true);
+    ui->scrollAreaWidgetContents->update();
+}
+
+void RoomStatusPageWidget::rebuildFloorSections()
+{
+    auto* gridLayout = qobject_cast<QGridLayout*>(ui->scrollAreaWidgetContents->layout());
+    if (!gridLayout) return;
+
+    m_cardsByFloor.clear();
+    for (RoomCard* card : m_roomCards) {
+        if (card) m_cardsByFloor[floorForRoomNumber(card->getRoomNumber())].append(card);
+    }
+
     int sectionRow = 0;
-    for (auto floorIt = visibleCardsByFloor.begin(); floorIt != visibleCardsByFloor.end(); ++floorIt) {
-        auto cards = floorIt.value();
-        std::sort(cards.begin(), cards.end(), [](RoomCard* left, RoomCard* right) {
+    for (auto floorIt = m_cardsByFloor.begin(); floorIt != m_cardsByFloor.end(); ++floorIt) {
+        std::sort(floorIt.value().begin(), floorIt.value().end(), [](RoomCard* left, RoomCard* right) {
             bool leftOk = false;
             bool rightOk = false;
             const int leftNumber = left->getRoomNumber().toInt(&leftOk);
@@ -505,19 +552,14 @@ void RoomStatusPageWidget::applyFilters() {
         roomsLayout->setHorizontalSpacing(10);
         roomsLayout->setVerticalSpacing(10);
         roomsLayout->setAlignment(Qt::AlignTop | Qt::AlignLeft);
-        for (int index = 0; index < cards.size(); ++index) {
-            RoomCard* card = cards.at(index);
-            card->show();
-            roomsLayout->addWidget(card, index / columns, index % columns,
-                                   Qt::AlignTop | Qt::AlignLeft);
-        }
         sectionLayout->addWidget(roomsWidget, 1);
         gridLayout->addWidget(section, sectionRow++, 0);
+
         m_floorSections.append(section);
+        m_floorSectionByNumber.insert(floorIt.key(), section);
+        m_floorLayoutByNumber.insert(floorIt.key(), roomsLayout);
     }
     gridLayout->setColumnStretch(0, 1);
-    ui->scrollAreaWidgetContents->setUpdatesEnabled(true);
-    ui->scrollAreaWidgetContents->update();
 }
 
 int RoomStatusPageWidget::floorColumnCount() const
@@ -537,6 +579,9 @@ void RoomStatusPageWidget::clearFloorSections()
         delete section;
     }
     m_floorSections.clear();
+    m_cardsByFloor.clear();
+    m_floorSectionByNumber.clear();
+    m_floorLayoutByNumber.clear();
 
     if (auto* gridLayout = qobject_cast<QGridLayout*>(ui->scrollAreaWidgetContents->layout())) {
         QLayoutItem* item = nullptr;
@@ -548,8 +593,12 @@ void RoomStatusPageWidget::resizeEvent(QResizeEvent* event)
 {
     QWidget::resizeEvent(event);
     const int columns = floorColumnCount();
-    if (!m_roomCards.isEmpty() && columns != m_lastFloorColumnCount) {
-        QTimer::singleShot(0, this, &RoomStatusPageWidget::applyFilters);
+    if (!m_roomCards.isEmpty() && columns != m_lastFloorColumnCount && !m_reflowPending) {
+        m_reflowPending = true;
+        QTimer::singleShot(0, this, [this]() {
+            m_reflowPending = false;
+            if (floorColumnCount() != m_lastFloorColumnCount) applyFilters();
+        });
     }
 }
 
@@ -558,6 +607,37 @@ QString RoomStatusPageWidget::roomStateSignature() const
     if (!m_manager) return {};
 
     const QDateTime now = QDateTime::currentDateTime();
+    std::unordered_map<std::string, QString> bookingStateByRoom;
+    std::unordered_set<std::string> activeRooms;
+    for (const auto& booking : m_manager->getBookings()) {
+        if (!booking || booking->isCancelled() || booking->isDeleted() || !booking->getRoom()) continue;
+
+        const std::string roomNumber = booking->getRoom()->getRoomNumber();
+        const BookingState bookingState = m_manager->getBookingState(*booking);
+        if (bookingState == BookingState::ACTIVE) {
+            activeRooms.insert(roomNumber);
+            bookingStateByRoom[roomNumber] = "occupied:" + QString::fromStdString(booking->getBookingId());
+            continue;
+        }
+        if (bookingState != BookingState::UPCOMING || activeRooms.find(roomNumber) != activeRooms.end()) continue;
+
+        QDateTime plannedStart = QDateTime::fromString(
+            QString::fromStdString(booking->getPlannedCheckInAt()), Qt::ISODateWithMs);
+        QDateTime plannedEnd = QDateTime::fromString(
+            QString::fromStdString(booking->getPlannedCheckOutAt()), Qt::ISODateWithMs);
+        if (!plannedStart.isValid()) {
+            plannedStart = QDateTime(
+                QDate::fromString(QString::fromStdString(booking->getCheckInDate()), Qt::ISODate), QTime(0, 0));
+        }
+        if (!plannedEnd.isValid()) {
+            plannedEnd = QDateTime(
+                QDate::fromString(QString::fromStdString(booking->getCheckOutDate()), Qt::ISODate), QTime(0, 0));
+        }
+        if (plannedStart.isValid() && plannedEnd.isValid() && plannedStart <= now && now < plannedEnd) {
+            bookingStateByRoom[roomNumber] = "awaiting:" + QString::fromStdString(booking->getBookingId());
+        }
+    }
+
     QStringList stateParts;
     stateParts.reserve(static_cast<int>(m_manager->getRooms().size()));
 
@@ -569,40 +649,8 @@ QString RoomStatusPageWidget::roomStateSignature() const
             || m_manager->isRoomBlockedAt(room->getRoomNumber(), now.toString(Qt::ISODateWithMs).toStdString())) {
             state = "maintenance";
         } else {
-            for (const auto& booking : m_manager->getBookings()) {
-                if (!booking || booking->isCancelled() || booking->isDeleted()
-                    || !booking->getRoom()
-                    || booking->getRoom()->getRoomNumber() != room->getRoomNumber()) {
-                    continue;
-                }
-
-                const BookingState bookingState = m_manager->getBookingState(*booking);
-                if (bookingState == BookingState::ACTIVE) {
-                    state = "occupied:" + QString::fromStdString(booking->getBookingId());
-                    break;
-                }
-                if (bookingState == BookingState::UPCOMING) {
-                    QDateTime plannedStart = QDateTime::fromString(
-                        QString::fromStdString(booking->getPlannedCheckInAt()), Qt::ISODateWithMs);
-                    QDateTime plannedEnd = QDateTime::fromString(
-                        QString::fromStdString(booking->getPlannedCheckOutAt()), Qt::ISODateWithMs);
-                    if (!plannedStart.isValid()) {
-                        plannedStart = QDateTime(
-                            QDate::fromString(QString::fromStdString(booking->getCheckInDate()), Qt::ISODate),
-                            QTime(0, 0));
-                    }
-                    if (!plannedEnd.isValid()) {
-                        plannedEnd = QDateTime(
-                            QDate::fromString(QString::fromStdString(booking->getCheckOutDate()), Qt::ISODate),
-                            QTime(0, 0));
-                    }
-                    if (plannedStart.isValid() && plannedEnd.isValid()
-                        && plannedStart <= now && now < plannedEnd) {
-                        state = "awaiting:" + QString::fromStdString(booking->getBookingId());
-                        break;
-                    }
-                }
-            }
+            const auto bookingState = bookingStateByRoom.find(room->getRoomNumber());
+            if (bookingState != bookingStateByRoom.end()) state = bookingState->second;
         }
         stateParts.append(QString::fromStdString(room->getRoomNumber()) + '=' + state);
     }
