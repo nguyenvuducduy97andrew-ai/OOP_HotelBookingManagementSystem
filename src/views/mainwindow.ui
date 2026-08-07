@@ -27,9 +27,9 @@
   </property>
   <property name="styleSheet">
    <string notr="true">/* ================= 1. BASE STRUCTURE (rounded-corner fix) ================= */
-QWidget#centralwidget {
-    background-color: #E5E7EB; /* Outer gray background */
-}
+  QWidget#centralwidget {
+      background-color: #F0F5FA; /* Cryptowall Outer gray-blue background */
+  }
 
 QFrame#mainAppContainer {
     background-color: #FFFFFF;
@@ -54,29 +54,30 @@ QFrame#mainContainFrame, QStackedWidget {
          border: none;
 }
 
-QPushButton[sidebarBtn=&quot;true&quot;] {
+QPushButton[sidebarBtn="true"] {
     background-color: transparent;
-    color: #A3AED0; /* Gray text while inactive */
+    color: #2B3674; /* Dark blue/black text while inactive */
     border: none;
     text-align: left;
-    padding-left: 20px;
-    font-size: 14px;
+    padding-left: 12px;
+    font-size: 13px;
     font-weight: 600;
-    min-height: 45px;
+    min-height: 42px;
     border-radius: 10px;
+    margin: 4px 10px;
 }
 
-/* Hover state */
-QPushButton[sidebarBtn=&quot;true&quot;]:hover {
-    background-color: #F4F7FE;
-    color: #005BFE;
-}
-
-/* Active button style */
-QPushButton[sidebarBtn=&quot;true&quot;][active=&quot;true&quot;] {
-    background-color: #005BFE; /* Primary blue */
-    color: #FFFFFF; /* White text */
-}
+  /* Hover state */
+  QPushButton[sidebarBtn="true"]:hover {
+      background-color: #F1F5F9; /* Light gray */
+      color: #2B3674;
+  }
+  
+  /* Active button style */
+  QPushButton[sidebarBtn="true"][active="true"] {
+      background-color: #EAF2FF; /* Light blue background */
+      color: #3B58FF; /* Blue text */
+  }
 
 
 /* ================= 3. RIGHT HEADER (title) ================= */
@@ -109,20 +110,20 @@ QMessageBox QLabel {
     font-weight: 500;
 }
 
-QMessageBox QPushButton {
-    background-color: #005BFE;
-    color: #FFFFFF;
-    font-weight: 700;
-    border-radius: 8px;
-    padding: 6px 18px;
-    font-size: 12px;
-    border: none;
-    min-width: 80px;
-}
-
-QMessageBox QPushButton:hover {
-    background-color: #2B7BFF;
-}</string>
+  QMessageBox QPushButton {
+      background-color: #3B58FF;
+      color: #FFFFFF;
+      font-weight: 700;
+      border-radius: 8px;
+      padding: 6px 18px;
+      font-size: 12px;
+      border: none;
+      min-width: 80px;
+  }
+  
+  QMessageBox QPushButton:hover {
+      background-color: #4F6BFF;
+  }</string>
   </property>
   <widget class="QWidget" name="centralwidget">
    <layout class="QGridLayout" name="gridLayout">
@@ -191,6 +192,16 @@ QMessageBox QPushButton:hover {
                <property name="text">
                 <string>Dashboard</string>
                </property>
+               <property name="icon">
+                <iconset resource="../resources/resources.qrc">
+                 <normaloff>:/ic_dashboard.svg</normaloff>:/ic_dashboard.svg</iconset>
+               </property>
+               <property name="iconSize">
+                <size>
+                 <width>22</width>
+                 <height>22</height>
+                </size>
+               </property>
                <property name="sidebarBtn" stdset="0">
                 <bool>true</bool>
                </property>
@@ -199,7 +210,17 @@ QMessageBox QPushButton:hover {
              <item>
               <widget class="QPushButton" name="btnReservation">
                <property name="text">
-                <string>Reservation</string>
+                <string>Reservations</string>
+               </property>
+               <property name="icon">
+                <iconset resource="../resources/resources.qrc">
+                 <normaloff>:/ic_reservation.svg</normaloff>:/ic_reservation.svg</iconset>
+               </property>
+               <property name="iconSize">
+                <size>
+                 <width>22</width>
+                 <height>22</height>
+                </size>
                </property>
                <property name="sidebarBtn" stdset="0">
                 <bool>true</bool>
@@ -211,6 +232,16 @@ QMessageBox QPushButton:hover {
                <property name="text">
                 <string>Customer</string>
                </property>
+               <property name="icon">
+                <iconset resource="../resources/resources.qrc">
+                 <normaloff>:/ic_customer.svg</normaloff>:/ic_customer.svg</iconset>
+               </property>
+               <property name="iconSize">
+                <size>
+                 <width>22</width>
+                 <height>22</height>
+                </size>
+               </property>
                <property name="sidebarBtn" stdset="0">
                 <bool>true</bool>
                </property>
@@ -221,6 +252,16 @@ QMessageBox QPushButton:hover {
                <property name="text">
                 <string>Room</string>
                </property>
+               <property name="icon">
+                <iconset resource="../resources/resources.qrc">
+                 <normaloff>:/ic_room.svg</normaloff>:/ic_room.svg</iconset>
+               </property>
+               <property name="iconSize">
+                <size>
+                 <width>22</width>
+                 <height>22</height>
+                </size>
+               </property>
                <property name="sidebarBtn" stdset="0">
                 <bool>true</bool>
                </property>
@@ -229,7 +270,17 @@ QMessageBox QPushButton:hover {
              <item>
               <widget class="QPushButton" name="btnRoomStatus">
                <property name="text">
-                <string>RoomStatus</string>
+                <string>Room Status</string>
+               </property>
+               <property name="icon">
+                <iconset resource="../resources/resources.qrc">
+                 <normaloff>:/ic_room_status.svg</normaloff>:/ic_room_status.svg</iconset>
+               </property>
+               <property name="iconSize">
+                <size>
+                 <width>22</width>
+                 <height>22</height>
+                </size>
                </property>
                <property name="sidebarBtn" stdset="0">
                 <bool>true</bool>
@@ -240,6 +291,16 @@ QMessageBox QPushButton:hover {
                 <widget class="QPushButton" name="btnStatistics">
                  <property name="text">
                     <string>Statistics</string>
+                 </property>
+                 <property name="icon">
+                  <iconset resource="../resources/resources.qrc">
+                   <normaloff>:/ic_statistics.svg</normaloff>:/ic_statistics.svg</iconset>
+                 </property>
+                 <property name="iconSize">
+                  <size>
+                   <width>22</width>
+                   <height>22</height>
+                  </size>
                  </property>
                  <property name="sidebarBtn" stdset="0">
                     <bool>true</bool>

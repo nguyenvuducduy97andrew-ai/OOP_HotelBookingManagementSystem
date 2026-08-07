@@ -78,7 +78,7 @@ QLineEdit, QDateTimeEdit {
 }
 
 QLineEdit:focus, QDateTimeEdit:focus {
-    border: 1.5px solid #005BFE;
+    border: 1.5px solid #3B58FF;
     background-color: #FFFFFF;
 }
 
@@ -116,7 +116,7 @@ QPushButton#btnCancel:pressed {
 
 /* Confirm button */
 QPushButton#btnConfirm {
-    background-color: #005BFE;
+    background-color: #3B58FF;
     color: #FFFFFF;
     border: none;
     border-radius: 10px;

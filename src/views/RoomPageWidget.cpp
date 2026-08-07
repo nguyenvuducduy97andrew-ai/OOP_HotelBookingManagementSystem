@@ -102,20 +102,17 @@ void setupRoomPageStyle(QWidget* widget) {
             color: #2B3674;
         }
         QLineEdit#searchEdit:focus {
-            border: 1px solid #005BFE;
+            border: 1px solid #3B58FF;
         }
         QPushButton#btnAddRoom {
-            background-color: #005BFE;
+            background-color: #3B58FF;
             color: #FFFFFF;
-            font-weight: 700;
-            border-radius: 10px;
-            padding: 8px 18px;
-            font-size: 13px;
             border: none;
+            border-radius: 8px;
+            padding: 8px 20px;
+            font-weight: 600;
         }
-        QPushButton#btnAddRoom:hover {
-            background-color: #2B7BFF;
-        }
+        QPushButton#btnAddRoom:hover { background-color: #4F6BFF; }
         QPushButton.filterBtn {
             background-color: #F4F7FE;
             color: #A3AED0;
@@ -125,14 +122,21 @@ void setupRoomPageStyle(QWidget* widget) {
             border: 1px solid #E9EDF7;
             font-size: 12px;
         }
-        QPushButton.filterBtn:hover {
-            background-color: #E2E8F0;
-            color: #2B3674;
+        QPushButton[typeFilterBtn="true"] {
+            background-color: #F8FAFC;
+            color: #475569;
+            border-radius: 8px;
+            padding: 8px 16px;
+            font-weight: 600;
+            border: 1px solid transparent;
         }
-        QPushButton.filterBtn[active="true"] {
-            background-color: #005BFE;
-            color: #FFFFFF;
-            border: 1px solid #005BFE;
+        QPushButton[typeFilterBtn="true"]:hover {
+            background-color: #E2E8F0;
+        }
+        QPushButton[typeFilterBtn="true"]:checked {
+            background-color: #EAF2FF;
+            color: #3B58FF;
+            border: 1px solid #3B58FF;
         }
         QFrame#detailFrame {
             background-color: #FFFFFF;
@@ -176,9 +180,13 @@ void setupRoomPageStyle(QWidget* widget) {
             font-size: 12px;
             font-weight: 700;
         }
+        QComboBox QAbstractItemView::item:selected {
+            background-color: #EAF2FF;
+            color: #3B58FF;
+        }
         QPushButton#btnEdit {
             background-color: #E9EFFF;
-            color: #005BFE;
+            color: #3B58FF;
             font-weight: 700;
             border-radius: 8px;
             padding: 6px 14px;
@@ -349,7 +357,7 @@ void RoomPageWidget::setupUI() {
 
     // Extra Fees details
     m_detailExtraFeeLabel = new QLabel(this);
-    m_detailExtraFeeLabel->setStyleSheet("font-size: 13px; font-weight: 700; color: #005BFE; background-color: #E9EFFF; border-radius: 8px; padding: 8px;");
+    m_detailExtraFeeLabel->setStyleSheet("font-size: 13px; font-weight: 700; color: #3B58FF; background-color: #EAF2FF; border-radius: 8px; padding: 8px;");
     m_detailExtraFeeLabel->setVisible(false);
     contentLayout->addWidget(m_detailExtraFeeLabel);
 
@@ -502,7 +510,7 @@ QWidget* RoomPageWidget::createRoomCard(const std::shared_ptr<Room>& room) {
 
     // Modified: Label the displayed rate as hourly so staff do not confuse the time-based bill with the retired nightly price.
     auto* priceLabel = new QLabel(formatMoney(room->getBasePrice()) + " VND / hour", card);
-    priceLabel->setStyleSheet("font-size: 13px; font-weight: 800; color: #005BFE;");
+    priceLabel->setStyleSheet("font-size: 13px; font-weight: 800; color: #3B58FF;");
 
     rightCol->addWidget(statusBadge);
     rightCol->addWidget(priceLabel);
@@ -649,9 +657,9 @@ void RoomPageWidget::updateDetailPanel(const std::shared_ptr<Room>& room) {
     QString formattedAmenities = "<table width='100%' cellpadding='4'>";
     for (int i = 0; i < amenitiesList.size(); i += 2) {
         formattedAmenities += "<tr>";
-        formattedAmenities += "<td width='50%'><span style='color: #005BFE;'>✔</span> " + amenitiesList[i] + "</td>";
+        formattedAmenities += "<td width='50%'><span style='color: #3B58FF;'>✔</span> " + amenitiesList[i] + "</td>";
         if (i + 1 < amenitiesList.size()) {
-            formattedAmenities += "<td width='50%'><span style='color: #005BFE;'>✔</span> " + amenitiesList[i+1] + "</td>";
+            formattedAmenities += "<td width='50%'><span style='color: #3B58FF;'>✔</span> " + amenitiesList[i+1] + "</td>";
         } else {
             formattedAmenities += "<td width='50%'></td>";
         }

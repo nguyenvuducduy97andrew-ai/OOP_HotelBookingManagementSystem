@@ -624,13 +624,13 @@ void DashboardWidget::applyStyle()
             border: 1px solid #E2E8F0;
             background-color: #FFFFFF;
             color: #2B3674;
-            selection-background-color: #005BFE;
+            selection-background-color: #3B58FF;
             selection-color: #FFFFFF;
             outline: none;
             padding: 4px;
         }
         QPushButton#btnExport {
-            background-color: #005BFE;
+            background-color: #3B58FF;
             color: #FFFFFF;
             border: none;
             border-radius: 10px;
@@ -639,10 +639,10 @@ void DashboardWidget::applyStyle()
             font-weight: 600;
         }
         QPushButton#btnExport:hover {
-            background-color: #2B7BFF;
+            background-color: #4F6BFF;
         }
         QPushButton#btnExport:pressed {
-            background-color: #0046CC;
+            background-color: #2A3EB5;
         }
         StatCard, MiniCard, #ChartCard, #AuditCard {
             background-color: #FFFFFF;
@@ -650,7 +650,7 @@ void DashboardWidget::applyStyle()
             border-radius: 16px;
         }
         #statCard1 {
-            border-top: 3px solid #005BFE;
+            border-top: 3px solid #3B58FF;
         }
         #statCard2 {
             border-top: 3px solid #05CD99;

@@ -35,7 +35,7 @@ QFrame#frameCardContainer {
 }
 
 QFrame#frameCardContainer:hover {
-    border: 2px solid #005BFE;
+    border: 2px solid #3B58FF;
     background-color: #F8FAFC;
 }
 

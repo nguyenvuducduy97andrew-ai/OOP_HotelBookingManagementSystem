@@ -109,7 +109,7 @@ void showReservationFeedback(
     const bool isSuccess = tone == ReservationFeedbackTone::Success;
     const QString accentBackground = isError ? "#FEF2F2" : (isSuccess ? "#ECFDF5" : "#EFF6FF");
     const QString accentBorder = isError ? "#FECACA" : (isSuccess ? "#A7F3D0" : "#BFDBFE");
-    const QString buttonColor = isError ? "#DC2626" : (isSuccess ? "#059669" : "#005BFE");
+    const QString buttonColor = isError ? "#DC2626" : (isSuccess ? "#059669" : "#3B58FF");
 
     QDialog dialog(parent);
     dialog.setWindowTitle(title);
@@ -223,8 +223,9 @@ void showReservationDetails(QWidget* parent, const std::shared_ptr<Booking>& boo
         "QLabel#detailsSubtitle { color: #64748B; font-size: 12px; }"
         "QLabel#detailsKey { color: #64748B; font-size: 12px; font-weight: 700; }"
         "QLabel#detailsValue { color: #2B3674; font-size: 13px; }"
-        "QPushButton { background: #005BFE; color: #FFFFFF; border: none; border-radius: 8px;"
-        " font-weight: 700; min-width: 96px; padding: 8px 18px; }");
+        "QPushButton { background: #3B58FF; color: #FFFFFF; border: none; border-radius: 8px;"
+        " font-weight: 700; min-width: 96px; padding: 8px 18px; }"
+        "QPushButton:hover { background: #4F6BFF; }");
     auto* layout = new QVBoxLayout(&dialog);
     layout->setSizeConstraint(QLayout::SetFixedSize);
     layout->setContentsMargins(24, 22, 24, 20);
@@ -294,11 +295,11 @@ bool requestReservationReason(
         "QLabel#dialogSubtitle { color: #64748B; font-size: 12px; }"
         "QLineEdit { color: #2B3674; background: #F8FAFC; border: 1px solid #CBD5E1;"
         " border-radius: 8px; padding: 9px 10px; font-size: 13px; }"
-        "QLineEdit:focus { border: 1px solid #005BFE; }"
+        "QLineEdit:focus { border: 1px solid #3B58FF; }"
         "QPushButton { min-width: 88px; padding: 8px 14px; border-radius: 8px; font-weight: 700; }"
         "QPushButton#cancelButton { color: #475569; background: #FFFFFF; border: 1px solid #CBD5E1; }"
-        "QPushButton#confirmButton { color: #FFFFFF; background: #005BFE; border: none; }"
-        "QPushButton#confirmButton:hover { background: #2B7BFF; }"
+        "QPushButton#confirmButton { color: #FFFFFF; background: #3B58FF; border: none; }"
+        "QPushButton#confirmButton:hover { background: #4F6BFF; }"
     );
 
     auto* layout = new QVBoxLayout(&dialog);
@@ -360,13 +361,13 @@ bool requestCheckoutPayment(QWidget* parent, double total, QString& method, doub
         "QLabel#dialogSubtitle { color: #64748B; font-size: 12px; font-weight: 500; }"
         "QComboBox, QDoubleSpinBox { color: #2B3674; background: #F4F7FE;"
         " border: 1px solid #D9E2F2; border-radius: 8px; padding: 7px 10px; min-height: 22px; }"
-        "QComboBox:focus, QDoubleSpinBox:focus { border: 1px solid #005BFE; }"
-        "QComboBox QAbstractItemView { color: #2B3674; background: #FFFFFF;"
-        " selection-color: #FFFFFF; selection-background-color: #005BFE; }"
+        "QComboBox:focus, QDoubleSpinBox:focus { border: 1px solid #3B58FF; }"
+        "QComboBox QAbstractItemView { background: #FFFFFF; color: #1B2559; "
+        " selection-color: #FFFFFF; selection-background-color: #3B58FF; }"
         "QPushButton { min-width: 96px; padding: 8px 14px; border-radius: 8px; font-weight: 700; }"
         "QPushButton#checkoutPaymentCancel { color: #2B3674; background: #E9EDF7; border: none; }"
-        "QPushButton#checkoutPaymentConfirm { color: #FFFFFF; background: #005BFE; border: none; }"
-        "QPushButton#checkoutPaymentConfirm:hover { background: #2B7BFF; }"
+        "QPushButton#checkoutPaymentConfirm { color: #FFFFFF; background: #3B58FF; border: none; }"
+        "QPushButton#checkoutPaymentConfirm:hover { background: #4F6BFF; }"
     );
     auto* layout = new QVBoxLayout(&dialog);
     layout->setContentsMargins(24, 22, 24, 20);
@@ -489,8 +490,8 @@ void setupReservationsPageStyle(QWidget* widget) {
             color: #2B3674;
             min-width: 250px;
         }
-        QLineEdit#searchEdit:focus {
-            border: 1px solid #005BFE;
+        QDateEdit:focus, QComboBox:focus, QLineEdit:focus, QSpinBox:focus {
+            border: 1px solid #3B58FF;
         }
         QComboBox#statusCombo {
             background-color: #F4F7FE;
@@ -503,15 +504,14 @@ void setupReservationsPageStyle(QWidget* widget) {
         }
         QComboBox QAbstractItemView {
             background-color: #FFFFFF;
-            color: #2B3674;
-            selection-background-color: #005BFE;
+            selection-background-color: #3B58FF;
             selection-color: #FFFFFF;
             border: 1px solid #E9EDF7;
         }
         QPushButton#btnAddBooking {
-            background-color: #005BFE;
+            background-color: #3B58FF;
             color: #FFFFFF;
-            font-weight: 700;
+            font-weight: bold;
             border-radius: 10px;
             padding: 8px 18px;
             font-size: 13px;
@@ -755,7 +755,7 @@ void ReservationsPageWidget::refreshData() {
         auto* statusItem = new QTableWidgetItem();
         if (state == BookingState::UPCOMING) {
             statusItem->setText("📅 Upcoming");
-            statusItem->setForeground(QColor("#005BFE"));
+            statusItem->setForeground(QColor("#3B58FF"));
         } else if (state == BookingState::ACTIVE) {
             statusItem->setText("🛏 Active");
             statusItem->setForeground(QColor("#D97706"));

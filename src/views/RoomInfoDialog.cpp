@@ -166,7 +166,7 @@ void RoomInfoDialog::setupStyle() {
         }
         QLabel#extraFeeLabel {
             background-color: #F4F7FE;
-            color: #005BFE;
+            color: #3B58FF;
             padding: 10px;
             border-radius: 8px;
             font-weight: 700;
@@ -211,7 +211,7 @@ void RoomInfoDialog::setupStyle() {
             background-color: #E9EDF7;
         }
         QPushButton#btnBooking {
-            background-color: #005BFE;
+            background-color: #3B58FF;
             color: #FFFFFF;
             font-weight: 700;
             border-radius: 12px;
@@ -220,7 +220,7 @@ void RoomInfoDialog::setupStyle() {
             border: none;
         }
         QPushButton#btnBooking:hover {
-            background-color: #2B7BFF;
+            background-color: #4F6BFF;
         }
     )");
 }
@@ -254,8 +254,7 @@ void RoomInfoDialog::populateData() {
         hasAmenities = true;
         
         QLabel* pill = new QLabel("✓ " + am, m_amContainer);
-        // Modified: Use two compact amenity columns so complete labels remain readable in the smaller Room Info dialog.
-        pill->setStyleSheet("background-color: #F4F7FE; color: #005BFE; border: 1px solid #E9EDF7; padding: 4px 8px; border-radius: 10px; font-weight: 600; font-size: 13px;");
+        pill->setStyleSheet("background-color: #F4F7FE; color: #3B58FF; border: 1px solid #E9EDF7; padding: 6px 12px; border-radius: 12px; font-weight: 600; font-size: 13px;");
         m_amLayout->addWidget(pill, row, col);
         
         col++;

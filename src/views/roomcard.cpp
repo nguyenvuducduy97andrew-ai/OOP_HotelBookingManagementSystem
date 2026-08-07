@@ -57,10 +57,10 @@ void RoomCard::setAvailable() { // Render the available state.
     // Clear data
     m_guestName = ""; m_idNumber = ""; m_phoneNumber = ""; m_dateIn = ""; m_dateOut = "";
 
-    ui->frameStatusBadge->setStyleSheet("background-color: #05A660; border-radius: 10px;");
-    ui->frameCardContainer->setStyleSheet("background-color: #E2FBE8; border-radius: 10px;");
+    ui->frameStatusBadge->setStyleSheet("background-color: #05CD99; border-radius: 10px;");
+    ui->frameCardContainer->setStyleSheet("background-color: #FFFFFF; border: 1px solid #E9EDF7; border-radius: 16px;");
 
-    ui->lblGuestName->setStyleSheet("color: #05A660; background-color: transparent; font-size: 18px; font-weight: bold; border: none;");
+    ui->lblGuestName->setStyleSheet("color: #05CD99; background-color: transparent; font-size: 18px; font-weight: bold; border: none;");
     ui->lblCheckOutDate->hide();
     ui->lblCheckInDate->hide();
     ui->lineDivider->hide();
@@ -86,11 +86,11 @@ void RoomCard::setAwaiting(QString guestName, QString dateIn, QString dateOut) {
     ui->lblGuestName->show();
     ui->lblGuestName->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
 
-    ui->frameStatusBadge->setStyleSheet("background-color: #6D5DFB; border-radius: 10px;");
-    ui->frameCardContainer->setStyleSheet("background-color: #EEEAFE; border-radius: 10px;");
-    ui->lblGuestName->setStyleSheet("color: #3F3A8F; background: transparent; font-size: 14px; font-weight: bold; border: none;");
-    ui->lblCheckInDate->setStyleSheet("color: #3F3A8F; font-size: 14px; background: transparent;");
-    ui->lblCheckOutDate->setStyleSheet("color: #3F3A8F; font-size: 14px; background: transparent;");
+    ui->frameStatusBadge->setStyleSheet("background-color: #3B58FF; border-radius: 10px;");
+    ui->frameCardContainer->setStyleSheet("background-color: #FFFFFF; border: 1px solid #E9EDF7; border-radius: 16px;");
+    ui->lblGuestName->setStyleSheet("color: #1B2559; background: transparent; font-size: 14px; font-weight: bold; border: none;");
+    ui->lblCheckInDate->setStyleSheet("color: #A3AED0; font-size: 14px; background: transparent;");
+    ui->lblCheckOutDate->setStyleSheet("color: #A3AED0; font-size: 14px; background: transparent;");
 
     ui->lblGuestName->setText(guestName.isEmpty() ? "Awaiting check-in" : QString("Awaiting: ") + guestName);
     ui->lblCheckInDate->setText("IN: " + dateIn);
@@ -118,12 +118,12 @@ void RoomCard::setOccupied(QString guestName, QString idNumber, QString phoneNum
     ui->lblGuestName->show();
     ui->lblGuestName->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
 
-    ui->frameStatusBadge->setStyleSheet("background-color: #E53935; border-radius: 10px;");
-    ui->frameCardContainer->setStyleSheet("background-color: #FFE1E1; border-radius: 10px;");
+    ui->frameStatusBadge->setStyleSheet("background-color: #FFB547; border-radius: 10px;");
+    ui->frameCardContainer->setStyleSheet("background-color: #FFFFFF; border: 1px solid #E9EDF7; border-radius: 16px;");
 
-    ui->lblGuestName->setStyleSheet("color: black; background: transparent; font-size: 14px; font-weight: bold; border: none;");
-    ui->lblCheckInDate->setStyleSheet("color: black; font-size: 14px; background: transparent;");
-    ui->lblCheckOutDate->setStyleSheet("color: black; font-size: 14px; background: transparent;");
+    ui->lblGuestName->setStyleSheet("color: #1B2559; background: transparent; font-size: 14px; font-weight: bold; border: none;");
+    ui->lblCheckInDate->setStyleSheet("color: #A3AED0; font-size: 14px; background: transparent;");
+    ui->lblCheckOutDate->setStyleSheet("color: #A3AED0; font-size: 14px; background: transparent;");
 
     ui->lblGuestName->setText(guestName);
     ui->lblCheckInDate->setText ("IN: " + dateIn);
@@ -142,10 +142,10 @@ void RoomCard::setMaintenance() {
     ui->lblCheckInDate->hide();
     ui->lineDivider->hide();
 
-    ui->frameStatusBadge->setStyleSheet("background-color: #757575; border-radius: 10px;");
-    ui->frameCardContainer->setStyleSheet("background-color: #E0E0E0; border-radius: 10px;");
+    ui->frameStatusBadge->setStyleSheet("background-color: #A3AED0; border-radius: 10px;");
+    ui->frameCardContainer->setStyleSheet("background-color: #FFFFFF; border: 1px solid #E9EDF7; border-radius: 16px;");
 
-    ui->lblGuestName->setStyleSheet("color: #0f172a; background: transparent; font-size: 16px; font-weight: bold; border: none;");
+    ui->lblGuestName->setStyleSheet("color: #1B2559; background: transparent; font-size: 16px; font-weight: bold; border: none;");
     ui->lblGuestName->setText("");
 
     ui->lblStatusIcon->setPixmap(QPixmap(":/mtn_icon.png"));
@@ -188,10 +188,10 @@ void RoomCard::setTempAvailMode(bool enabled) {
         ui->lineDivider->hide();
         ui->lblGuestName->setText("");
         
-        ui->frameStatusBadge->setStyleSheet("background-color: #05A660; border-radius: 10px;");
-        ui->frameCardContainer->setStyleSheet("background-color: #E2FBE8; border-radius: 10px;");
-        
-        ui->lblGuestName->setStyleSheet("color: #0f172a; background: transparent; font-size: 18px; font-weight: bold; border: none;");
+        ui->frameStatusBadge->setStyleSheet("background-color: #05CD99; border-radius: 10px;");
+        ui->frameCardContainer->setStyleSheet("background-color: #FFFFFF; border: 1px solid #E9EDF7; border-radius: 16px;");
+
+        ui->lblGuestName->setStyleSheet("color: #1B2559; background: transparent; font-size: 18px; font-weight: bold; border: none;");
         
         ui->lblStatusIcon->setPixmap(QPixmap(":/avl_icon.png"));
         ui->lblStatusIcon->setScaledContents(true);

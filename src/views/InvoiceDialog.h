@@ -76,7 +76,7 @@ public:
         // Modified: Match invoice viewing with the Reservation dialog system: clear title, supporting subtitle, and an unambiguous close action.
         auto* titleRow = new QHBoxLayout();
         auto* invoiceIcon = new QLabel("▣", this);
-        invoiceIcon->setStyleSheet("color:#005BFE; font-size:17px; background:transparent; border:none;");
+        invoiceIcon->setStyleSheet("color:#3B58FF; font-size:17px; background:transparent; border:none;");
         auto* titleLabel = new QLabel("Booking invoice", this);
         titleLabel->setObjectName("titleLabel");
         auto* invoiceClose = new QPushButton("×", this);

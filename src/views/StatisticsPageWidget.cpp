@@ -115,9 +115,9 @@ const char* calendarPopupStyle = R"(
         color: #2B3674;
     }
     QCalendarWidget QAbstractItemView:enabled {
-        color: #2B3674;
+        color: #1B2559;
         background-color: #FFFFFF;
-        selection-background-color: #005BFE;
+        selection-background-color: #3B58FF;
         selection-color: #FFFFFF;
     }
     QCalendarWidget QAbstractItemView:disabled {
@@ -304,13 +304,13 @@ void StatisticsPageWidget::setupFilterBar(QVBoxLayout* parentLayout) {
     m_searchEdit = new QLineEdit(this);
     m_searchEdit->setPlaceholderText("Find Invoice ID, Booking...");
     m_searchEdit->setStyleSheet("QLineEdit { " + commonInputStyle + " min-width: 200px; }"
-                                "QLineEdit:focus { border: 1px solid #005BFE; }");
+                                "QLineEdit:focus { border: 1px solid #3B58FF; }");
 
     // Amount filter.
     m_amountFilter = new QComboBox(this);
     m_amountFilter->addItems({ "All Price Ranges", "Below 1,000,000 VND", "1,000,000 VND - 5,000,000 VND", "Above 5,000,000 VND" });
     m_amountFilter->setStyleSheet("QComboBox { " + commonInputStyle + " }"
-                                  "QComboBox QAbstractItemView { background-color: #FFFFFF; color: #2B3674; selection-background-color: #005BFE; selection-color: #FFFFFF; border: 1px solid #E9EDF7; }");
+                                  "QComboBox QAbstractItemView { background-color: #FFFFFF; color: #2B3674; selection-background-color: #3B58FF; selection-color: #FFFFFF; border: 1px solid #E9EDF7; }");
 
     // Invoice issue-date filter.
     m_dateFrom = new QDateEdit(QDate::currentDate().addMonths(-1), this); // Default to one month ago.
@@ -512,7 +512,7 @@ void StatisticsPageWidget::refreshData() {
     m_barSeries->clear();
     m_barAxisX->clear();
     QBarSet* revSet = new QBarSet("Revenue (VNĐ)");
-    revSet->setColor(QColor("#005BFE"));
+    revSet->setColor(QColor("#3B58FF"));
     QStringList months;
     double maxVal = 0;
     for (int i = 1; i <= 12; ++i) {
