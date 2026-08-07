@@ -10,7 +10,13 @@
 #include <QTimer>
 #include <QDateTime>
 #include <QtMath>
-#include <QVBoxLayout>
+#include <QtCharts/QAreaSeries>
+#include <QtCharts/QLineSeries>
+#include <QtCharts/QLegendMarker>
+#include <QtCharts/QScatterSeries>
+#include <QVariantAnimation>
+#include <QPropertyAnimation>
+#include <QToolTip>
 #include <QComboBox>
 #include <QFileDialog>
 #include <QMessageBox>
@@ -584,34 +590,94 @@ void DashboardWidget::buildTrendChart()
     QStringList months = {"Jan","Feb","Mar","Apr","May","Jun","Jul",
                           "Aug","Sep","Oct","Nov","Dec"};
 
-    auto *seriesCurrent = new QLineSeries();
-    seriesCurrent->setName(QString::number(currentYear));
-    seriesCurrent->setColor(QColor("#005BFE"));
+    m_seriesCurrentLine = new QLineSeries();
+    m_seriesCurrentLine->setName(QString::number(currentYear));
+    m_seriesCurrentLine->setPointsVisible(true);
     for (int i = 0; i < 12; ++i)
-        seriesCurrent->append(i, dataCurrent[i]);
+        m_seriesCurrentLine->append(i, dataCurrent[i]);
 
-    auto *seriesPrev = new QLineSeries();
-    seriesPrev->setName(QString::number(prevYear));
-    QPen dashedPen(QColor("#CBD5E0"));
-    dashedPen.setStyle(Qt::DashLine);
-    dashedPen.setWidth(2);
-    seriesPrev->setPen(dashedPen);
+    m_seriesCurrentArea = new QAreaSeries(m_seriesCurrentLine);
+    m_seriesCurrentArea->setName(QString::number(currentYear));
+    m_seriesCurrentArea->setPen(QPen(Qt::transparent));
+    
+    QLinearGradient currentGradient(QPointF(0, 0), QPointF(0, 1));
+    currentGradient.setColorAt(0.0, QColor(0, 91, 254, 100)); // #005BFE with alpha
+    currentGradient.setColorAt(1.0, QColor(0, 91, 254, 0));
+    currentGradient.setCoordinateMode(QGradient::ObjectBoundingMode);
+    m_seriesCurrentArea->setBrush(currentGradient);
+
+    m_seriesPrevLine = new QLineSeries();
+    m_seriesPrevLine->setName(QString::number(prevYear));
+    m_seriesPrevLine->setPointsVisible(true);
     for (int i = 0; i < 12; ++i)
-        seriesPrev->append(i, dataPrev[i]);
+        m_seriesPrevLine->append(i, dataPrev[i]);
+
+    m_seriesPrevArea = new QAreaSeries(m_seriesPrevLine);
+    m_seriesPrevArea->setName(QString::number(prevYear));
+    m_seriesPrevArea->setPen(QPen(Qt::transparent));
+    
+    QLinearGradient prevGradient(QPointF(0, 0), QPointF(0, 1));
+    prevGradient.setColorAt(0.0, QColor(203, 213, 224, 100)); // #CBD5E0 with alpha
+    prevGradient.setColorAt(1.0, QColor(203, 213, 224, 0));
+    prevGradient.setCoordinateMode(QGradient::ObjectBoundingMode);
+    m_seriesPrevArea->setBrush(prevGradient);
 
     auto *chart = new QChart();
-    chart->addSeries(seriesCurrent);
-    chart->addSeries(seriesPrev);
+    chart->addSeries(m_seriesPrevArea);
+    chart->addSeries(m_seriesCurrentArea);
+    
     chart->legend()->setVisible(true);
     chart->legend()->setLabelColor(QColor("#2B3674"));
     chart->legend()->setAlignment(Qt::AlignTop);
+    chart->legend()->setMarkerShape(QLegend::MarkerShapeRectangle);
+    
+    // Hide legend markers for the area series so we don't get duplicates
+    for (auto marker : chart->legend()->markers(m_seriesPrevArea))
+        marker->setVisible(false);
+    for (auto marker : chart->legend()->markers(m_seriesCurrentArea))
+        marker->setVisible(false);
+        
     chart->setBackgroundBrush(QColor("#FFFFFF"));
     chart->setMargins(QMargins(4, 4, 4, 4));
+
+    connect(m_seriesCurrentLine, &QLineSeries::hovered, this, &DashboardWidget::onTrendChartHovered);
+    connect(m_seriesPrevLine, &QLineSeries::hovered, this, &DashboardWidget::onTrendChartHovered);
+
+    m_hoverScatter = new QScatterSeries();
+    m_hoverScatter->setMarkerShape(QScatterSeries::MarkerShapeCircle);
+    m_hoverScatter->setMarkerSize(12.0);
+    m_hoverScatter->setColor(QColor("#FFFFFF")); // fill white
+    m_hoverScatter->setPen(QPen(QColor("#005BFE"), 3)); // blue border
+    m_hoverScatter->setName(""); // Disable auto-naming
+    chart->addSeries(m_hoverScatter);
+
+    // Invisible scatter series to catch hover events precisely at peaks
+    auto *invisibleScatter = new QScatterSeries();
+    invisibleScatter->setMarkerShape(QScatterSeries::MarkerShapeCircle);
+    invisibleScatter->setMarkerSize(15.0);
+    invisibleScatter->setColor(Qt::transparent);
+    invisibleScatter->setPen(QPen(Qt::transparent));
+    invisibleScatter->setName("");
+    for (int i = 0; i < 12; ++i) {
+        invisibleScatter->append(i, dataCurrent[i]);
+        invisibleScatter->append(i, dataPrev[i]);
+    }
+    chart->addSeries(invisibleScatter);
+    connect(invisibleScatter, &QScatterSeries::hovered, this, &DashboardWidget::onTrendChartHovered);
+
+    // Hide scatter series from legend
+    for (auto marker : chart->legend()->markers(m_hoverScatter)) {
+        marker->setVisible(false);
+    }
+    for (auto marker : chart->legend()->markers(invisibleScatter)) {
+        marker->setVisible(false);
+    }
 
     auto *axisXCat = new QBarCategoryAxis();
     axisXCat->append(months);
     axisXCat->setLabelsColor(QColor("#A3AED0"));
-    axisXCat->setGridLineColor(QColor("#F1F5F9"));
+    axisXCat->setGridLineVisible(false);
+    axisXCat->setLinePenColor(QColor("#E2E8F0"));
 
     // Find the max booking count in a month to dynamically scale axis Y
     double maxVal = 10.0;
@@ -628,13 +694,35 @@ void DashboardWidget::buildTrendChart()
     axisY->setTickCount(6);
     axisY->setLabelsColor(QColor("#A3AED0"));
     axisY->setGridLineColor(QColor("#F1F5F9"));
+    axisY->setLinePenColor(QColor("#E2E8F0"));
 
     chart->addAxis(axisXCat, Qt::AlignBottom);
     chart->addAxis(axisY, Qt::AlignLeft);
-    seriesCurrent->attachAxis(axisXCat);
-    seriesCurrent->attachAxis(axisY);
-    seriesPrev->attachAxis(axisXCat);
-    seriesPrev->attachAxis(axisY);
+    m_seriesCurrentArea->attachAxis(axisXCat);
+    m_seriesCurrentArea->attachAxis(axisY);
+    m_seriesPrevArea->attachAxis(axisXCat);
+    m_seriesPrevArea->attachAxis(axisY);
+    m_hoverScatter->attachAxis(axisXCat);
+    m_hoverScatter->attachAxis(axisY);
+    invisibleScatter->attachAxis(axisXCat);
+    invisibleScatter->attachAxis(axisY);
+    
+    m_seriesCurrentArea->setOpacity(0.0);
+    m_seriesPrevArea->setOpacity(0.0);
+
+    auto anim1 = new QPropertyAnimation(m_seriesCurrentArea, "opacity", chart);
+    anim1->setDuration(1200);
+    anim1->setStartValue(0.0);
+    anim1->setEndValue(1.0);
+    anim1->setEasingCurve(QEasingCurve::InOutQuad);
+    anim1->start(QAbstractAnimation::DeleteWhenStopped);
+
+    auto anim2 = new QPropertyAnimation(m_seriesPrevArea, "opacity", chart);
+    anim2->setDuration(1200);
+    anim2->setStartValue(0.0);
+    anim2->setEndValue(1.0);
+    anim2->setEasingCurve(QEasingCurve::InOutQuad);
+    anim2->start(QAbstractAnimation::DeleteWhenStopped);
 
     auto *chartView = new QChartView(chart);
     chartView->setRenderHint(QPainter::Antialiasing);
@@ -1500,4 +1588,17 @@ void DashboardWidget::exportReport()
 DashboardWidget::~DashboardWidget()
 {
     delete ui;
+}
+
+void DashboardWidget::onTrendChartHovered(const QPointF &point, bool state)
+{
+    if (state) {
+        m_hoverScatter->clear();
+        m_hoverScatter->append(point);
+        QString text = QString("%1 Bookings").arg(qRound(point.y()));
+        QToolTip::showText(QCursor::pos(), text, this);
+    } else {
+        m_hoverScatter->clear();
+        QToolTip::hideText();
+    }
 }

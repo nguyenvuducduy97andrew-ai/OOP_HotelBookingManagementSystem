@@ -4,6 +4,7 @@
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QStyle>
+#include <QEnterEvent>
 
 // ---------------------------------------------------------------
 StatCard::StatCard(QWidget *parent)
@@ -76,6 +77,8 @@ MiniCard::MiniCard(QWidget *parent)
     outer->addWidget(m_iconLabel);
     outer->addLayout(textCol);
     outer->addStretch();
+    
+    updateStyle(false);
 }
 
 void MiniCard::setData(const QString &iconText, const QColor &iconBg,
@@ -89,12 +92,68 @@ void MiniCard::setData(const QString &iconText, const QColor &iconBg,
     m_valueLabel->setText(value);
 }
 
+void MiniCard::setActive(bool active)
+{
+    if (m_isActive == active) return;
+    m_isActive = active;
+    updateStyle(false);
+}
+
+void MiniCard::updateStyle(bool hover)
+{
+    m_textLabel->setStyleSheet("background: transparent; " + QString(m_isActive ? "color: #FFFFFF; font-weight: bold;" : ""));
+    m_valueLabel->setStyleSheet("background: transparent; " + QString(m_isActive ? "color: #FFFFFF; font-weight: bold;" : "")); 
+    
+    if (m_isActive) {
+        if (hover) {
+            setStyleSheet("MiniCard { background-color: #1874CD; border-radius: 12px; border: 1px solid #1874CD; }");
+        } else {
+            setStyleSheet("MiniCard { background-color: #1E90FF; border-radius: 12px; border: 1px solid #1E90FF; }");
+        }
+    } else {
+        if (hover) {
+            setStyleSheet("MiniCard { background-color: #F1F5F9; border-radius: 12px; border: 1px solid #DCE6F5; }");
+        } else {
+            setStyleSheet("MiniCard { background-color: #FFFFFF; border-radius: 12px; border: 1px solid #DCE6F5; }");
+        }
+    }
+}
+
+void MiniCard::enterEvent(QEnterEvent *event)
+{
+    updateStyle(true);
+    QFrame::enterEvent(event);
+}
+
+void MiniCard::leaveEvent(QEvent *event)
+{
+    updateStyle(false); 
+    QFrame::leaveEvent(event);
+}
+
 void MiniCard::mousePressEvent(QMouseEvent *event)
 {
     if (event->button() == Qt::LeftButton) {
+        bool willBeActive = !m_isActive;
+        
+        if (willBeActive && parentWidget()) {
+            QList<MiniCard*> siblings = parentWidget()->findChildren<MiniCard*>();
+            for (MiniCard* sibling : siblings) {
+                if (sibling != this) {
+                    sibling->setActive(false);
+                }
+            }
+        }
+        
+        setActive(willBeActive);
         emit clicked();
     }
     QFrame::mousePressEvent(event);
+}
+
+void MiniCard::mouseReleaseEvent(QMouseEvent *event)
+{
+    QFrame::mouseReleaseEvent(event);
 }
 
 // ---------------------------------------------------------------

@@ -9,9 +9,13 @@
 #include <QDateEdit>
 #include <QPushButton>
 #include <QtCharts/QChartView>
+#include <QtCharts/QLineSeries>
+#include <QtCharts/QAreaSeries>
 #include <QtCharts/QBarSeries>
 #include <QtCharts/QBarSet>
 #include <QtCharts/QPieSeries>
+#include <QtCharts/QScatterSeries>
+#include <QVariantAnimation>
 #include <QtCharts/QBarCategoryAxis>
 #include <QtCharts/QValueAxis>
 #include "HotelManager.h"
@@ -26,12 +30,16 @@ public:
 private slots:
     void applyFilters(); 
     void onViewInvoiceClicked(const QString& invoiceId);
+    void onRevenueChartHovered(const QPointF &point, bool state);
 
 private:
     HotelManager* m_manager;
 
     QChart* m_barChart;
-    QBarSeries* m_barSeries;
+    QLineSeries* m_revenueLineSeries;
+    QAreaSeries* m_revenueAreaSeries;
+    QScatterSeries* m_revenueHoverScatter;
+    QScatterSeries* m_invisibleHoverScatter = nullptr;
     QBarCategoryAxis* m_barAxisX;
     QValueAxis* m_barAxisY;
 
@@ -52,6 +60,8 @@ private:
     QComboBox* m_amountFilter;
     QDateEdit* m_dateFrom;
     QDateEdit* m_dateTo;
+
+    QLabel* m_revenueTooltip = nullptr;
 
     QTableWidget* m_invoiceTable;
 
