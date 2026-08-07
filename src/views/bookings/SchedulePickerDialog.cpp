@@ -31,32 +31,51 @@ SchedulePickerDialog::SchedulePickerDialog(const QDateTime& initialCheckIn,
                                            AvailabilityPredicate availabilityPredicate,
                                            QWidget* parent,
                                            bool checkOutOnly,
-                                           bool startInCheckOutMode)
+                                           bool startInCheckOutMode,
+                                           Purpose purpose)
     : QDialog(parent),
       m_availabilityPredicate(std::move(availabilityPredicate)),
-      m_checkIn(checkOutOnly ? initialCheckIn : wholeHour(initialCheckIn)),
-      m_checkOut(wholeHour(initialCheckOut)),
-      m_checkOutOnly(checkOutOnly)
+      m_checkIn(purpose == Purpose::BookingStay && checkOutOnly
+                    ? initialCheckIn
+                    : QDateTime(initialCheckIn.date(), purpose == Purpose::BookingStay ? QTime(initialCheckIn.time().hour(), 0) : QTime(0, 0))),
+      m_checkOut(QDateTime(initialCheckOut.date(), purpose == Purpose::BookingStay ? QTime(initialCheckOut.time().hour(), 0) : QTime(0, 0))),
+      m_checkOutOnly(checkOutOnly),
+      m_purpose(purpose)
 {
-    if (!m_checkIn.isValid() || (!m_checkOutOnly && m_checkIn < QDateTime(QDate::currentDate(), QTime(0, 0)))) {
-        m_checkIn = wholeHour(QDateTime::currentDateTime().addSecs(kMinimumBookingSeconds));
-    }
-    if (!m_checkOut.isValid() || m_checkOut < m_checkIn.addSecs(kMinimumBookingSeconds)) {
-        m_checkOut = m_checkIn.addSecs(kMinimumBookingSeconds);
+    if (isDateOnlyPurpose()) {
+        // Modified: Reuse the booking-room calendar shell for full-day maintenance and reporting without imposing hourly booking rules.
+        if (!m_checkIn.isValid() || (!allowsPastDates() && m_checkIn.date() < QDate::currentDate())) {
+            m_checkIn = QDateTime(QDate::currentDate(), QTime(0, 0));
+        }
+        if (!m_checkOut.isValid() || m_checkOut.date() < m_checkIn.date()) {
+            m_checkOut = m_checkIn;
+        }
+    } else {
+        if (!m_checkIn.isValid() || (!m_checkOutOnly && m_checkIn < QDateTime(QDate::currentDate(), QTime(0, 0)))) {
+            m_checkIn = wholeHour(QDateTime::currentDateTime().addSecs(kMinimumBookingSeconds));
+        }
+        if (!m_checkOut.isValid() || m_checkOut < m_checkIn.addSecs(kMinimumBookingSeconds)) {
+            m_checkOut = m_checkIn.addSecs(kMinimumBookingSeconds);
+        }
     }
 
-    setWindowTitle("Choose dates & times");
+    const bool maintenancePurpose = m_purpose == Purpose::MaintenanceRange;
+    const bool reportingPurpose = m_purpose == Purpose::ReportingPeriod;
+    const QString dialogTitle = maintenancePurpose
+        ? QStringLiteral("Choose maintenance dates")
+        : reportingPurpose ? QStringLiteral("Choose reporting period") : QStringLiteral("Choose dates & times");
+    setWindowTitle(dialogTitle);
     setModal(true);
     // Modified: Keep the complete schedule dialog at its A4-like working size so dates, hours and actions remain visible together.
-    lockDialogToWorkingArea(this, QSize(720, 700));
+    lockDialogToWorkingArea(this, isDateOnlyPurpose() ? QSize(720, 510) : QSize(720, 700));
     // Modified: Use an opaque custom header to avoid the platform-dark title bar without allowing background content to bleed through.
     setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint);
     setStyleSheet(R"(
         QDialog { background: #FAFCFF; border: 2px solid #93C5FD; border-radius: 18px; }
         QFrame#dialogHeader { background: #FFFFFF; border: none; border-bottom: 1px solid #E7EDF7;border-top-left-radius: 13px; border-top-right-radius: 13px; }
         QLabel#pickerTitle { color: #163779; font-size: 19px; font-weight: 800; background: transparent; border: none; }
-        QPushButton#windowClose { background: #f7f2f2; color: #8a3333; border: 1px solid #ff7c7c; border-radius: 8px; font-size: 20px; }
-        QPushButton#windowClose:hover { background: #f59e9e; color: #1B3F83; }
+        QPushButton#windowClose { background: #FFF7F7; color: #B91C1C; border: 1px solid #ff7c7c; border-radius: 8px; padding: 0px; font-family: "Segoe UI"; font-size: 12px; font-weight: 800; }
+        QPushButton#windowClose:hover { background: #f59e9e; color: #FFFFFF; }
         QLabel { color: #2B3674; background: transparent; border: none; font-size: 13px; font-weight: 600; }
         QLabel#pickerHint { color: #6B7FA8; font-weight: 500; }
         QLabel#pickerHint[error="true"] { color: #B45309; }
@@ -90,11 +109,11 @@ SchedulePickerDialog::SchedulePickerDialog(const QDateTime& initialCheckIn,
     headerLayout->setContentsMargins(22, 0, 12, 0);
     auto* scheduleIcon = new QLabel("◷", header);
     scheduleIcon->setStyleSheet("color:#005BFE; font-size:18px; background:transparent; border:none;");
-    auto* title = new QLabel("Choose dates & times", header);
+    auto* title = new QLabel(dialogTitle, header);
     title->setObjectName("pickerTitle");
-    auto* close = new QPushButton("×", header);
+    auto* close = new QPushButton(header);
     close->setObjectName("windowClose");
-    close->setFixedSize(30, 30);
+    styleDialogCloseButton(close);
     headerLayout->addWidget(scheduleIcon);
     headerLayout->addSpacing(8);
     headerLayout->addWidget(title);
@@ -115,14 +134,19 @@ SchedulePickerDialog::SchedulePickerDialog(const QDateTime& initialCheckIn,
     layout->setContentsMargins(6, 4, 6, 6);
     layout->setSpacing(8);
 
-    auto* subtitle = new QLabel("Select a check-in date and time first, then switch to Check-out to complete the stay.", this);
+    const QString subtitleText = maintenancePurpose
+        ? QStringLiteral("Choose the first and last full day when this room will be unavailable for maintenance.")
+        : reportingPurpose
+            ? QStringLiteral("Choose the inclusive start and end dates used by the report and invoice filters.")
+            : QStringLiteral("Select a check-in date and time first, then switch to Check-out to complete the stay.");
+    auto* subtitle = new QLabel(subtitleText, this);
     subtitle->setObjectName("pickerHint");
     subtitle->setWordWrap(true);
     layout->addWidget(subtitle);
 
     auto* modeRow = new QHBoxLayout();
-    auto* checkInMode = new QPushButton("Check-in", this);
-    auto* checkOutMode = new QPushButton("Check-out", this);
+    auto* checkInMode = new QPushButton(isDateOnlyPurpose() ? "Start date" : "Check-in", this);
+    auto* checkOutMode = new QPushButton(isDateOnlyPurpose() ? "End date" : "Check-out", this);
     checkInMode->setObjectName("modeButton");
     checkOutMode->setObjectName("modeButton");
     checkInMode->setCheckable(true);
@@ -144,7 +168,9 @@ SchedulePickerDialog::SchedulePickerDialog(const QDateTime& initialCheckIn,
     m_calendar = new QCalendarWidget(this);
     // Modified: Constrain the calendar itself to a centered, self-contained grid so all seven weekdays are visible without horizontal scrolling.
     m_calendar->setFixedSize(500, 276);
-    m_calendar->setMinimumDate(QDate::currentDate());
+    if (!allowsPastDates()) {
+        m_calendar->setMinimumDate(QDate::currentDate());
+    }
     m_calendar->setSelectedDate(m_modeGroup->checkedId() == 0 ? m_checkIn.date() : m_checkOut.date());
     // Modified: Keep week numbers available to Qt internally but remove the non-actionable column from reservation scheduling.
     m_calendar->setVerticalHeaderFormat(QCalendarWidget::NoVerticalHeader);
@@ -152,10 +178,12 @@ SchedulePickerDialog::SchedulePickerDialog(const QDateTime& initialCheckIn,
     layout->addLayout(modeRow);
 
     auto* hoursLabel = new QLabel("Available hour slots", this);
+    hoursLabel->setVisible(!isDateOnlyPurpose());
     layout->addWidget(hoursLabel);
     // Modified: Keep all 24 hourly choices inside the same compact visual width as the calendar.
     auto* hourGridContainer = new QWidget(content);
     hourGridContainer->setFixedWidth(500);
+    hourGridContainer->setVisible(!isDateOnlyPurpose());
     auto* hourGrid = new QGridLayout(hourGridContainer);
     hourGrid->setContentsMargins(0, 0, 0, 0);
     hourGrid->setHorizontalSpacing(6);
@@ -194,7 +222,10 @@ SchedulePickerDialog::SchedulePickerDialog(const QDateTime& initialCheckIn,
 
     auto* buttons = new QDialogButtonBox(this);
     auto* cancelButton = buttons->addButton("Cancel", QDialogButtonBox::RejectRole);
-    auto* applyButton = buttons->addButton("Apply schedule", QDialogButtonBox::AcceptRole);
+    const QString applyText = maintenancePurpose
+        ? QStringLiteral("Apply maintenance dates")
+        : reportingPurpose ? QStringLiteral("Apply period") : QStringLiteral("Apply schedule");
+    auto* applyButton = buttons->addButton(applyText, QDialogButtonBox::AcceptRole);
     cancelButton->setObjectName("cancelButton");
     applyButton->setObjectName("applyButton");
     // Modified: Set footer button colors directly so the action text remains above an opaque, high-contrast button on every platform theme.
@@ -216,10 +247,13 @@ SchedulePickerDialog::SchedulePickerDialog(const QDateTime& initialCheckIn,
         }
         if (m_modeGroup->checkedId() == 0) {
             m_checkIn.setDate(date);
-            // Modified: Continue replacing check-in until staff explicitly switches to Check-out; the preview remains the minimum one-hour stay.
-            m_checkOut = m_checkIn.addSecs(kMinimumBookingSeconds);
+            // Modified: Continue replacing the range start until staff explicitly switches modes; date-only workflows keep a valid one-day range.
+            m_checkOut = isDateOnlyPurpose() ? m_checkIn : m_checkIn.addSecs(kMinimumBookingSeconds);
         } else if (date < m_checkIn.date()) {
-            showHint("Check-out cannot be before the selected check-in date.", true);
+            showHint(isDateOnlyPurpose()
+                         ? "The end date cannot be before the selected start date."
+                         : "Check-out cannot be before the selected check-in date.",
+                     true);
             m_calendar->setSelectedDate(m_checkOut.date());
             return;
         } else {
@@ -235,7 +269,10 @@ SchedulePickerDialog::SchedulePickerDialog(const QDateTime& initialCheckIn,
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
     connect(buttons, &QDialogButtonBox::accepted, this, [this]() {
         if (!isRangeAvailable(m_checkIn, m_checkOut)) {
-            showHint("No room is available for this complete schedule. Choose another date or hour.", true);
+            showHint(isDateOnlyPurpose()
+                         ? "Choose a valid start and end date for this period."
+                         : "No room is available for this complete schedule. Choose another date or hour.",
+                     true);
             return;
         }
         accept();
@@ -256,6 +293,12 @@ QDateTime SchedulePickerDialog::selectedCheckOut() const
 
 bool SchedulePickerDialog::isRangeAvailable(const QDateTime& checkIn, const QDateTime& checkOut) const
 {
+    if (isDateOnlyPurpose()) {
+        return checkIn.isValid() && checkOut.isValid()
+            && (allowsPastDates() || checkIn.date() >= QDate::currentDate())
+            && checkOut.date() >= checkIn.date()
+            && (!m_availabilityPredicate || m_availabilityPredicate(checkIn, checkOut));
+    }
     // Modified: Reject elapsed whole-hour slots in the picker so staff never reaches the save step with a past planned arrival.
     return checkIn.isValid() && (m_checkOutOnly || checkIn >= QDateTime::currentDateTime())
         && checkOut >= checkIn.addSecs(kMinimumBookingSeconds)
@@ -265,8 +308,13 @@ bool SchedulePickerDialog::isRangeAvailable(const QDateTime& checkIn, const QDat
 bool SchedulePickerDialog::isDayAvailable(const QDate& day) const
 {
     const bool chooseCheckIn = m_modeGroup->checkedId() == 0;
-    if (day < QDate::currentDate() || (!chooseCheckIn && day < m_checkIn.date())) {
+    if ((!allowsPastDates() && day < QDate::currentDate()) || (!chooseCheckIn && day < m_checkIn.date())) {
         return false;
+    }
+    if (isDateOnlyPurpose()) {
+        const QDateTime candidateIn = chooseCheckIn ? QDateTime(day, QTime(0, 0)) : m_checkIn;
+        const QDateTime candidateOut = chooseCheckIn ? candidateIn : QDateTime(day, QTime(0, 0));
+        return isRangeAvailable(candidateIn, candidateOut);
     }
     for (int hour = 0; hour < kHoursPerDay; ++hour) {
         QDateTime candidateIn = m_checkIn;
@@ -291,7 +339,9 @@ void SchedulePickerDialog::refreshAvailability()
     refreshHourAvailability();
     refreshSelectionPresentation();
     updateSummary();
-    showHint("Grey dates and hour slots have no room available for the selected range.");
+    showHint(isDateOnlyPurpose()
+                 ? "Grey dates cannot be selected for this period."
+                 : "Grey dates and hour slots have no room available for the selected range.");
 }
 
 void SchedulePickerDialog::refreshDayAvailability()
@@ -304,7 +354,7 @@ void SchedulePickerDialog::refreshDayAvailability()
     unavailable.setForeground(QColor("#A3AED0"));
     unavailable.setBackground(QColor("#F1F5F9"));
     for (QDate day = firstVisible; day <= lastVisible; day = day.addDays(1)) {
-        if (day < QDate::currentDate() || (!chooseCheckIn && day < m_checkIn.date())) {
+        if ((!allowsPastDates() && day < QDate::currentDate()) || (!chooseCheckIn && day < m_checkIn.date())) {
             m_calendar->setDateTextFormat(day, unavailable);
             continue;
         }
@@ -315,6 +365,9 @@ void SchedulePickerDialog::refreshDayAvailability()
 
 void SchedulePickerDialog::refreshHourAvailability()
 {
+    if (isDateOnlyPurpose()) {
+        return;
+    }
     const bool chooseCheckIn = m_modeGroup->checkedId() == 0;
     for (int hour = 0; hour < kHoursPerDay; ++hour) {
         QDateTime candidateIn = m_checkIn;
@@ -349,8 +402,25 @@ void SchedulePickerDialog::refreshSelectionPresentation()
 
 void SchedulePickerDialog::updateSummary()
 {
+    if (isDateOnlyPurpose()) {
+        const QString prefix = m_purpose == Purpose::MaintenanceRange
+            ? QStringLiteral("Maintenance period") : QStringLiteral("Reporting period");
+        m_summaryLabel->setText(QString("%1: %2  →  %3 (inclusive)")
+            .arg(prefix, m_checkIn.date().toString("dd MMM yyyy"), m_checkOut.date().toString("dd MMM yyyy")));
+        return;
+    }
     m_summaryLabel->setText(QString("Selected schedule: %1  →  %2\nMinimum reservation duration: one hour.")
         .arg(m_checkIn.toString("dd MMM yyyy, HH:mm"), m_checkOut.toString("dd MMM yyyy, HH:mm")));
+}
+
+bool SchedulePickerDialog::isDateOnlyPurpose() const
+{
+    return m_purpose != Purpose::BookingStay;
+}
+
+bool SchedulePickerDialog::allowsPastDates() const
+{
+    return m_purpose == Purpose::ReportingPeriod;
 }
 
 void SchedulePickerDialog::showHint(const QString& message, bool isError)

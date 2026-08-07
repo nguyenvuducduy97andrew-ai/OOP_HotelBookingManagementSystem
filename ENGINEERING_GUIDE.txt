@@ -55,6 +55,10 @@ src/views/
     Qt widgets, dialogs, navigation, dashboard, Statistics visualization,
     invoice exploration, PDF rendering, and .ui files.
 
+src/resources/
+    Small application icons plus Standard, Deluxe, and Suite room-photo assets.
+    CMake embeds the photos through Qt BIG_RESOURCES rather than normal AUTORCC.
+
 There are no controller service directories or forwarding service classes.
 
 
@@ -310,6 +314,20 @@ identity selectors as monetary. Custom dialog surfaces remain opaque, use the
 light-blue perimeter around the entire title/content surface, and keep header
 corner styling consistent.
 
+RoomImageCarousel is the single room-gallery implementation used by Room Info
+and Room Management. It owns presentation state only: the selected room type,
+current photo index, and display cache. It must not query managers, mutate Room,
+or decide availability. Only the selected gallery is decoded; QImageReader
+decodes close to the requested size, QPixmapCache reuses composed display crops,
+a render signature avoids identical work, and a short resize debounce prevents
+continuous rescaling while a window is moving.
+
+Room photos live under src/resources/room_images/<type>/. CMake sorts and embeds
+them with qt_add_resources(... BIG_RESOURCES ... OPTIONS -no-compress). Keep the
+small operational icons in resources.qrc. Do not move full-size JPEG galleries
+back into normal AUTORCC: that would regenerate a very large C++ byte array and
+needlessly recompress already-compressed images, increasing configure/build cost.
+
 
 
 9. CHANGE CHECKLIST
@@ -328,6 +346,9 @@ Before changing a controller workflow:
 [ ] Run Debug and Release builds.
 [ ] Run `ctest --test-dir build --output-on-failure` with `BUILD_TESTING=ON`.
 [ ] Run git diff --check.
+[ ] If room photos changed, verify every Standard/Deluxe/Suite resource path,
+    open each gallery once, and confirm the previous/next controls wrap safely.
+[ ] Confirm resources.qrc still contains only small application icons.
 
 When adding a field:
 
@@ -387,6 +408,10 @@ Search for obsolete architecture:
     rg "BookingService|CustomerService|RoomService|InvoiceService|RoomAvailabilityService" src CMakeLists.txt
     rg "HotelManager" src/controllers/booking src/controllers/customer src/controllers/room
     rg "friend class .*Service|[A-Za-z]+Core\\(" src/controllers
+    rg "room_images/" src/resources/resources.qrc
+
+The last command should return no room-photo entries. Room photo resources are
+declared by CMake BIG_RESOURCES; resources.qrc remains the small-icon bundle.
 
 Expected controller tree:
 

@@ -1,5 +1,6 @@
 #include "RoomInfoDialog.h"
 #include "DialogWindowBehavior.h"
+#include "RoomImageCarousel.h"
 #include <QLabel>
 #include <QPushButton>
 #include <QVBoxLayout>
@@ -35,8 +36,8 @@ void RoomInfoDialog::setupUI() {
     auto* bgFrame = new QFrame(this);
     bgFrame->setObjectName("bgFrame");
     auto* frameLayout = new QVBoxLayout(bgFrame);
-    frameLayout->setContentsMargins(18, 18, 18, 18);
-    frameLayout->setSpacing(9);
+    frameLayout->setContentsMargins(16, 16, 16, 16);
+    frameLayout->setSpacing(7);
     
     // Header row
     auto* headerLayout = new QHBoxLayout();
@@ -51,11 +52,14 @@ void RoomInfoDialog::setupUI() {
     headerLayout->addStretch();
     enableDialogHeaderDrag(this, m_titleLabel);
     
-    // Image placeholder
+    // Image area
     m_imageLabel = new QLabel(this);
     m_imageLabel->setObjectName("imageLabel");
     m_imageLabel->setAlignment(Qt::AlignCenter);
     m_imageLabel->setFixedHeight(130);
+    // Modified: Keep Suite media within the same vertical budget as the placeholder so the fixed Room Info layout remains orderly.
+    m_roomImageCarousel = new RoomImageCarousel(105, this);
+    m_roomImageCarousel->hide();
     
     // Specs row
     auto* specsLayout = new QHBoxLayout();
@@ -66,11 +70,11 @@ void RoomInfoDialog::setupUI() {
     m_guestLabel = new QLabel(this);
     m_guestLabel->setObjectName("specLabel");
     
-    specsLayout->addWidget(m_sizeLabel);
-    specsLayout->addStretch();
-    specsLayout->addWidget(m_bedLabel);
-    specsLayout->addStretch();
-    specsLayout->addWidget(m_guestLabel);
+    specsLayout->setContentsMargins(2, 0, 2, 0);
+    specsLayout->setSpacing(8);
+    specsLayout->addWidget(m_sizeLabel, 1, Qt::AlignLeft | Qt::AlignVCenter);
+    specsLayout->addWidget(m_bedLabel, 2, Qt::AlignCenter);
+    specsLayout->addWidget(m_guestLabel, 1, Qt::AlignRight | Qt::AlignVCenter);
     
     // Hourly base price and optional room-type fee
     m_basePriceLabel = new QLabel(this);
@@ -90,7 +94,7 @@ void RoomInfoDialog::setupUI() {
     m_descLabel->setFrameShape(QFrame::NoFrame);
     m_descLabel->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_descLabel->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    m_descLabel->setFixedHeight(60);
+    m_descLabel->setFixedHeight(54);
     m_descLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     m_descLabel->setAlignment(Qt::AlignJustify);
     
@@ -118,6 +122,7 @@ void RoomInfoDialog::setupUI() {
     // Assemble
     frameLayout->addLayout(headerLayout);
     frameLayout->addWidget(m_imageLabel);
+    frameLayout->addWidget(m_roomImageCarousel);
     frameLayout->addLayout(specsLayout);
     frameLayout->addWidget(m_basePriceLabel);
     frameLayout->addWidget(m_extraFeeLabel);
@@ -167,21 +172,19 @@ void RoomInfoDialog::setupStyle() {
         QLabel#extraFeeLabel {
             background-color: #F4F7FE;
             color: #005BFE;
-            padding: 10px;
+            padding: 8px;
             border-radius: 8px;
             font-weight: 700;
             font-size: 14px;
-            margin-top: 10px;
         }
         QLabel#basePriceLabel {
             background-color: #EFF6FF;
             color: #1D4ED8;
             border: 1px solid #BFDBFE;
-            padding: 10px;
+            padding: 8px;
             border-radius: 8px;
             font-weight: 800;
             font-size: 15px;
-            margin-top: 10px;
         }
         QLabel#sectionTitle {
             font-size: 16px;
@@ -203,7 +206,7 @@ void RoomInfoDialog::setupStyle() {
             color: #2B3674;
             font-weight: 700;
             border-radius: 12px;
-            padding: 12px 20px;
+            padding: 10px 20px;
             font-size: 14px;
             border: none;
         }
@@ -215,7 +218,7 @@ void RoomInfoDialog::setupStyle() {
             color: #FFFFFF;
             font-weight: 700;
             border-radius: 12px;
-            padding: 12px 20px;
+            padding: 10px 20px;
             font-size: 14px;
             border: none;
         }
@@ -255,7 +258,7 @@ void RoomInfoDialog::populateData() {
         
         QLabel* pill = new QLabel("✓ " + am, m_amContainer);
         // Modified: Use two compact amenity columns so complete labels remain readable in the smaller Room Info dialog.
-        pill->setStyleSheet("background-color: #F4F7FE; color: #005BFE; border: 1px solid #E9EDF7; padding: 4px 8px; border-radius: 10px; font-weight: 600; font-size: 13px;");
+        pill->setStyleSheet("background-color: #F4F7FE; color: #005BFE; border: 1px solid #E9EDF7; padding: 2px 7px; border-radius: 9px; font-weight: 600; font-size: 12px;");
         m_amLayout->addWidget(pill, row, col);
         
         col++;
@@ -297,19 +300,38 @@ void RoomInfoDialog::populateData() {
         .arg(formatMoney(m_room->getBasePrice())));
 
     if (typeName == "Standard") {
+        // Modified: Use the same navigable, softly previewed gallery for Standard rooms as for Suite rooms.
+        m_imageLabel->hide();
+        m_roomImageCarousel->setGallery("Standard", 6);
+        m_roomImageCarousel->show();
+        m_roomImageCarousel->updateGeometry();
+        if (layout()) {
+            layout()->activate();
+        }
         m_extraFeeLabel->setVisible(false);
-        m_imageLabel->setText("🏨 Standard Room Image Placeholder");
-        m_imageLabel->setStyleSheet("background-color: #F4F7FE; border-radius: 14px; font-weight: bold; color: #A3AED0; font-size: 18px;");
     } else if (typeName == "Deluxe") {
+        // Modified: Replace the Deluxe placeholder with the shared room gallery and its adjacent-image previews.
+        m_imageLabel->hide();
+        m_roomImageCarousel->setGallery("Deluxe", 8);
+        m_roomImageCarousel->show();
+        m_roomImageCarousel->updateGeometry();
+        if (layout()) {
+            layout()->activate();
+        }
         m_extraFeeLabel->setText(QString("💰 Mini Bar Fee: %1 VND").arg(formatMoney(m_room->getExtraFeeAmount())));
         m_extraFeeLabel->setVisible(true);
-        m_imageLabel->setText("✨ Deluxe Room Image Placeholder");
-        m_imageLabel->setStyleSheet("background-color: #E0F2FE; border-radius: 14px; font-weight: bold; color: #0284C7; font-size: 18px;");
     } else if (typeName == "Suite") {
+        // Modified: Replace the Suite placeholder with a navigable center-focused gallery while keeping adjacent images softly visible.
+        m_imageLabel->hide();
+        m_roomImageCarousel->setGallery("Suite", 9);
+        m_roomImageCarousel->show();
+        // Modified: Recalculate the fixed dialog layout after replacing its hidden placeholder with the Suite gallery.
+        m_roomImageCarousel->updateGeometry();
+        if (layout()) {
+            layout()->activate();
+        }
         m_extraFeeLabel->setText(QString("👑 Premium Service Fee: %1 VND").arg(formatMoney(m_room->getExtraFeeAmount())));
         m_extraFeeLabel->setVisible(true);
-        m_imageLabel->setText("👑 Suite Room Image Placeholder");
-        m_imageLabel->setStyleSheet("background-color: #FEF3C7; border-radius: 14px; font-weight: bold; color: #D97706; font-size: 18px;");
     }
 }
 

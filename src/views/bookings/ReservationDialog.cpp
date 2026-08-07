@@ -22,6 +22,7 @@
 #include <QScrollArea>
 #include <QStackedLayout>
 #include <QTimeEdit>
+#include <QStyle>
 #include <algorithm>
 
 ReservationDialog::ReservationDialog(HotelManager* manager, QWidget *parent, std::shared_ptr<Room> previewRoom)
@@ -160,7 +161,10 @@ void setupReservationDialogStyle(QDialog* dialog) {
             color: #64748B;
             border: none;
             border-radius: 8px;
-            font-size: 20px;
+            padding: 0px;
+            font-family: "Segoe UI";
+            font-size: 12px;
+            font-weight: 800;
         }
         QPushButton#reservationDialogClose:hover { background: #F1F5F9; color: #1B3F83; }
         QLabel#reservationDialogSubtitle {
@@ -199,9 +203,9 @@ void ReservationDialog::setupUI() {
     dialogIcon->setStyleSheet("color:#005BFE; font-size:17px; background:transparent; border:none;");
     auto* dialogTitle = new QLabel("Create reservation", this);
     dialogTitle->setObjectName("reservationDialogTitle");
-    auto* dialogClose = new QPushButton("×", this);
+    auto* dialogClose = new QPushButton(this);
     dialogClose->setObjectName("reservationDialogClose");
-    dialogClose->setFixedSize(30, 30);
+    styleDialogCloseButton(dialogClose);
     titleRow->addWidget(dialogIcon);
     titleRow->addSpacing(8);
     titleRow->addWidget(dialogTitle);
@@ -334,7 +338,6 @@ void ReservationDialog::setupUI() {
     }
     const QDate today = QDate::currentDate();
     m_checkInDateEdit = new QDateEdit(defaultCheckIn.date(), this);
-    m_checkInDateEdit->setCalendarPopup(true);
     m_checkInDateEdit->setDisplayFormat("yyyy-MM-dd");
     // Modified: Match the service rule by preventing newly created reservations from using historical check-in dates.
     m_checkInDateEdit->setMinimumDate(today);
@@ -349,7 +352,6 @@ void ReservationDialog::setupUI() {
 
     const QDateTime defaultCheckOut = defaultCheckIn.addSecs(60 * 60);
     m_checkOutDateEdit = new QDateEdit(defaultCheckOut.date(), this);
-    m_checkOutDateEdit->setCalendarPopup(true);
     m_checkOutDateEdit->setDisplayFormat("yyyy-MM-dd");
     m_checkOutDateEdit->setMinimumDate(today);
     m_checkOutDateEdit->hide();

@@ -8,6 +8,7 @@
 #include <QMouseEvent>
 #include <QObject>
 #include <QScreen>
+#include <QPushButton>
 #include <QWidget>
 
 // Modified: Centralize the non-resizable, bounded and draggable behavior shared by the application's custom dialogs.
@@ -85,6 +86,22 @@ inline void enableDialogHeaderDrag(QDialog* dialog, QWidget* header)
     // Each title bar owns a lightweight handler; no signal/slot metadata is needed for this event-filter-only helper.
     auto* handler = new DialogMoveHandler(dialog);
     header->installEventFilter(handler);
+}
+
+inline void styleDialogCloseButton(QPushButton* button)
+{
+    if (!button) {
+        return;
+    }
+    // Modified: Give every custom-dialog exit control the same visible red X treatment in normal, hover and pressed states.
+    button->setText("X");
+    button->setFixedSize(30, 30);
+    button->setCursor(Qt::PointingHandCursor);
+    button->setFocusPolicy(Qt::NoFocus);
+    button->setStyleSheet(
+        "QPushButton { background:#FFF7F7; color:#DC2626; border:1px solid #FF6B6B; border-radius:8px; padding:0px; font-family:'Segoe UI'; font-size:12px; font-weight:800; }"
+        "QPushButton:hover { background:#FCA5A5; color:#FFFFFF; border-color:#FB7185; }"
+        "QPushButton:pressed { background:#F87171; color:#FFFFFF; border-color:#EF4444; }");
 }
 
 class NonMoneyWheelBlocker final : public QObject {

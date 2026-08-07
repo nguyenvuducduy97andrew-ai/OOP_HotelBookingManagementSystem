@@ -8,6 +8,8 @@
 #include <unordered_set>
 #include "HotelManager.h"
 
+class RoomImageCarousel;
+
 class RoomPageWidget : public QWidget {
     Q_OBJECT
 
@@ -55,6 +57,7 @@ private:
     QLabel* m_detailTitleLabel;
     QLabel* m_detailStatusLabel;
     QLabel* m_detailImageLabel;
+    RoomImageCarousel* m_detailRoomImageCarousel;
     QLabel* m_detailSizeLabel;
     QLabel* m_detailBedLabel;
     QLabel* m_detailGuestLabel;

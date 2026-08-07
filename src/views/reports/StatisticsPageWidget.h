@@ -6,7 +6,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QComboBox>
-#include <QDateEdit>
+#include <QDate>
 #include <QPushButton>
 #include <QtCharts/QChartView>
 #include <QtCharts/QBarSeries>
@@ -50,8 +50,10 @@ private:
     // Filter controls.
     QLineEdit* m_searchEdit;
     QComboBox* m_amountFilter;
-    QDateEdit* m_dateFrom;
-    QDateEdit* m_dateTo;
+    QDate m_dateFrom;
+    QDate m_dateTo;
+    QPushButton* m_periodButton;
+    QLabel* m_periodSummary;
 
     QTableWidget* m_invoiceTable;
 

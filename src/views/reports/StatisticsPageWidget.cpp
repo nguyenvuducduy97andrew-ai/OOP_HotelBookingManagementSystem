@@ -4,11 +4,11 @@
 #include "DeluxeRoom.h"
 #include "SuiteRoom.h"
 #include "SearchFieldUi.h"
+#include "SchedulePickerDialog.h"
 #include <QHeaderView>
 #include <QDateTime>
 #include <QMessageBox>
 #include <QScrollArea>
-#include <QCalendarWidget>
 #include <QEvent>
 #include <QFontMetrics>
 #include <QFrame>
@@ -110,29 +110,6 @@ private:
     QFrame* m_popup = nullptr;
 };
 
-const char* calendarPopupStyle = R"(
-    QCalendarWidget QWidget {
-        background-color: #FFFFFF;
-        color: #2B3674;
-    }
-    QCalendarWidget QAbstractItemView:enabled {
-        color: #2B3674;
-        background-color: #FFFFFF;
-        selection-background-color: #005BFE;
-        selection-color: #FFFFFF;
-    }
-    QCalendarWidget QAbstractItemView:disabled {
-        color: #A3AED0;
-    }
-    QCalendarWidget QToolButton {
-        color: #2B3674;
-        background-color: transparent;
-    }
-    QCalendarWidget QMenu {
-        background-color: #FFFFFF;
-        color: #2B3674;
-    }
-)";
 }
 
 StatisticsPageWidget::StatisticsPageWidget(HotelManager* manager, QWidget* parent)
@@ -164,7 +141,8 @@ void StatisticsPageWidget::setupTopChartsUI(QWidget* parent, QVBoxLayout* mainLa
 
     auto* pieLayout = new QVBoxLayout();
     pieLayout->setContentsMargins(0, 0, 0, 0);
-    pieLayout->addWidget(createSectionHeader("🍩 Selected-period invoiced revenue structure", parent));
+    // Modified: Use an invoice symbol for the revenue breakdown instead of depicting the chart's donut geometry.
+    pieLayout->addWidget(createSectionHeader("🧾 Selected-period invoiced revenue structure", parent));
     auto* pieChartView = new QChartView(m_pieChart);
     pieChartView->setRenderHint(QPainter::Antialiasing);
     pieChartView->setStyleSheet("background-color: #FFFFFF; border-radius: 12px; border: 1px solid #E2E8F0;");
@@ -315,32 +293,28 @@ void StatisticsPageWidget::setupFilterBar(QVBoxLayout* parentLayout) {
                                   "QComboBox QAbstractItemView { background-color: #FFFFFF; color: #2B3674; selection-background-color: #005BFE; selection-color: #FFFFFF; border: 1px solid #E9EDF7; }");
 
     // Invoice issue-date filter.
-    m_dateFrom = new QDateEdit(QDate::currentDate().addMonths(-1), this); // Default to one month ago.
-    m_dateFrom->setCalendarPopup(true);
-    m_dateFrom->setStyleSheet("QDateEdit { " + commonInputStyle + " }");
-    m_dateFrom->calendarWidget()->setStyleSheet(calendarPopupStyle);
-
-    m_dateTo = new QDateEdit(QDate::currentDate(), this);
-    m_dateTo->setCalendarPopup(true);
-    m_dateTo->setStyleSheet("QDateEdit { " + commonInputStyle + " }");
-    m_dateTo->calendarWidget()->setStyleSheet(calendarPopupStyle);
+    m_dateFrom = QDate::currentDate().addMonths(-1);
+    m_dateTo = QDate::currentDate();
+    m_periodButton = new QPushButton("Choose reporting period", this);
+    m_periodButton->setStyleSheet("QPushButton { " + commonInputStyle + " font-weight: 700; }"
+                                  "QPushButton:hover { border: 1px solid #005BFE; background-color: #EAF2FF; }");
+    m_periodSummary = new QLabel(this);
+    m_periodSummary->setStyleSheet("color:#6B7FA8; font-size:12px; font-weight:600;");
+    m_periodSummary->setText(QString("%1 → %2")
+        .arg(m_dateFrom.toString("dd MMM yyyy"), m_dateTo.toString("dd MMM yyyy")));
 
     QLabel* lblSearch = new QLabel("Search:", this);
     lblSearch->setStyleSheet(labelStyle);
     
-    QLabel* lblFrom = new QLabel("From:", this);
-    lblFrom->setStyleSheet(labelStyle);
-
-    QLabel* lblTo = new QLabel("To:", this);
-    lblTo->setStyleSheet(labelStyle);
+    QLabel* lblPeriod = new QLabel("Period:", this);
+    lblPeriod->setStyleSheet(labelStyle);
 
     filterLayout->addWidget(lblSearch);
     filterLayout->addWidget(m_searchEdit);
     filterLayout->addWidget(m_amountFilter);
-    filterLayout->addWidget(lblFrom);
-    filterLayout->addWidget(m_dateFrom);
-    filterLayout->addWidget(lblTo);
-    filterLayout->addWidget(m_dateTo);
+    filterLayout->addWidget(lblPeriod);
+    filterLayout->addWidget(m_periodButton);
+    filterLayout->addWidget(m_periodSummary);
     filterLayout->addStretch();
 
     parentLayout->addLayout(filterLayout);
@@ -348,8 +322,21 @@ void StatisticsPageWidget::setupFilterBar(QVBoxLayout* parentLayout) {
     // Modified: Rebuild both invoice rows and charts from the same selected filter scope, avoiding a table/chart mismatch.
     connect(m_searchEdit, &QLineEdit::textChanged, this, &StatisticsPageWidget::refreshData);
     connect(m_amountFilter, &QComboBox::currentIndexChanged, this, &StatisticsPageWidget::refreshData);
-    connect(m_dateFrom, &QDateEdit::dateChanged, this, &StatisticsPageWidget::refreshData);
-    connect(m_dateTo, &QDateEdit::dateChanged, this, &StatisticsPageWidget::refreshData);
+    connect(m_periodButton, &QPushButton::clicked, this, [this]() {
+        // Modified: Statistics now shares the booking-room calendar format while allowing historical inclusive report periods.
+        SchedulePickerDialog picker(QDateTime(m_dateFrom, QTime(0, 0)),
+                                    QDateTime(m_dateTo, QTime(0, 0)),
+                                    {}, this, false, false,
+                                    SchedulePickerDialog::Purpose::ReportingPeriod);
+        if (picker.exec() != QDialog::Accepted) {
+            return;
+        }
+        m_dateFrom = picker.selectedCheckIn().date();
+        m_dateTo = picker.selectedCheckOut().date();
+        m_periodSummary->setText(QString("%1 → %2")
+            .arg(m_dateFrom.toString("dd MMM yyyy"), m_dateTo.toString("dd MMM yyyy")));
+        refreshData();
+    });
 }
 
 void StatisticsPageWidget::setupTable() {
@@ -392,8 +379,8 @@ void StatisticsPageWidget::refreshData() {
     double filteredServiceFee = 0.0;
     const QString searchText = m_searchEdit->text().trimmed().toLower();
     const int amountFilter = m_amountFilter->currentIndex();
-    const QDate fromDate = m_dateFrom->date();
-    const QDate toDate = m_dateTo->date();
+    const QDate fromDate = m_dateFrom;
+    const QDate toDate = m_dateTo;
 
     for (const auto& inv : invoices) {
         if (!inv) continue;

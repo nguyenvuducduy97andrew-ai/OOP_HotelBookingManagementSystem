@@ -200,9 +200,17 @@ RoomStatusPageWidget -> RoomInfoDialog -> bookingRequested -> MainWindow -> Rese
 
 `RoomInfoDialog` is read-only and returns `Accepted` only from its Booking action. `RoomStatusPageWidget` rechecks timestamp availability and capacity before opening it; `ReservationDialog` performs authoritative validation again before mutation. `SchedulePickerDialog` is shared by Room Status, reservation create/edit, and active-stay extension so endpoint-selection semantics cannot diverge between screens.
 
+`RoomImageCarousel` is a shared view component used by both `RoomInfoDialog` and the persistent Room Management detail panel. The component receives a room-type gallery name rather than a model or manager reference. Standard, Deluxe, and Suite therefore share navigation, faded adjacent previews, cropping, and counters without duplicating UI logic. A gallery switch loads only the selected type. `QImageReader` decodes near the final widget size, `QPixmapCache` retains display-ready crops, a render signature suppresses identical work, and resize events are debounced before refreshing. Image presentation remains entirely inside the view layer.
+
 Custom dialog chrome is a view-only concern. `DialogWindowBehavior.h` bounds and locks dialog geometry, enables dragging from custom headers, and blocks accidental mouse-wheel changes on non-monetary selectors/spin boxes. It does not access `HotelManager`, model objects, or persistence. Price/fee controls opt into wheel adjustment explicitly.
 
 `StatisticsPageWidget` is a read-only visualization and invoice-exploration view. It reads bookings and invoices through the `HotelManager` facade, builds its chart series and filtered table locally, and opens `InvoiceDialog` for invoice details. Booking changes and completed checkout events trigger `refreshData()` so its visualizations remain synchronized with the shared manager state.
+
+## Resource and build pipeline
+
+Small application icons stay in `src/resources/resources.qrc` and use normal `AUTORCC`. Room photos live under `src/resources/room_images/<type>/` and are collected in a sorted repository-relative list by CMake. `qt_add_resources(... BIG_RESOURCES ...)` embeds that list directly as object data with JPEG recompression disabled. This avoids generating and compiling one enormous C++ array while preserving `:/room_images/<type>/<type>_NN.jpg` runtime paths.
+
+The resource policy is build-tool independent: MinGW Makefiles, Ninja, MSVC, and IDE-driven CMake builds receive the same target definition. CMake 3.17 is the project minimum because Qt big-resource object generation is reliable from that version. Generator choice, parallel job count, compiler cache, and build-directory placement are optional local accelerators rather than correctness requirements.
 
 ## Automated business verification
 

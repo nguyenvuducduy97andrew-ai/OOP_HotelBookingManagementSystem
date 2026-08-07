@@ -1,15 +1,17 @@
 #include "RoomDialog.h"
 #include "DialogWindowBehavior.h"
+#include "SchedulePickerDialog.h"
+#include "CustomAlertDialog.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QFormLayout>
 #include <QPushButton>
-#include <QMessageBox>
 #include <QLocale>
 #include <QDate>
 #include <QColor>
 #include <QListWidget>
 #include <QPainter>
+#include <QStyle>
 #include <QStyleOptionButton>
 
 class AmenityButton : public QPushButton {
@@ -263,7 +265,7 @@ void setupDialogStyle(QDialog* dialog) {
             color: #1B3F83;
         }
         QFrame#roomDialogHeader { background:#FFFFFF; border:none; border-bottom:1px solid #E7EDF7; border-top-left-radius:13px; border-top-right-radius:13px; }
-        QPushButton#roomDialogClose { background:transparent; color:#64748B; border:none; border-radius:8px; font-size:20px; }
+        QPushButton#roomDialogClose { background:transparent; color:#64748B; border:none; border-radius:8px; padding:0px; font-family:"Segoe UI"; font-size:12px; font-weight:800; }
         QPushButton#roomDialogClose:hover { background:#F1F5F9; color:#1B3F83; }
     )");
 }
@@ -288,9 +290,9 @@ void RoomDialog::setupUI() {
     roomDialogIcon->setStyleSheet("color:#005BFE; font-size:18px; background:transparent; border:none;");
     auto* roomDialogTitle = new QLabel(m_isEditMode ? "Edit room" : "Add a new room", header);
     roomDialogTitle->setObjectName("roomDialogTitle");
-    auto* roomDialogClose = new QPushButton("×", header);
+    auto* roomDialogClose = new QPushButton(header);
     roomDialogClose->setObjectName("roomDialogClose");
-    roomDialogClose->setFixedSize(30, 30);
+    styleDialogCloseButton(roomDialogClose);
     headerLayout->addWidget(roomDialogIcon);
     headerLayout->addSpacing(8);
     headerLayout->addWidget(roomDialogTitle);
@@ -341,20 +343,31 @@ void RoomDialog::setupUI() {
     m_availabilityCombo->addItems({"Available", "Schedule maintenance"});
     formLayout->addRow("Status:", m_availabilityCombo);
 
-    m_maintenanceStartLabel = new QLabel("Maintenance starts:", this);
-    m_maintenanceStartDateEdit = new QDateEdit(QDate::currentDate(), this);
-    // Modified: Prevent operational maintenance scheduling from creating a past interval.
-    m_maintenanceStartDateEdit->setMinimumDate(QDate::currentDate());
-    m_maintenanceStartDateEdit->setCalendarPopup(true);
-    m_maintenanceStartDateEdit->setDisplayFormat("dd MMM yyyy");
-    formLayout->addRow(m_maintenanceStartLabel, m_maintenanceStartDateEdit);
-
-    m_maintenanceEndLabel = new QLabel("Maintenance ends:", this);
-    m_maintenanceEndDateEdit = new QDateEdit(QDate::currentDate(), this);
-    m_maintenanceEndDateEdit->setMinimumDate(QDate::currentDate());
-    m_maintenanceEndDateEdit->setCalendarPopup(true);
-    m_maintenanceEndDateEdit->setDisplayFormat("dd MMM yyyy");
-    formLayout->addRow(m_maintenanceEndLabel, m_maintenanceEndDateEdit);
+    m_maintenanceStartDate = QDate::currentDate();
+    m_maintenanceEndDate = QDate::currentDate();
+    m_maintenanceScheduleLabel = new QLabel("Maintenance schedule:", this);
+    auto* maintenanceScheduleWidget = new QWidget(this);
+    auto* maintenanceScheduleLayout = new QHBoxLayout(maintenanceScheduleWidget);
+    maintenanceScheduleLayout->setContentsMargins(0, 0, 0, 0);
+    maintenanceScheduleLayout->setSpacing(10);
+    m_maintenanceScheduleButton = new QPushButton("Choose dates", maintenanceScheduleWidget);
+    m_maintenanceScheduleButton->setObjectName("btnMaintenanceSchedule");
+    m_maintenanceScheduleButton->setFixedSize(150, 38);
+    // Modified: Give the compact maintenance-date action an explicit opaque style so inherited button colors can never hide its text.
+    m_maintenanceScheduleButton->setStyleSheet(
+        "QPushButton { background:#EAF2FF; color:#005BFE; border:1px solid #93C5FD; border-radius:8px; padding:7px 12px; font-size:13px; font-weight:700; }"
+        "QPushButton:hover { background:#DBEAFE; border-color:#60A5FA; }"
+        "QPushButton:pressed { background:#BFDBFE; }");
+    m_maintenanceScheduleSummary = new QLabel(maintenanceScheduleWidget);
+    m_maintenanceScheduleSummary->setStyleSheet("color:#6B7FA8; font-size:12px;");
+    m_maintenanceScheduleSummary->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+    m_maintenanceScheduleSummary->setWordWrap(false);
+    m_maintenanceScheduleSummary->setText(QString("%1 → %2 (full days)")
+        .arg(m_maintenanceStartDate.toString("dd MMM yyyy"), m_maintenanceEndDate.toString("dd MMM yyyy")));
+    maintenanceScheduleLayout->addWidget(m_maintenanceScheduleButton);
+    // Modified: Keep the selected full-day range immediately to the right of the compact picker button for quick review.
+    maintenanceScheduleLayout->addWidget(m_maintenanceScheduleSummary, 1);
+    formLayout->addRow(m_maintenanceScheduleLabel, maintenanceScheduleWidget);
 
     m_maintenanceNoteLabel = new QLabel("Maintenance note:", this);
     m_maintenanceNoteEdit = new QTextEdit(this);
@@ -491,13 +504,7 @@ void RoomDialog::setupUI() {
 
     connect(m_typeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &RoomDialog::onTypeChanged);
     connect(m_availabilityCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &RoomDialog::onStatusChanged);
-    connect(m_maintenanceStartDateEdit, &QDateEdit::dateChanged, this, [this](const QDate& startDate) {
-        // Modified: Keep the inclusive full-day Maintenance end date selectable from its start date onward.
-        m_maintenanceEndDateEdit->setMinimumDate(startDate);
-        if (m_maintenanceEndDateEdit->date() < startDate) {
-            m_maintenanceEndDateEdit->setDate(startDate);
-        }
-    });
+    connect(m_maintenanceScheduleButton, &QPushButton::clicked, this, &RoomDialog::openMaintenanceSchedulePicker);
     connect(m_cancelMaintenanceBtn, &QPushButton::clicked, this, &RoomDialog::markSelectedMaintenanceForCancellation);
     connect(m_confirmMaintenanceBtn, &QPushButton::clicked, this, &RoomDialog::markSelectedMaintenanceForConfirmation);
     connect(m_addAmenityBtn, &QPushButton::clicked, this, &RoomDialog::onAddCustomAmenity);
@@ -564,20 +571,23 @@ void RoomDialog::onTypeChanged(int index) {
 
 void RoomDialog::onAccept() {
     if (m_roomNumberEdit->text().trimmed().isEmpty()) {
-        QMessageBox::warning(this, "Missing information", "Please enter the room number.");
+        CustomAlertDialog("Missing information", "Please enter the room number.", this).exec();
         return;
     }
     if (m_basePriceSpin->value() <= 0) {
-        QMessageBox::warning(this, "Invalid value", "Please enter a room price greater than 0.");
+        // Modified: Use the branded one-action alert so the acknowledgement button remains visible and the validation popup has a soft, consistent frame.
+        CustomAlertDialog("Invalid value", "Please enter a room price greater than 0.", this).exec();
         return;
     }
-    if (shouldScheduleMaintenance() && m_maintenanceEndDateEdit->date() < m_maintenanceStartDateEdit->date()) {
+    if (shouldScheduleMaintenance() && m_maintenanceEndDate < m_maintenanceStartDate) {
         // Modified: Permit a one-day Maintenance case while preserving the selected end day as fully unavailable.
-        QMessageBox::warning(this, "Invalid maintenance dates", "Maintenance cannot end before its start date.");
+        CustomAlertDialog("Invalid maintenance dates", "Maintenance cannot end before its start date.", this).exec();
         return;
     }
     if ((!m_maintenanceIdToCancel.isEmpty() || !m_maintenanceIdToConfirm.isEmpty()) && shouldScheduleMaintenance()) {
-        QMessageBox::warning(this, "Complete one maintenance action", "Save the schedule cancellation first, then create a new maintenance schedule.");
+        CustomAlertDialog("Complete one maintenance action",
+                          "Save the schedule cancellation first, then create a new maintenance schedule.",
+                          this).exec();
         return;
     }
     accept();
@@ -616,11 +626,11 @@ QString RoomDialog::getAmenities() const {
 bool RoomDialog::shouldScheduleMaintenance() const { return m_availabilityCombo->currentIndex() == 1; }
 
 QString RoomDialog::getMaintenanceStartDate() const {
-    return m_maintenanceStartDateEdit->date().toString(Qt::ISODate);
+    return m_maintenanceStartDate.toString(Qt::ISODate);
 }
 
 QString RoomDialog::getMaintenanceEndDate() const {
-    return m_maintenanceEndDateEdit->date().toString(Qt::ISODate);
+    return m_maintenanceEndDate.toString(Qt::ISODate);
 }
 
 QString RoomDialog::getMaintenanceNote() const {
@@ -703,13 +713,27 @@ void RoomDialog::markSelectedMaintenanceForConfirmation() {
 
 void RoomDialog::onStatusChanged(int index) {
     const bool scheduleMaintenance = index == 1;
-    m_maintenanceStartLabel->setVisible(scheduleMaintenance);
-    m_maintenanceStartDateEdit->setVisible(scheduleMaintenance);
-    m_maintenanceEndLabel->setVisible(scheduleMaintenance);
-    m_maintenanceEndDateEdit->setVisible(scheduleMaintenance);
+    m_maintenanceScheduleLabel->setVisible(scheduleMaintenance);
+    m_maintenanceScheduleButton->parentWidget()->setVisible(scheduleMaintenance);
     m_maintenanceNoteLabel->setVisible(scheduleMaintenance);
     m_maintenanceNoteEdit->setVisible(scheduleMaintenance);
     adjustSize();
+}
+
+void RoomDialog::openMaintenanceSchedulePicker()
+{
+    // Modified: Maintenance create/edit now uses the same branded range calendar as room booking while retaining inclusive full-day semantics.
+    SchedulePickerDialog picker(QDateTime(m_maintenanceStartDate, QTime(0, 0)),
+                                QDateTime(m_maintenanceEndDate, QTime(0, 0)),
+                                {}, this, false, false,
+                                SchedulePickerDialog::Purpose::MaintenanceRange);
+    if (picker.exec() != QDialog::Accepted) {
+        return;
+    }
+    m_maintenanceStartDate = picker.selectedCheckIn().date();
+    m_maintenanceEndDate = picker.selectedCheckOut().date();
+    m_maintenanceScheduleSummary->setText(QString("%1 → %2 (full days)")
+        .arg(m_maintenanceStartDate.toString("dd MMM yyyy"), m_maintenanceEndDate.toString("dd MMM yyyy")));
 }
 
 void RoomDialog::onAddCustomAmenity() {

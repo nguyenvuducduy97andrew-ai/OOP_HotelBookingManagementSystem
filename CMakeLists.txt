@@ -1,4 +1,5 @@
-cmake_minimum_required(VERSION 3.16)
+# Modified: CMake 3.17 is the minimum reliable version for Qt BIG_RESOURCES, which avoids compiling large room photos as generated C++ arrays.
+cmake_minimum_required(VERSION 3.17)
 project(HotelBookingManagement LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -11,6 +12,13 @@ file(MAKE_DIRECTORY "${CMAKE_SOURCE_DIR}/data")
 
 find_package(Qt6 REQUIRED COMPONENTS Core Sql Widgets Charts Svg)
 include(CTest)
+
+# Modified: Discover room-photo assets in a repository-relative, deterministic list so every developer and evaluator receives the same optimized resource build.
+file(GLOB_RECURSE ROOM_PHOTO_FILES CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/resources/room_images/*.jpg"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/resources/room_images/*.jpeg"
+)
+list(SORT ROOM_PHOTO_FILES)
 
 # Keep each architectural layer independently compilable and reusable by the application and tests.
 file(GLOB_RECURSE MODEL_SOURCES CONFIGURE_DEPENDS
@@ -75,6 +83,15 @@ add_executable(HotelBookingManagement
     src/main.cpp
     src/resources/resources.qrc
     ${VIEW_SOURCES}
+)
+
+# Modified: Embed large, already-compressed room photos directly as object data instead of generating and compiling a very large qrc_resources.cpp file.
+qt_add_resources(HotelBookingManagement "room_photos"
+    PREFIX "/"
+    BASE "${CMAKE_CURRENT_SOURCE_DIR}/src/resources"
+    BIG_RESOURCES
+    FILES ${ROOM_PHOTO_FILES}
+    OPTIONS -no-compress
 )
 target_include_directories(HotelBookingManagement PRIVATE ${VIEW_INCLUDE_DIRS})
 target_precompile_headers(HotelBookingManagement PRIVATE src/pch/widgets_pch.h)

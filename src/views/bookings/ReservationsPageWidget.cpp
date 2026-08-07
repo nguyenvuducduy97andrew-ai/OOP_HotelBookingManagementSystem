@@ -151,9 +151,9 @@ void showReservationFeedback(
     headerIcon->setObjectName("feedbackHeaderIcon");
     auto* headerTitle = new QLabel(title, header);
     headerTitle->setObjectName("feedbackWindowTitle");
-    auto* headerClose = new QPushButton("×", header);
+    auto* headerClose = new QPushButton(header);
     headerClose->setObjectName("feedbackWindowClose");
-    headerClose->setFixedSize(30, 30);
+    styleDialogCloseButton(headerClose);
     headerLayout->addWidget(headerIcon);
     headerLayout->addSpacing(8);
     headerLayout->addWidget(headerTitle);

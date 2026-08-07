@@ -1,4 +1,5 @@
 #include "RoomPageWidget.h"
+#include "RoomImageCarousel.h"
 #include "RoomDialog.h"
 #include "StandardRoom.h"
 #include "DeluxeRoom.h"
@@ -334,6 +335,9 @@ void RoomPageWidget::setupUI() {
     m_detailImageLabel->setStyleSheet("background-color: #F4F7FE; border-radius: 14px;");
     m_detailImageLabel->setAlignment(Qt::AlignCenter);
     contentLayout->addWidget(m_detailImageLabel);
+    m_detailRoomImageCarousel = new RoomImageCarousel(180, m_detailPanel);
+    m_detailRoomImageCarousel->hide();
+    contentLayout->addWidget(m_detailRoomImageCarousel);
 
     // Specs
     auto* specsRow = new QHBoxLayout();
@@ -664,19 +668,25 @@ void RoomPageWidget::updateDetailPanel(const std::shared_ptr<Room>& room) {
     m_detailAmenitiesLabel->setTextFormat(Qt::RichText);
 
     if (typeName == "Standard") {
+        // Modified: Present the Standard image collection in Room Management with the same carousel behavior used by Room Info.
+        m_detailImageLabel->hide();
+        m_detailRoomImageCarousel->setGallery("Standard", 6);
+        m_detailRoomImageCarousel->show();
         m_detailExtraFeeLabel->setVisible(false);
-        m_detailImageLabel->setText("🏨 Standard Room Image Placeholder");
-        m_detailImageLabel->setStyleSheet("background-color: #F4F7FE; border-radius: 14px; font-weight: bold; color: #A3AED0;");
     } else if (typeName == "Deluxe") {
+        // Modified: Show the Deluxe gallery in the persistent room-details panel instead of a static placeholder.
+        m_detailImageLabel->hide();
+        m_detailRoomImageCarousel->setGallery("Deluxe", 8);
+        m_detailRoomImageCarousel->show();
         m_detailExtraFeeLabel->setText(QString("💰 Mini Bar Fee: %1 VND").arg(formatMoney(room->getExtraFeeAmount())));
         m_detailExtraFeeLabel->setVisible(true);
-        m_detailImageLabel->setText("✨ Deluxe Room Image Placeholder");
-        m_detailImageLabel->setStyleSheet("background-color: #E0F2FE; border-radius: 14px; font-weight: bold; color: #0284C7;");
     } else if (typeName == "Suite") {
+        // Modified: Show the shared Suite gallery in Room Management so room details and booking review use the same images and navigation.
+        m_detailImageLabel->hide();
+        m_detailRoomImageCarousel->setGallery("Suite", 9);
+        m_detailRoomImageCarousel->show();
         m_detailExtraFeeLabel->setText(QString("👑 Premium Service Fee: %1 VND").arg(formatMoney(room->getExtraFeeAmount())));
         m_detailExtraFeeLabel->setVisible(true);
-        m_detailImageLabel->setText("👑 Suite Room Image Placeholder");
-        m_detailImageLabel->setStyleSheet("background-color: #FEF3C7; border-radius: 14px; font-weight: bold; color: #D97706;");
     }
 }
 

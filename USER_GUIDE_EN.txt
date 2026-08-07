@@ -135,6 +135,12 @@ delete historical customers merely to clean up a list.
 
 Room Management lets staff add rooms, filter types, inspect room details, edit room settings and manage dated maintenance.
 
+Standard, Deluxe, and Suite use the same gallery controls. The current photo is
+centered and faded edges preview the previous and next photos. Use `<` or `>` to
+navigate and read `Image ... of ...` for the current position. Photos are visual
+references only; system status, capacity, price, and availability are the
+authoritative operational facts.
+
 Add/Edit room:
 1. Select Add Room, or select a room then Edit.
 2. Confirm Room Number, Room Type and Base Price.
@@ -179,9 +185,9 @@ New reservations begin from Room Status, not a separate New Reservation button.
    Switch to Check-out before choosing the departure date/time. Week numbers are
    hidden; all seven weekdays and all 24 hour slots should be visible.
 3. Select adults/children and apply the availability filter.
-4. Click an appropriate room. Room Info opens first with type, capacity, bed,
-   hourly rate, description, and amenities. Closing/cancelling this review does
-   not open the booking form.
+4. Click an appropriate room. Room Info opens first with previous/next gallery
+   controls, type, capacity, bed, hourly rate, description, and amenities.
+   Closing/cancelling this review does not open the booking form.
 5. Choose Booking in Room Info. Reservation opens with the room and schedule set.
 6. For an existing guest, search and select Existing customer by document number,
    name, or phone. For a new guest, select `New customer — enter details manually`
@@ -336,6 +342,12 @@ then confirm again. A simulated notice is not conflict resolution.
 Database error at startup:
 Close the app. Do not repeatedly overwrite/delete the DB. If possible copy
 `data/hotel_data.db` from the project folder as a backup and give the exact message to a developer.
+
+Room photos are briefly loading or do not change immediately:
+Allow the current action to finish, then use one previous/next action. Do not click
+several navigation buttons rapidly or open many Room Info dialogs at once. If the
+whole gallery remains empty after restarting, report the room type and number to a
+developer. A gallery-loading problem does not mutate booking data.
 
 ===============================================================================
 12. SCENARIO PLAYBOOK AND HANDOVER

@@ -11,6 +11,7 @@ class QVBoxLayout;
 class QHBoxLayout;
 class QGridLayout;
 class QTextEdit;
+class RoomImageCarousel;
 
 class RoomInfoDialog : public QDialog {
     Q_OBJECT
@@ -39,6 +40,7 @@ private:
     QLabel* m_titleLabel;
     QLabel* m_statusBadge;
     QLabel* m_imageLabel;
+    RoomImageCarousel* m_roomImageCarousel;
     
     QLabel* m_sizeLabel;
     QLabel* m_bedLabel;

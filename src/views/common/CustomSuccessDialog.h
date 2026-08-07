@@ -67,9 +67,9 @@ public:
         headerIcon->setObjectName("successHeaderIcon");
         auto* headerTitle = new QLabel("Operation completed", header);
         headerTitle->setObjectName("successWindowTitle");
-        auto* close = new QPushButton("×", header);
+        auto* close = new QPushButton(header);
         close->setObjectName("successWindowClose");
-        close->setFixedSize(30, 30);
+        styleDialogCloseButton(close);
         headerLayout->addWidget(headerIcon);
         headerLayout->addSpacing(8);
         headerLayout->addWidget(headerTitle);

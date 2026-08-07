@@ -13,6 +13,7 @@ A C++17 / Qt6 desktop application for hotel rooms, customers, reservations, chec
 - Reservation customer picker searches active guests by document number, name, or phone, then reuses their stored identity key without re-registering them.
 - Reservation creation only from Room Status, upcoming-reservation editing, active-stay extension, cancellation, checkout, and invoice generation.
 - Room selection uses a review-first flow: a Room Status card opens `RoomInfoDialog`, and only its explicit **Booking** action opens `ReservationDialog` with the room and selected schedule prefilled.
+- Standard, Deluxe, and Suite room reviews use a shared image carousel: one centered photo, softly faded adjacent previews, previous/next controls, and an image-position label. The same gallery is used by Room Management and the booking review step.
 - One shared compact schedule picker presents all seven weekdays and 24 whole-hour slots without horizontal scrolling. Check-in remains the editable endpoint until staff switches to Check-out.
 - Explicit booking lifecycle: staff must record **Check-in** before a room becomes occupied, then record checkout to complete the stay.
 - Reservation occupancy and room capacity validation: every booking stores adult/child counts and is rejected if it exceeds the selected room type's capacity.
@@ -128,6 +129,7 @@ src/
 │   ├── room/      RoomManager: rooms, maintenance, and notices
 │   └── report/    ReportService read-only reporting branch
 ├── database/      DataManager SQLite schema, migration, load, and save
+├── resources/     Small embedded icons and room-photo galleries
 └── views/         Qt widgets, dialogs, navigation, dashboard, and .ui files
 ```
 
@@ -137,8 +139,8 @@ src/
 
 ### Requirements
 
-- CMake 3.16 or newer
-- Qt 6 modules: Core, Widgets, SQL, and Charts
+- CMake 3.17 or newer
+- Qt 6 modules: Core, Widgets, SQL, Charts, and SVG
 - A C++17 compiler compatible with the selected Qt kit
 
 ### CMake
@@ -147,6 +149,10 @@ src/
 cmake -S . -B build
 cmake --build build --target HotelBookingManagement
 ```
+
+Room photos are discovered from `src/resources/room_images` and embedded with Qt `BIG_RESOURCES`. This generates direct object data rather than compiling a multi-megabyte C++ byte array. JPEG compression is not repeated during resource generation. The optimization is part of `CMakeLists.txt`, so a normal CMake build receives it on every supported machine without a personal path, plugin, or environment setting. `resources.qrc` remains intentionally small and contains only application icons.
+
+At runtime, `RoomImageCarousel` loads only the selected room type, decodes each JPEG close to its display size, caches display-ready pixmaps, debounces resize-driven refreshes, and skips an unchanged render signature. The original photo dimensions therefore do not need to be expanded into memory on every room selection.
 
 ### Business tests
 
@@ -193,6 +199,7 @@ If the compiler cannot build CMake's one-file test program, repair or reinstall 
 | `ReportService` | Read-only PDF report snapshot builder |
 | `DataManager` | SQLite schema, migrations, explicit reconciliation tool, staged load, and transactional upsert save |
 | `StatisticsPageWidget` | Invoice and booking data visualization, invoice filtering, and invoice-detail access |
+| `RoomImageCarousel` | Shared Standard/Deluxe/Suite gallery with lazy type selection, scaled decoding, cached crops, and resize debouncing |
 
 ## Contributors
 

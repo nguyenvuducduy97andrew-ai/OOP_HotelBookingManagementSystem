@@ -3,7 +3,7 @@
 #include <QLineEdit>
 #include <QDoubleSpinBox>
 #include <QComboBox>
-#include <QDateEdit>
+#include <QDate>
 #include <QLabel>
 #include <QPushButton>
 #include <QTextEdit>
@@ -52,6 +52,7 @@ private slots:
     void onStatusChanged(int index);
     void markSelectedMaintenanceForCancellation();
     void markSelectedMaintenanceForConfirmation();
+    void openMaintenanceSchedulePicker();
     void onAccept();
     void onAddCustomAmenity();
     void onRemoveAmenity(const QString& amenityText);
@@ -65,11 +66,12 @@ private:
     QDoubleSpinBox* m_basePriceSpin;
     QComboBox* m_typeCombo;
     QComboBox* m_availabilityCombo;
-    QLabel* m_maintenanceStartLabel;
-    QLabel* m_maintenanceEndLabel;
+    QLabel* m_maintenanceScheduleLabel;
     QLabel* m_maintenanceNoteLabel;
-    QDateEdit* m_maintenanceStartDateEdit;
-    QDateEdit* m_maintenanceEndDateEdit;
+    QPushButton* m_maintenanceScheduleButton;
+    QLabel* m_maintenanceScheduleSummary;
+    QDate m_maintenanceStartDate;
+    QDate m_maintenanceEndDate;
     QTextEdit* m_maintenanceNoteEdit;
     QLabel* m_existingMaintenanceLabel;
     QComboBox* m_existingMaintenanceCombo;

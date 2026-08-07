@@ -72,7 +72,10 @@ void CustomerDialog::setupStyle() {
             color: #64748B;
             border: none;
             border-radius: 8px;
-            font-size: 20px;
+            padding: 0px;
+            font-family: "Segoe UI";
+            font-size: 12px;
+            font-weight: 800;
         }
         QPushButton#customerDialogClose:hover { background: #F1F5F9; color: #1B3F83; }
         QLineEdit {
@@ -174,9 +177,9 @@ void CustomerDialog::setupUI() {
     dialogIcon->setStyleSheet("color:#005BFE; font-size:17px; background:transparent; border:none;");
     auto* titleLabel = new QLabel(m_customer ? "Edit customer details" : "Add a new customer", this);
     titleLabel->setObjectName("dialogTitle");
-    auto* dialogClose = new QPushButton("×", this);
+    auto* dialogClose = new QPushButton(this);
     dialogClose->setObjectName("customerDialogClose");
-    dialogClose->setFixedSize(30, 30);
+    styleDialogCloseButton(dialogClose);
     titleRow->addWidget(dialogIcon);
     titleRow->addSpacing(8);
     titleRow->addWidget(titleLabel);

@@ -109,9 +109,9 @@ public:
         headerIcon->setObjectName("headerIcon");
         auto* windowTitle = new QLabel(title, header);
         windowTitle->setObjectName("windowTitle");
-        auto* close = new QPushButton("×", header);
+        auto* close = new QPushButton(header);
         close->setObjectName("windowClose");
-        close->setFixedSize(30, 30);
+        styleDialogCloseButton(close);
         headerLayout->addWidget(headerIcon);
         headerLayout->addSpacing(8);
         headerLayout->addWidget(windowTitle);

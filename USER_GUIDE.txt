@@ -138,6 +138,12 @@ cách dọn lỗi nếu khách đã có booking history.
 Room Management dùng để thêm room, filter type, xem Room Details, sửa room và
 lập maintenance schedule.
 
+Mỗi hạng Standard, Deluxe và Suite có gallery ảnh dùng chung cách thao tác. Ảnh
+đang xem nằm ở giữa; hai mép ảnh mờ cho biết ảnh liền trước/liền sau. Dùng nút
+`<` hoặc `>` để chuyển ảnh và xem dòng `Image ... of ...` để biết vị trí. Gallery
+chỉ dùng để tham khảo tiện nghi/hình thức phòng; trạng thái, capacity, giá và lịch
+khả dụng hiển thị bằng dữ liệu hệ thống mới là thông tin vận hành có hiệu lực.
+
 6.1 Add hoặc Edit Room
 
 1. Chọn Add Room, hoặc chọn room rồi chọn Edit.
@@ -191,8 +197,9 @@ Reservations page.
    Chuyển sang Check-out rồi mới chọn ngày/giờ trả phòng. Week number không hiển
    thị; lịch phải thấy đủ 7 thứ và bảng giờ phải thấy đủ 24 slot.
 3. Chọn Adults/Children và áp dụng availability filter.
-4. Click room phù hợp. Room Info mở trước để xem type, capacity, bed, hourly rate,
-   description và amenities. Đóng/Cancel ở đây sẽ không mở form đặt phòng.
+4. Click room phù hợp. Room Info mở trước để xem gallery ảnh bằng nút trái/phải,
+   type, capacity, bed, hourly rate, description và amenities. Đóng/Cancel ở đây
+   sẽ không mở form đặt phòng.
 5. Chọn Booking trong Room Info. Reservation form mở với room và schedule đã chọn.
 6. Với khách cũ, tìm và chọn ở Existing customer bằng document number, tên hoặc
    phone. Với khách mới, chọn `New customer — enter details manually` rồi nhập
@@ -350,6 +357,12 @@ Simulated notice không phải resolution.
 Database error lúc startup:
 Đóng app. Không overwrite/xóa DB lặp lại. Nếu có thể copy backup file hotel_data.db
 và gửi exact error cho developer để kiểm tra schema/migration/revision.
+
+Ảnh phòng chưa hiện ngay hoặc đang chuyển ảnh:
+Đợi thao tác hiện tại hoàn tất rồi thử nút trái/phải một lần. Không click liên tục
+nhiều nút hoặc mở nhiều Room Info cùng lúc. Nếu cả gallery trống sau khi khởi động
+lại ứng dụng, báo developer kèm room type và room number; dữ liệu booking không
+bị thay đổi chỉ vì ảnh không tải được.
 
 ===============================================================================
 12. BÀN GIAO CA VÀ BẢO VỆ DỮ LIỆU

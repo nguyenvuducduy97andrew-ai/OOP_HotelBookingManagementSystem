@@ -121,6 +121,8 @@ Available/Awaiting/Occupied/Cleaning/Maintenance trên Room Status được suy 
 
 Các trạng thái thuần UI như mode `Check-in`/`Check-out` của schedule picker, room đang được review, vị trí dialog, trạng thái cuộn và việc chặn mouse-wheel không được lưu trong SQLite. Chỉ schedule đã xác nhận trong Booking, lựa chọn Customer/Room chuẩn hóa và các audit fact nghiệp vụ mới đi qua `HotelManager` để persistence. Vì vậy đóng Room Info hoặc Schedule Picker trước khi Apply/Booking không tạo bản ghi và không làm tăng `DataVersion`.
 
+Gallery ảnh của Standard, Deluxe và Suite cũng không nằm trong bảng `Room` hay file SQLite. Ảnh là tài nguyên chỉ đọc tại `src/resources/room_images/<type>/`, được CMake nhúng vào executable bằng Qt `BIG_RESOURCES` và được `RoomImageCarousel` hiển thị theo `roomType`. Thêm, đổi hoặc tối ưu ảnh không tạo revision database; ngược lại, lỗi tải ảnh không được phép làm thay đổi giá, trạng thái, capacity, lịch khả dụng hoặc booking của phòng.
+
 ### 4.4 `RoomMaintenance`
 
 | Loại | Giá trị |

@@ -79,9 +79,9 @@ public:
         invoiceIcon->setStyleSheet("color:#005BFE; font-size:17px; background:transparent; border:none;");
         auto* titleLabel = new QLabel("Booking invoice", this);
         titleLabel->setObjectName("titleLabel");
-        auto* invoiceClose = new QPushButton("×", this);
+        auto* invoiceClose = new QPushButton(this);
         invoiceClose->setObjectName("invoiceClose");
-        invoiceClose->setFixedSize(30, 30);
+        styleDialogCloseButton(invoiceClose);
         auto* subtitleLabel = new QLabel("Issued financial record for a completed stay. This screen is read-only.", this);
         subtitleLabel->setObjectName("subtitleLabel");
         subtitleLabel->setWordWrap(true);
