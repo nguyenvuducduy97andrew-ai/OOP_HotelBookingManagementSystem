@@ -54,10 +54,7 @@ private:
     QTimer* m_statusRefreshTimer = nullptr;
     QDateTime m_selectedCheckIn;
     QDateTime m_selectedCheckOut;
-    QPushButton* m_scheduleButton = nullptr;
-    QPushButton* m_checkInScheduleField = nullptr;
-    QPushButton* m_checkOutScheduleField = nullptr;
-    QComboBox* m_roomTypeCombo = nullptr;
+
 
 protected:
     void resizeEvent(QResizeEvent* event) override;

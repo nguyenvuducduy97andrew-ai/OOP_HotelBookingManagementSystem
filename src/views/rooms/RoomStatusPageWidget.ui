@@ -304,14 +304,14 @@ QLabel {
        </layout>
       </item>
       <item row="1" column="0" colspan="3">
-       <widget class="QDateEdit" name="dateEditCheckIn">
+       <widget class="QPushButton" name="dateEditCheckIn">
         <property name="font">
          <font>
           <pointsize>-1</pointsize>
          </font>
         </property>
-        <property name="displayFormat">
-         <string>dd/MM/yyyy</string>
+        <property name="styleSheet">
+         <string notr="true">text-align: left; padding: 4px;</string>
         </property>
        </widget>
       </item>
@@ -447,14 +447,14 @@ QLabel {
        </widget>
       </item>
       <item row="1" column="5" colspan="3">
-       <widget class="QDateEdit" name="dateEditCheckOut">
+       <widget class="QPushButton" name="dateEditCheckOut">
         <property name="font">
          <font>
           <pointsize>-1</pointsize>
          </font>
         </property>
-        <property name="displayFormat">
-         <string>dd/MM/yyyy</string>
+        <property name="styleSheet">
+         <string notr="true">text-align: left; padding: 4px;</string>
         </property>
        </widget>
       </item>

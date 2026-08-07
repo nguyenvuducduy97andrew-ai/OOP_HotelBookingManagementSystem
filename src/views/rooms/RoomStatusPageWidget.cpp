@@ -67,97 +67,62 @@ RoomStatusPageWidget::RoomStatusPageWidget(HotelManager* manager, QWidget *paren
     ui->lblChildrenCount->setText("0");
 
     const QDateTime now = QDateTime::currentDateTime();
-    m_selectedCheckIn = QDateTime(now.date(), QTime(now.time().hour(), 0)).addSecs(60 * 60);
-    m_selectedCheckOut = m_selectedCheckIn.addSecs(60 * 60);
-    ui->dateEditCheckIn->setDate(m_selectedCheckIn.date());
-    ui->dateEditCheckOut->setDate(m_selectedCheckOut.date());
+    m_selectedCheckIn = QDateTime(now.date(), QTime(14, 0));
+    m_selectedCheckOut = QDateTime(now.date().addDays(1), QTime(12, 0));
+    
+    const QString fieldStyle =
+        "QPushButton { background:#FFFFFF; color:#2B3674; border:1px solid #D8E2F0; "
+        "border-radius:10px; padding:9px 12px; font-weight:600; text-align:left; }"
+        "QPushButton:hover { background: #F8FAFF; border-color: #BFDBFE; }"
+        "QPushButton:focus { border:1px solid #93C5FD; }";
+    ui->dateEditCheckIn->setStyleSheet(fieldStyle);
+    ui->dateEditCheckOut->setStyleSheet(fieldStyle);
+    ui->dateEditCheckIn->setMinimumHeight(42);
+    ui->dateEditCheckOut->setMinimumHeight(42);
+    
+    updateScheduleFields();
 
-    auto* filterLayout = qobject_cast<QGridLayout*>(ui->frameFilterPanel->layout());
-    if (filterLayout) {
-        ui->lblCheckInTitle->setText("Booking schedule");
-        ui->lblCheckOutTitle->hide();
-        ui->dateEditCheckIn->hide();
-        ui->dateEditCheckOut->hide();
-        m_scheduleButton = new QPushButton("Choose dates & times", ui->frameFilterPanel);
-        m_scheduleButton->setObjectName("btnChooseSchedule");
-        // Modified: Give the shared schedule entry a dedicated visible treatment instead of inheriting an empty legacy date-field cell.
-        m_scheduleButton->setMinimumHeight(42);
-        m_scheduleButton->setMinimumWidth(150);
-        m_scheduleButton->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-        m_scheduleButton->setStyleSheet(
-            "QPushButton { background:#EFF6FF; color:#1D4ED8; border:1px solid #BFDBFE; "
-            "border-radius:10px; padding:9px 14px; font-weight:700; text-align:left; }"
-            "QPushButton:hover { background:#DBEAFE; border-color:#60A5FA; }");
-        const QString fieldStyle =
-            "QPushButton { background:#FFFFFF; color:#2B3674; border:1px solid #D8E2F0; "
-            "border-radius:10px; padding:9px 12px; font-weight:600; text-align:left; }"
-            "QPushButton:hover { background: #F8FAFF; border-color: #BFDBFE; }"
-            "QPushButton:focus { border:1px solid #93C5FD; }";
-        m_checkInScheduleField = new QPushButton(ui->frameFilterPanel);
-        m_checkOutScheduleField = new QPushButton(ui->frameFilterPanel);
-        m_checkInScheduleField->setMinimumHeight(42);
-        m_checkOutScheduleField->setMinimumHeight(42);
-        m_checkInScheduleField->setMinimumWidth(190);
-        m_checkOutScheduleField->setMinimumWidth(190);
-        m_checkInScheduleField->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-        m_checkOutScheduleField->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-        m_checkInScheduleField->setStyleSheet(fieldStyle);
-        m_checkOutScheduleField->setStyleSheet(fieldStyle);
+    connect(ui->dateEditCheckIn, &QPushButton::clicked, this, [this]() {
+        openSchedulePicker(false);
+    });
+    connect(ui->dateEditCheckOut, &QPushButton::clicked, this, [this]() {
+        openSchedulePicker(true);
+    });
 
-        m_roomTypeCombo = new QComboBox(ui->frameFilterPanel);
-        m_roomTypeCombo->setObjectName("roomTypeCombo");
-        m_roomTypeCombo->addItem("All room types", "All");
-        m_roomTypeCombo->addItem("Standard", "Standard");
-        m_roomTypeCombo->addItem("Deluxe", "Deluxe");
-        m_roomTypeCombo->addItem("Suite", "Suite");
-        m_roomTypeCombo->setMinimumHeight(42);
-        m_roomTypeCombo->setMinimumWidth(155);
-        m_roomTypeCombo->setStyleSheet(
-            "QComboBox { background:#FFFFFF; color:#2B3674; border:1px solid #D8E2F0; "
-            "border-radius:10px; padding:9px 12px; font-weight:700; }"
-            "QComboBox:hover { background:#F8FAFF; border-color:#BFDBFE; }");
+    auto markInputsChanged = [this]() {
+        if (m_isCheckAvailMode) {
+            m_isCheckAvailMode = false;
+            ui->btnCheckAvailability->setText("Check availability");
+            ui->btnCheckAvailability->setStyleSheet("");
+        }
+    };
 
-        filterLayout->addWidget(m_scheduleButton, 1, 0, 1, 2);
-        filterLayout->addWidget(m_checkInScheduleField, 1, 2, 1, 3);
-        filterLayout->addWidget(m_checkOutScheduleField, 1, 5, 1, 3);
-        filterLayout->addWidget(m_roomTypeCombo, 1, 8, 1, 3);
-        updateScheduleFields();
-
-        connect(m_scheduleButton, &QPushButton::clicked, this, [this]() { openSchedulePicker(false); });
-        connect(m_checkInScheduleField, &QPushButton::clicked, this, [this]() { openSchedulePicker(false); });
-        connect(m_checkOutScheduleField, &QPushButton::clicked, this, [this]() { openSchedulePicker(true); });
-        connect(m_roomTypeCombo, &QComboBox::currentIndexChanged, this, [this](int) {
-            setFilterType(m_roomTypeCombo->currentData().toString());
-        });
-    }
-
-    connect(ui->btnAddAdult, &QPushButton::clicked, this, [this]() {
+    connect(ui->btnAddAdult, &QPushButton::clicked, this, [this, markInputsChanged]() {
         int val = ui->lblAdultCount->text().toInt();
         ui->lblAdultCount->setText(QString::number(val + 1));
-        applyFilters();
+        markInputsChanged();
     });
-    connect(ui->btnMinusAdult, &QPushButton::clicked, this, [this]() {
+    connect(ui->btnMinusAdult, &QPushButton::clicked, this, [this, markInputsChanged]() {
         int val = ui->lblAdultCount->text().toInt();
         if (val > 1) ui->lblAdultCount->setText(QString::number(val - 1));
-        applyFilters();
+        markInputsChanged();
     });
 
-    connect(ui->btnAddChild, &QPushButton::clicked, this, [this]() {
+    connect(ui->btnAddChild, &QPushButton::clicked, this, [this, markInputsChanged]() {
         int val = ui->lblChildrenCount->text().toInt();
         ui->lblChildrenCount->setText(QString::number(val + 1));
-        applyFilters();
+        markInputsChanged();
     });
-    connect(ui->btnMinusChild, &QPushButton::clicked, this, [this]() {
+    connect(ui->btnMinusChild, &QPushButton::clicked, this, [this, markInputsChanged]() {
         int val = ui->lblChildrenCount->text().toInt();
         if (val > 0) ui->lblChildrenCount->setText(QString::number(val - 1));
-        applyFilters();
+        markInputsChanged();
     });
 
-    // Room type filtering now lives in the schedule row instead of a separate button row.
-    ui->btnFilterAll->hide();
-    ui->btnFilterStandard->hide();
-    ui->btnFilterDeluxe->hide();
-    ui->btnFilterSuite->hide();
+    connect(ui->btnFilterAll, &QPushButton::clicked, this, [this]() { setFilterType("All"); });
+    connect(ui->btnFilterStandard, &QPushButton::clicked, this, [this]() { setFilterType("Standard"); });
+    connect(ui->btnFilterDeluxe, &QPushButton::clicked, this, [this]() { setFilterType("Deluxe"); });
+    connect(ui->btnFilterSuite, &QPushButton::clicked, this, [this]() { setFilterType("Suite"); });
 
     // Connect the search field.
     connect(ui->txtSearchRoom, &QLineEdit::textChanged, this, &RoomStatusPageWidget::applyFilters);
@@ -200,12 +165,8 @@ RoomStatusPageWidget::RoomStatusPageWidget(HotelManager* manager, QWidget *paren
 
 void RoomStatusPageWidget::updateScheduleFields()
 {
-    if (m_checkInScheduleField) {
-        m_checkInScheduleField->setText("Check-in:   " + m_selectedCheckIn.toString("dd MMM yyyy, HH:mm"));
-    }
-    if (m_checkOutScheduleField) {
-        m_checkOutScheduleField->setText("Check-out:   " + m_selectedCheckOut.toString("dd MMM yyyy, HH:mm"));
-    }
+    ui->dateEditCheckIn->setText(m_selectedCheckIn.toString("dd/MM/yyyy HH:mm"));
+    ui->dateEditCheckOut->setText(m_selectedCheckOut.toString("dd/MM/yyyy HH:mm"));
 }
 
 void RoomStatusPageWidget::openSchedulePicker(bool startInCheckOutMode)
@@ -234,7 +195,11 @@ void RoomStatusPageWidget::openSchedulePicker(bool startInCheckOutMode)
     m_selectedCheckIn = picker.selectedCheckIn();
     m_selectedCheckOut = picker.selectedCheckOut();
     updateScheduleFields();
-    setAvailabilityMode(true);
+    if (m_isCheckAvailMode) {
+        m_isCheckAvailMode = false;
+        ui->btnCheckAvailability->setText("Check availability");
+        ui->btnCheckAvailability->setStyleSheet("");
+    }
 }
 
 void RoomStatusPageWidget::setupUI() {
@@ -367,13 +332,10 @@ void RoomStatusPageWidget::refreshData() {
 }
 
 void RoomStatusPageWidget::setFilterType(QString type) {
-    if (m_roomTypeCombo) {
-        const int index = m_roomTypeCombo->findData(type);
-        if (index >= 0 && index != m_roomTypeCombo->currentIndex()) {
-            const QSignalBlocker blocker(m_roomTypeCombo);
-            m_roomTypeCombo->setCurrentIndex(index);
-        }
-    }
+    ui->btnFilterAll->setChecked(type == "All");
+    ui->btnFilterStandard->setChecked(type == "Standard");
+    ui->btnFilterDeluxe->setChecked(type == "Deluxe");
+    ui->btnFilterSuite->setChecked(type == "Suite");
     applyFilters();
 }
 
@@ -395,7 +357,10 @@ void RoomStatusPageWidget::setAvailabilityMode(bool enabled)
 }
 
 void RoomStatusPageWidget::applyFilters() {
-    const QString type = m_roomTypeCombo ? m_roomTypeCombo->currentData().toString() : QString("All");
+    QString type = "All";
+    if (ui->btnFilterStandard->isChecked()) type = "Standard";
+    else if (ui->btnFilterDeluxe->isChecked()) type = "Deluxe";
+    else if (ui->btnFilterSuite->isChecked()) type = "Suite";
 
     QString searchText = ui->txtSearchRoom->text().trimmed().toLower();
     QGridLayout* gridLayout = qobject_cast<QGridLayout*>(ui->scrollAreaWidgetContents->layout());
@@ -484,32 +449,39 @@ void RoomStatusPageWidget::applyFilters() {
         auto* section = new QFrame(ui->scrollAreaWidgetContents);
         section->setObjectName("floorSection");
         section->setStyleSheet(
-            "QFrame#floorSection { background:#FFFFFF; border:1px solid #E2E8F0; border-radius:14px; }"
-            "QLabel#floorLabel { color:#1D4ED8; background:#EFF6FF; border:1px solid #BFDBFE; "
-            "border-radius:10px; font-size:16px; font-weight:800; padding:12px 8px; }");
-        auto* sectionLayout = new QHBoxLayout(section);
-        sectionLayout->setContentsMargins(12, 12, 12, 12);
-        sectionLayout->setSpacing(14);
+            "QFrame#floorSection { background:transparent; border:none; }"
+            "QLabel#floorLabel { color:#64748B; font-size:16px; font-weight:600; padding:0px; }");
+        auto* sectionLayout = new QVBoxLayout(section);
+        sectionLayout->setContentsMargins(0, 0, 0, 20);
+        sectionLayout->setSpacing(8);
 
         auto* floorLabel = new QLabel(
             floorIt.key() > 0 ? QString("Floor %1").arg(floorIt.key()) : QString("Other"), section);
         floorLabel->setObjectName("floorLabel");
-        floorLabel->setAlignment(Qt::AlignCenter);
-        floorLabel->setFixedWidth(86);
-        floorLabel->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding);
+        floorLabel->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+        
+        auto* hLine = new QFrame(section);
+        hLine->setObjectName("floorLine");
+        hLine->setFrameShape(QFrame::HLine);
+        hLine->setFrameShadow(QFrame::Plain);
+        hLine->setFixedHeight(1);
+        hLine->setStyleSheet("background-color: #CBD5E1;");
+        
         sectionLayout->addWidget(floorLabel);
+        sectionLayout->addWidget(hLine);
 
         auto* roomsWidget = new QWidget(section);
         auto* roomsLayout = new QGridLayout(roomsWidget);
         roomsLayout->setContentsMargins(0, 0, 0, 0);
         roomsLayout->setHorizontalSpacing(10);
         roomsLayout->setVerticalSpacing(10);
-        roomsLayout->setAlignment(Qt::AlignTop | Qt::AlignLeft);
+        for (int c = 0; c < columns; ++c) {
+            roomsLayout->setColumnStretch(c, 1);
+        }
         for (int index = 0; index < cards.size(); ++index) {
             RoomCard* card = cards.at(index);
             card->show();
-            roomsLayout->addWidget(card, index / columns, index % columns,
-                                   Qt::AlignTop | Qt::AlignLeft);
+            roomsLayout->addWidget(card, index / columns, index % columns, Qt::AlignTop);
         }
         sectionLayout->addWidget(roomsWidget, 1);
         gridLayout->addWidget(section, sectionRow++, 0);
@@ -523,9 +495,10 @@ void RoomStatusPageWidget::applyFilters() {
 int RoomStatusPageWidget::floorColumnCount() const
 {
     const int viewportWidth = ui->scrollArea->viewport()->width();
-    constexpr int floorLabelAndSpacing = 124;
+    constexpr int floorLabelAndSpacing = 24;
     constexpr int cardWidthAndSpacing = 225;
-    return std::max(1, (viewportWidth - floorLabelAndSpacing) / cardWidthAndSpacing);
+    int cols = std::max(1, (viewportWidth - floorLabelAndSpacing) / cardWidthAndSpacing);
+    return std::min(4, cols);
 }
 
 void RoomStatusPageWidget::clearFloorSections()
