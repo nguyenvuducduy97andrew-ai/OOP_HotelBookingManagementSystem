@@ -166,13 +166,13 @@ QMessageBox QPushButton:hover {
         <widget class="QFrame" name="sidebarFrame">
          <property name="minimumSize">
           <size>
-           <width>180</width>
+           <width>195</width>
            <height>0</height>
           </size>
          </property>
          <property name="maximumSize">
           <size>
-           <width>180</width>
+           <width>195</width>
            <height>16777215</height>
           </size>
          </property>

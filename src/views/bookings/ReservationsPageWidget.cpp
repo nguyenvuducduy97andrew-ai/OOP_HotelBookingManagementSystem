@@ -583,8 +583,15 @@ void ReservationsPageWidget::setupUI() {
     auto* pageTitle = new QLabel("Reservation Management", this);
     pageTitle->setObjectName("pageTitle");
 
+    auto* btnAddBooking = new QPushButton("+ New Reservation", this);
+    btnAddBooking->setObjectName("btnAddBooking");
+    btnAddBooking->setCursor(Qt::PointingHandCursor);
+    connect(btnAddBooking, &QPushButton::clicked, this, [this]() {
+        openReservationDialog();
+    });
     headerRow->addWidget(pageTitle);
     headerRow->addStretch();
+    headerRow->addWidget(btnAddBooking);
     mainLayout->addLayout(headerRow);
 
     // Filter Row
@@ -618,7 +625,7 @@ void ReservationsPageWidget::setupUI() {
     m_tableWidget->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Stretch); // Let Customer Name take remaining space
     m_tableWidget->horizontalHeader()->setSectionResizeMode(8, QHeaderView::Fixed);
     // Modified: Reserve room for labelled action buttons so staff can understand each operation without an icon legend.
-    m_tableWidget->setColumnWidth(8, 330);
+    m_tableWidget->setColumnWidth(8, 340);
     // Modified: Left-align headers so their text does not visually clip against both section borders.
     m_tableWidget->horizontalHeader()->setDefaultAlignment(Qt::AlignLeft | Qt::AlignVCenter);
     m_tableWidget->setEditTriggers(QAbstractItemView::NoEditTriggers);
