@@ -324,16 +324,6 @@ void MainWindow::showReservationSubPage(int index)
     else m_reservationsPage->refreshData();
 }
 
-void MainWindow::showReservationSubPage(int index)
-{
-    if (!m_reservationSubPages) return;
-    const int boundedIndex = index == 1 ? 1 : 0;
-    m_reservationSubPages->setCurrentIndex(boundedIndex);
-    m_roomStatusTab->setChecked(boundedIndex == 0);
-    m_reservationDetailsTab->setChecked(boundedIndex == 1);
-    if (boundedIndex == 0) m_roomStatusPage->refreshData();
-    else m_reservationsPage->refreshData();
-}
 
 MainWindow::~MainWindow()
 {
