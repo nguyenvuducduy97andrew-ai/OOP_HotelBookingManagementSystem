@@ -1,0 +1,72 @@
+#pragma once
+
+#include <QWidget>
+#include <QDateTime>
+#include <QFrame>
+#include <QString>
+#include <QColor>
+#include <QTimer>
+#include <QTextBrowser>
+
+class QUrl;
+class QLabel;
+class QTableWidget;
+
+namespace Ui {
+class DashboardWidget;
+}
+
+class HotelManager;
+
+class DashboardWidget : public QWidget
+{
+    Q_OBJECT
+
+public:
+    explicit DashboardWidget(HotelManager* manager, QWidget *parent = nullptr);
+    ~DashboardWidget();
+    void refreshDashboard();
+
+
+signals:
+    void reservationActionRequested(const QString& bookingId, const QString& actionType);
+
+private:
+    Ui::DashboardWidget *ui;
+    HotelManager* m_manager;
+private slots:
+    // Called whenever the timer interval elapses.
+    void updateDateTime();
+    void exportReport();
+    void onBookingHistoryLinkClicked(const QUrl& url);
+    void onTrendChartHovered(const QPointF &point, bool state);
+
+private:
+    // Timer declaration.
+    QTimer *dateTimeTimer;
+
+    // ---- Dashboard content helpers ----
+    void populateData();     // Populate StatCard, MiniCard, and RoomListItem widgets.
+    void buildTrendChart();  // Create a QChartView inside trendChartHost.
+    void buildBarChart();    // Create a QChartView inside barChartHost.
+    void applyStyle();       // Apply the light theme to the dashboard body.
+    void refreshBookingHistoryView();
+    void toggleMiniCardReservations(int cardIndex);
+    void refreshMiniCardReservations();
+    QString buildBookingHistoryHtml() const;
+    QString buildReportHtml() const;
+
+    QTextBrowser *bookingHistoryBrowser;
+    QFrame *m_reservationPanel = nullptr;
+    QLabel *m_reservationPanelTitle = nullptr;
+    QLabel *m_reservationPanelSubtitle = nullptr;
+    
+    class QScatterSeries* m_hoverScatter = nullptr;
+    class QLineSeries* m_seriesCurrentLine = nullptr;
+    class QLineSeries* m_seriesPrevLine = nullptr;
+    class QAreaSeries* m_seriesCurrentArea = nullptr;
+    class QAreaSeries* m_seriesPrevArea = nullptr;
+    QTableWidget *m_reservationTable = nullptr;
+    int m_selectedMiniCard = 0;
+    int m_historyPage = 0;
+};

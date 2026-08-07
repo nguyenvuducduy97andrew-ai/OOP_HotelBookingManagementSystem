@@ -4,15 +4,17 @@
 #include "RoomManager.h"
 #include <QDate>
 #include <QDateTime>
+#include <QTime>
 #include <QList>
 #include <QRegularExpression>
 #include <QString>
 #include <QStringList>
 #include "CustomerIdentity.h"
-#include "CountryInputRules.h"
+#include "customer/CountryInputRules.h"
 #include <QUuid>
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <unordered_set>
 #include <type_traits>
 #include <utility>
@@ -24,6 +26,22 @@ namespace {
 std::string collapseWhitespace(const std::string& value)
 {
     return QString::fromStdString(value).simplified().toStdString();
+}
+
+QDateTime plannedBookingBoundary(const Booking& booking, bool checkIn)
+{
+    // Modified: Prefer canonical planned timestamps while retaining a midnight fallback only for imported legacy records.
+    const std::string& timestamp = checkIn ? booking.getPlannedCheckInAt() : booking.getPlannedCheckOutAt();
+    QDateTime boundary = QDateTime::fromString(QString::fromStdString(timestamp), Qt::ISODateWithMs);
+    if (!boundary.isValid()) {
+        boundary = QDateTime::fromString(QString::fromStdString(timestamp), Qt::ISODate);
+    }
+    if (!boundary.isValid()) {
+        const std::string& legacyDate = checkIn ? booking.getCheckInDate() : booking.getCheckOutDate();
+        const QDate parsedDate = QDate::fromString(QString::fromStdString(legacyDate), Qt::ISODate);
+        boundary = parsedDate.isValid() ? QDateTime(parsedDate, QTime(0, 0)) : QDateTime();
+    }
+    return boundary;
 }
 
 bool isSingleNameTokenValid(const QString& token)
@@ -46,7 +64,7 @@ std::string bookingStateToString(BookingState state)
     case BookingState::CANCELLED:
         return "Cancelled";
     case BookingState::NO_SHOW:
-        return "No-show";
+        return "Cancelled";
     default:
         return "Unknown";
     }
@@ -235,7 +253,7 @@ std::shared_ptr<Invoice> HotelManager::findInvoiceForBooking(const std::string &
 
 std::vector<std::shared_ptr<Room>> HotelManager::getAvailableRooms() const
 {
-    const std::string today = QDate::currentDate().toString(Qt::ISODate).toStdString();
+    const std::string now = QDateTime::currentDateTime().toString(Qt::ISODateWithMs).toStdString();
     std::unordered_set<std::string> occupiedRoomNumbers;
     for (const auto& booking : m_bookingManager.getBookings()) {
         if (!booking || booking->isCancelled() || booking->isDeleted()
@@ -254,7 +272,7 @@ std::vector<std::shared_ptr<Room>> HotelManager::getAvailableRooms() const
     for (const auto &room : m_roomManager.getRooms())
     {
         if (!room || !room->getIsAvailable() || room->isArchived()
-            || m_roomManager.isRoomUnderMaintenance(room->getRoomNumber(), today))
+            || m_roomManager.isRoomBlockedAt(room->getRoomNumber(), now))
         {
             continue;
         }
@@ -265,30 +283,8 @@ std::vector<std::shared_ptr<Room>> HotelManager::getAvailableRooms() const
         }
     }
 
-    // Modified: Calculate active occupancy once and include dated maintenance in the current-room availability query.
+    // Modified: Calculate active occupancy once and evaluate Cleaning or Maintenance at the current timestamp, not as an all-day date flag.
     return availableRooms;
-}
-
-std::vector<std::shared_ptr<Room>> HotelManager::getAvailableRoomsForDates(
-    const std::string& checkInDate,
-    const std::string& checkOutDate,
-    std::string& errorMessage,
-    const std::string& excludedBookingId) const
-{
-    return m_bookingManager.getAvailableRoomsForDates(
-        checkInDate, checkOutDate, m_roomManager.getRooms(),
-        m_roomManager.getRoomMaintenances(), errorMessage, excludedBookingId);
-}
-
-bool HotelManager::isRoomFreeForDates(const std::string& roomNumber,
-                                      const std::string& checkInDate,
-                                      const std::string& checkOutDate,
-                                      std::string& errorMessage,
-                                      const std::string& excludedBookingId) const
-{
-    return m_bookingManager.isRoomFreeForDates(
-        roomNumber, checkInDate, checkOutDate,
-        m_roomManager.getRoomMaintenances(), errorMessage, excludedBookingId);
 }
 
 std::vector<std::shared_ptr<Booking>> HotelManager::getBookingsForCustomer(const std::string &customerId) const
@@ -296,34 +292,10 @@ std::vector<std::shared_ptr<Booking>> HotelManager::getBookingsForCustomer(const
     return m_bookingManager.getBookingsForCustomer(customerId);
 }
 
-std::vector<std::shared_ptr<Booking>> HotelManager::getTodayCheckIns() const
-{
-    const std::string todayStr = QDate::currentDate().toString(Qt::ISODate).toStdString();
-    return getArrivalsByDate(todayStr);
-}
-
-std::vector<std::shared_ptr<Booking>> HotelManager::getTodayCheckOuts() const
-{
-    const std::string todayStr = QDate::currentDate().toString(Qt::ISODate).toStdString();
-    return getDeparturesByDate(todayStr);
-}
-
 // Modified: Add query mappings that filter structural booking data into specialized layout sub-tabs.
 std::vector<std::shared_ptr<Booking>> HotelManager::getBookingsByStatus(BookingState state) const
 {
     return m_bookingManager.getBookingsByStatus(state);
-}
-
-// Modified: Add a query helper for dynamic dashboard timelines instead of a hardcoded system clock.
-std::vector<std::shared_ptr<Booking>> HotelManager::getArrivalsByDate(const std::string &dateStr) const
-{
-    return m_bookingManager.getArrivalsByDate(dateStr);
-}
-
-// Modified: Add a query helper for dashboard departure timeline tracking.
-std::vector<std::shared_ptr<Booking>> HotelManager::getDeparturesByDate(const std::string &dateStr) const
-{
-    return m_bookingManager.getDeparturesByDate(dateStr);
 }
 
 BookingState HotelManager::getBookingState(const Booking &booking) const
@@ -384,6 +356,71 @@ bool HotelManager::isRoomUnderMaintenance(const std::string& roomNumber, const s
     return m_roomManager.isRoomUnderMaintenance(roomNumber, date);
 }
 
+std::vector<std::shared_ptr<Room>> HotelManager::getAvailableRoomsForPeriod(
+    const std::string& plannedCheckInAt,
+    const std::string& plannedCheckOutAt,
+    std::string& errorMessage,
+    const std::string& excludedBookingId) const
+{
+    return m_bookingManager.getAvailableRoomsForPeriod(
+        plannedCheckInAt, plannedCheckOutAt, m_roomManager.getRooms(),
+        m_roomManager.getRoomMaintenances(), errorMessage, excludedBookingId);
+}
+
+bool HotelManager::isRoomBlockedAt(const std::string& roomNumber, const std::string& at) const
+{
+    return m_roomManager.isRoomBlockedAt(roomNumber, at);
+}
+
+std::vector<std::string> HotelManager::getCheckoutConflictWarnings(const std::string& bookingId,
+                                                                    const std::string& actualCheckoutAt) const
+{
+    std::vector<std::string> warnings;
+    const auto booking = m_bookingManager.findBookingById(bookingId);
+    const QDateTime checkoutAt = QDateTime::fromString(QString::fromStdString(actualCheckoutAt), Qt::ISODateWithMs);
+    if (!booking || !booking->getRoom() || !checkoutAt.isValid()) {
+        return warnings;
+    }
+
+    QDateTime plannedDeparture = QDateTime::fromString(
+        QString::fromStdString(booking->getPlannedCheckOutAt()), Qt::ISODateWithMs);
+    if (!plannedDeparture.isValid()) {
+        const QDate legacyDate = QDate::fromString(QString::fromStdString(booking->getCheckOutDate()), Qt::ISODate);
+        plannedDeparture = legacyDate.isValid() ? QDateTime(legacyDate, QTime(0, 0)) : QDateTime();
+    }
+    if (plannedDeparture.isValid() && checkoutAt > plannedDeparture.addSecs(30 * 60)) {
+        // Modified: Identify the room and both times so staff can judge a late checkout without guessing its operational impact.
+        warnings.push_back("Late checkout warning — Room " + booking->getRoom()->getRoomNumber()
+            + ": planned " + plannedDeparture.toString(Qt::ISODate).toStdString()
+            + ", actual " + checkoutAt.toString(Qt::ISODate).toStdString()
+            + ". Actual duration will be billed using the hourly rounding rule.");
+    }
+
+    const QDateTime cleaningEnd = checkoutAt.addSecs(2 * 60 * 60);
+    for (const auto& candidate : m_bookingManager.getBookings()) {
+        if (!candidate || candidate->getBookingId() == bookingId || candidate->isCancelled()
+            || candidate->isDeleted() || !candidate->getRoom()
+            || candidate->getRoom()->getRoomNumber() != booking->getRoom()->getRoomNumber()
+            || m_bookingManager.getBookingState(*candidate) != BookingState::UPCOMING) {
+            continue;
+        }
+        QDateTime plannedArrival = QDateTime::fromString(
+            QString::fromStdString(candidate->getPlannedCheckInAt()), Qt::ISODateWithMs);
+        if (!plannedArrival.isValid()) {
+            const QDate legacyDate = QDate::fromString(QString::fromStdString(candidate->getCheckInDate()), Qt::ISODate);
+            plannedArrival = legacyDate.isValid() ? QDateTime(legacyDate, QTime(0, 0)) : QDateTime();
+        }
+        if (plannedArrival.isValid() && plannedArrival < cleaningEnd) {
+            warnings.push_back("Arrival at risk — Room " + booking->getRoom()->getRoomNumber()
+                + ": booking " + candidate->getBookingId() + " is planned to arrive at "
+                + plannedArrival.toString(Qt::ISODate).toStdString() + ", but Cleaning after this checkout is expected to finish at "
+                + cleaningEnd.toString(Qt::ISODate).toStdString() + ".");
+        }
+    }
+    // Modified: Keep late-checkout and turnover conflicts visible to staff without silently overriding the next reservation.
+    return warnings;
+}
+
 bool HotelManager::hasRoomMaintenanceConflict(const std::string& roomNumber,
                                               const std::string& startDate,
                                               const std::string& endDate,
@@ -392,9 +429,45 @@ bool HotelManager::hasRoomMaintenanceConflict(const std::string& roomNumber,
     return m_roomManager.hasRoomMaintenanceConflict(roomNumber, startDate, endDate, errorMessage);
 }
 
-bool HotelManager::registerRoom(RoomType kind, const std::string& roomNumber, double baseRate, std::string& errorMessage)
+bool HotelManager::registerRoom(RoomType kind, const std::string& roomNumber, double baseRate, 
+                                double area, const std::string& bedType, int maxGuests, 
+                                const std::string& description, const std::string& amenities, 
+                                std::string& errorMessage)
 {
-    return m_roomManager.registerRoom(kind, roomNumber, baseRate, errorMessage);
+    if (area <= 0) {
+        errorMessage = "Area must be greater than zero.";
+        return false;
+    }
+    if (maxGuests <= 0) {
+        errorMessage = "Max guests must be at least 1.";
+        return false;
+    }
+    return m_roomManager.registerRoom(kind, roomNumber, baseRate, area, bedType, maxGuests, description, amenities, errorMessage);
+}
+
+bool HotelManager::updateRoomDetails(const std::string& roomNumber, double baseRate, double extraFee,
+                                     double area, const std::string& bedType, int maxGuests,
+                                     const std::string& description, const std::string& amenities,
+                                     std::string& errorMessage)
+{
+    if (!std::isfinite(baseRate) || baseRate <= 0.0) {
+        errorMessage = "Base rate must be a finite value greater than zero.";
+        return false;
+    }
+    if (!std::isfinite(extraFee) || extraFee < 0.0) {
+        errorMessage = "Extra fee must be a finite non-negative value.";
+        return false;
+    }
+    if (area <= 15) {
+        errorMessage = "Area must be greater than 15. No room should be that small!";
+        return false;
+    }
+    if (maxGuests <= 0) {
+        errorMessage = "Max guests must be at least 1.";
+        return false;
+    }
+
+    return m_roomManager.updateRoomDetails(roomNumber, baseRate, extraFee, area, bedType, maxGuests, description, amenities, errorMessage);
 }
 
 bool HotelManager::registerCustomer(const std::string& id, const std::string& name, const std::string& phone, std::string& errorMessage, std::string* conflictingCustomerId)
@@ -467,18 +540,189 @@ bool HotelManager::updateBooking(
                                                   errorMessage);
 }
 
+bool HotelManager::createBookingAt(const std::string& customerId,
+                                   const std::string& roomNumber,
+                                   const std::string& plannedCheckInAt,
+                                   const std::string& plannedCheckOutAt,
+                                   int adultCount,
+                                   int childCount,
+                                   std::string& errorMessage)
+{
+    const auto customer = findCustomerById(customerId);
+    const auto room = findRoomByNumber(roomNumber);
+    if (!customer || !room) {
+        errorMessage = "Customer or room not found.";
+        return false;
+    }
+    return m_bookingManager.createBookingAtResolved(
+        customer, room, plannedCheckInAt, plannedCheckOutAt, adultCount, childCount,
+        m_roomManager.getRoomMaintenances(), errorMessage);
+}
+
+bool HotelManager::createBookingForNewCustomer(const std::string& customerId,
+                                               const std::string& customerName,
+                                               const std::string& customerPhone,
+                                               const std::string& roomNumber,
+                                               const std::string& plannedCheckInAt,
+                                               const std::string& plannedCheckOutAt,
+                                               int adultCount,
+                                               int childCount,
+                                               std::string& errorMessage)
+{
+    // Modified: Register a new guest only as part of a successful reservation attempt, rolling it back when booking validation fails to avoid orphan customer records.
+    if (!m_customerManager.registerCustomer(customerId, customerName, customerPhone, errorMessage)) {
+        return false;
+    }
+    if (createBookingAt(customerId, roomNumber, plannedCheckInAt, plannedCheckOutAt,
+                        adultCount, childCount, errorMessage)) {
+        return true;
+    }
+
+    std::string rollbackError;
+    if (!m_customerManager.deleteCustomer(customerId, rollbackError)) {
+        errorMessage += " The new customer could not be rolled back: " + rollbackError;
+    }
+    return false;
+}
+
+bool HotelManager::updateBookingAt(const std::string& bookingId,
+                                   const std::string& customerId,
+                                   const std::string& roomNumber,
+                                   const std::string& plannedCheckInAt,
+                                   const std::string& plannedCheckOutAt,
+                                   int adultCount,
+                                   int childCount,
+                                   std::string& errorMessage)
+{
+    const auto customer = findCustomerById(customerId);
+    const auto room = findRoomByNumber(roomNumber);
+    if (!customer || !room) {
+        errorMessage = "Customer or room not found.";
+        return false;
+    }
+    // Modified: The facade exposes one timestamp scheduling path so future views cannot bypass room-block validation.
+    return m_bookingManager.updateBookingAtResolved(
+        bookingId, customer, room, plannedCheckInAt, plannedCheckOutAt, adultCount, childCount,
+        m_roomManager.getRoomMaintenances(), errorMessage);
+}
+
+bool HotelManager::extendActiveBookingAt(const std::string& bookingId,
+                                         const std::string& plannedCheckOutAt,
+                                         std::string& errorMessage)
+{
+    // Modified: Keep the active-stay extension path narrow so it cannot be used as a general post-check-in edit.
+    return m_bookingManager.extendActiveBookingAt(
+        bookingId, plannedCheckOutAt, m_roomManager.getRoomMaintenances(), errorMessage);
+}
+
 bool HotelManager::completeBooking(
     const std::string &bookingId,
     const std::string &actualCheckoutDate,
     std::string &errorMessage)
 {
-    return m_bookingManager.completeBooking(bookingId, actualCheckoutDate, errorMessage);
+    if (!m_bookingManager.completeBooking(bookingId, actualCheckoutDate, errorMessage)) {
+        return false;
+    }
+
+    const auto booking = m_bookingManager.findBookingById(bookingId);
+    if (!booking || !booking->getRoom()) {
+        errorMessage = "Checkout completed but its room record is unavailable.";
+        return false;
+    }
+    const std::string checkoutAt = booking->getActualCheckOutAt().empty()
+        ? actualCheckoutDate + "T" + QTime::currentTime().toString("HH:mm:ss").toStdString()
+        : booking->getActualCheckOutAt();
+    // Modified: Checkout immediately creates the two-hour Cleaning block that protects the next guest's turnover window.
+    if (m_roomManager.startCleaningAfterCheckout(booking->getRoom()->getRoomNumber(), checkoutAt, errorMessage)) {
+        return true;
+    }
+    std::string rollbackError;
+    if (!m_bookingManager.revertCompletedBooking(bookingId, rollbackError)) {
+        errorMessage += " Checkout rollback also failed: " + rollbackError;
+    }
+    return false;
+}
+
+bool HotelManager::completeBookingAt(const std::string& bookingId, const std::string& actualCheckoutAt,
+                                     std::string& errorMessage)
+{
+    if (!m_bookingManager.completeBookingAt(bookingId, actualCheckoutAt, errorMessage)) {
+        return false;
+    }
+    const auto booking = m_bookingManager.findBookingById(bookingId);
+    if (!booking || !booking->getRoom()) {
+        errorMessage = "Checkout completed but its room record is unavailable.";
+        return false;
+    }
+    // Modified: The timestamp-based checkout facade creates Cleaning from the exact recorded checkout moment.
+    if (m_roomManager.startCleaningAfterCheckout(
+            booking->getRoom()->getRoomNumber(), booking->getActualCheckOutAt(), errorMessage)) {
+        return true;
+    }
+    std::string rollbackError;
+    if (!m_bookingManager.revertCompletedBooking(bookingId, rollbackError)) {
+        errorMessage += " Checkout rollback also failed: " + rollbackError;
+    }
+    return false;
 }
 
 bool HotelManager::checkInBooking(const std::string& bookingId, const std::string& checkInDate,
                                   std::string& errorMessage)
 {
+    const auto booking = m_bookingManager.findBookingById(bookingId);
+    if (!booking || !booking->getRoom()) {
+        errorMessage = "Booking or room not found.";
+        return false;
+    }
+    const std::string checkInAt = checkInDate + "T" + QTime::currentTime().toString("HH:mm:ss").toStdString();
+    if (m_roomManager.isRoomBlockedAt(booking->getRoom()->getRoomNumber(), checkInAt)) {
+        errorMessage = "This room is still under Cleaning or Maintenance and is not ready for check-in.";
+        return false;
+    }
+    for (const auto& other : m_bookingManager.getBookings()) {
+        if (!other || other->getBookingId() == bookingId || !other->getRoom()
+            || other->getRoom()->getRoomNumber() != booking->getRoom()->getRoomNumber()) {
+            continue;
+        }
+        if (m_bookingManager.getBookingState(*other) == BookingState::ACTIVE) {
+            errorMessage = "This room still has another active stay.";
+            return false;
+        }
+    }
+    // Modified: Check-in is allowed only when the room has no active stay and no operational block at the recorded moment.
     return m_bookingManager.checkInBooking(bookingId, checkInDate, errorMessage);
+}
+
+bool HotelManager::checkInBookingAt(const std::string& bookingId, const std::string& actualCheckInAt,
+                                    std::string& errorMessage)
+{
+    const auto booking = m_bookingManager.findBookingById(bookingId);
+    if (!booking || !booking->getRoom()) {
+        errorMessage = "Booking or room not found.";
+        return false;
+    }
+    if (m_roomManager.isRoomBlockedAt(booking->getRoom()->getRoomNumber(), actualCheckInAt)) {
+        errorMessage = "This room is still under Cleaning or Maintenance and is not ready for check-in.";
+        return false;
+    }
+    for (const auto& other : m_bookingManager.getBookings()) {
+        if (other && other->getBookingId() != bookingId && other->getRoom()
+            && other->getRoom()->getRoomNumber() == booking->getRoom()->getRoomNumber()
+            && m_bookingManager.getBookingState(*other) == BookingState::ACTIVE) {
+            errorMessage = "This room still has another active stay.";
+            return false;
+        }
+    }
+    // Modified: This timestamp facade allows early arrival only after the room's blocking operational work has ended.
+    return m_bookingManager.checkInBookingAt(bookingId, actualCheckInAt, errorMessage);
+}
+
+bool HotelManager::markRoomReady(const std::string& roomNumber, const std::string& completedBy,
+                                 std::string& errorMessage)
+{
+    // Modified: Reception can release a completed Cleaning block early while the original planned duration stays auditable.
+    return m_roomManager.markRoomReady(
+        roomNumber, QDateTime::currentDateTime().toString(Qt::ISODateWithMs).toStdString(), completedBy, errorMessage);
 }
 
 bool HotelManager::createInvoice( // In practice, checkout first, then create invoice for completed booking
@@ -536,6 +780,10 @@ bool HotelManager::scheduleRoomMaintenance(const std::string& roomNumber,
                                                const std::string& note,
                                                std::string& errorMessage)
 {
+    const QDate startDay = QDate::fromString(QString::fromStdString(startDate), Qt::ISODate);
+    const QDate endDay = QDate::fromString(QString::fromStdString(endDate), Qt::ISODate);
+    const QDateTime maintenanceStart(startDay, QTime(0, 0));
+    const QDateTime maintenanceEnd(endDay, QTime(0, 0));
     std::vector<std::string> affectedBookingIds;
     for (const auto& booking : m_bookingManager.getBookings()) {
         if (!booking || booking->isCancelled() || booking->isDeleted() ||
@@ -544,12 +792,70 @@ bool HotelManager::scheduleRoomMaintenance(const std::string& roomNumber,
             continue;
         }
 
-        if (startDate < booking->getCheckOutDate() && booking->getCheckInDate() < endDate) {
+        QDateTime plannedStart = QDateTime::fromString(
+            QString::fromStdString(booking->getPlannedCheckInAt()), Qt::ISODateWithMs);
+        QDateTime plannedEnd = QDateTime::fromString(
+            QString::fromStdString(booking->getPlannedCheckOutAt()), Qt::ISODateWithMs);
+        if (!plannedStart.isValid()) {
+            const QDate legacyStart = QDate::fromString(QString::fromStdString(booking->getCheckInDate()), Qt::ISODate);
+            plannedStart = legacyStart.isValid() ? QDateTime(legacyStart, QTime(0, 0)) : QDateTime();
+        }
+        if (!plannedEnd.isValid()) {
+            const QDate legacyEnd = QDate::fromString(QString::fromStdString(booking->getCheckOutDate()), Qt::ISODate);
+            plannedEnd = legacyEnd.isValid() ? QDateTime(legacyEnd, QTime(0, 0)) : QDateTime();
+        }
+        // Modified: Compare Maintenance against canonical planned timestamps so a same-day hourly stay cannot be missed by legacy date fields.
+        if (maintenanceStart.isValid() && maintenanceEnd.isValid() && plannedStart.isValid() && plannedEnd.isValid()
+            && maintenanceStart < plannedEnd && plannedStart < maintenanceEnd) {
+            // Modified: A maintenance case cannot begin over an in-house guest. Upcoming reservations may use the soft-hold workflow,
+            // but an Active stay requires reception to resolve the physical occupancy before maintenance is even scheduled.
+            if (getBookingState(*booking) == BookingState::ACTIVE) {
+                errorMessage = "Cannot schedule maintenance because active booking " + booking->getBookingId()
+                    + " occupies Room " + roomNumber + " during the selected period. Check out or relocate the guest first.";
+                return false;
+            }
             affectedBookingIds.push_back(booking->getBookingId());
         }
     }
 
     return m_roomManager.scheduleRoomMaintenance(roomNumber, startDate, endDate, note, affectedBookingIds, errorMessage);
+}
+
+std::vector<std::string> HotelManager::getMaintenanceImpactWarnings(const std::string& roomNumber,
+                                                                     const std::string& startDate,
+                                                                     const std::string& endDate) const
+{
+    std::vector<std::string> warnings;
+    const QDateTime maintenanceStart(QDate::fromString(QString::fromStdString(startDate), Qt::ISODate), QTime(0, 0));
+    const QDateTime maintenanceEnd(QDate::fromString(QString::fromStdString(endDate), Qt::ISODate), QTime(0, 0));
+    if (!maintenanceStart.isValid() || !maintenanceEnd.isValid() || maintenanceEnd <= maintenanceStart) {
+        return warnings;
+    }
+
+    for (const auto& booking : m_bookingManager.getBookings()) {
+        if (!booking || booking->isCancelled() || booking->isDeleted() || !booking->getRoom()
+            || booking->getRoom()->getRoomNumber() != roomNumber) {
+            continue;
+        }
+        const BookingState state = getBookingState(*booking);
+        if (state != BookingState::UPCOMING && state != BookingState::ACTIVE) {
+            continue;
+        }
+        const QDateTime plannedStart = plannedBookingBoundary(*booking, true);
+        const QDateTime plannedEnd = plannedBookingBoundary(*booking, false);
+        if (!plannedStart.isValid() || !plannedEnd.isValid()
+            || !(maintenanceStart < plannedEnd && plannedStart < maintenanceEnd)) {
+            continue;
+        }
+        const QString guest = booking->getCustomer()
+            ? QString::fromStdString(booking->getCustomer()->getName()) : QStringLiteral("Guest unavailable");
+        // Modified: Return a staff-readable impact list before maintenance becomes a soft hold or confirmed physical block.
+        warnings.push_back(QString("%1 — %2 (%3), planned %4 to %5")
+            .arg(QString::fromStdString(booking->getBookingId()), guest,
+                 QString::fromStdString(bookingStateToString(state)), plannedStart.toString("dd MMM yyyy HH:mm"),
+                 plannedEnd.toString("dd MMM yyyy HH:mm")).toStdString());
+    }
+    return warnings;
 }
 
 bool HotelManager::confirmRoomMaintenance(const std::string& maintenanceId, std::string& errorMessage)
@@ -573,8 +879,13 @@ bool HotelManager::confirmRoomMaintenance(const std::string& maintenanceId, std:
             || getBookingState(*booking) == BookingState::COMPLETED) {
             continue;
         }
-        if (maintenanceIt->getStartDate() < booking->getCheckOutDate()
-            && booking->getCheckInDate() < maintenanceIt->getEndDate()) {
+        const QDateTime maintenanceStart(QDate::fromString(QString::fromStdString(maintenanceIt->getStartDate()), Qt::ISODate), QTime(0, 0));
+        const QDateTime maintenanceEnd(QDate::fromString(QString::fromStdString(maintenanceIt->getEndDate()), Qt::ISODate), QTime(0, 0));
+        const QDateTime plannedStart = plannedBookingBoundary(*booking, true);
+        const QDateTime plannedEnd = plannedBookingBoundary(*booking, false);
+        // Modified: Recheck Maintenance confirmation against planned timestamps so hourly bookings cannot bypass the guest-notice workflow.
+        if (maintenanceStart.isValid() && maintenanceEnd.isValid() && plannedStart.isValid() && plannedEnd.isValid()
+            && maintenanceStart < plannedEnd && plannedStart < maintenanceEnd) {
             errorMessage = "Booking " + booking->getBookingId()
                 + " still overlaps this maintenance case. Resolve the booking before confirmation.";
             return false;
@@ -777,24 +1088,36 @@ bool HotelManager::restoreRoomMaintenanceFromDatabase(const std::string& mainten
                                                       const std::string& note,
                                                       const std::string& status,
                                                       const std::string& createdAt,
+                                                      const std::string& blockType,
+                                                      const std::string& startAt,
+                                                      const std::string& endAt,
+                                                      const std::string& completedAt,
+                                                      const std::string& completedBy,
                                                       std::string& errorMessage)
 {
     if (!m_roomManager.validateRoomMaintenanceRestoration(
-            maintenanceId, roomNumber, startDate, endDate, status, errorMessage)) {
+            maintenanceId, roomNumber, startDate, endDate, status, blockType, startAt, endAt, errorMessage)) {
         return false;
     }
-    if (status == "Confirmed" && hasRoomMaintenanceConflict(roomNumber, startDate, endDate, errorMessage)) {
+    if (blockType == "Maintenance" && status == "Confirmed"
+        && hasRoomMaintenanceConflict(roomNumber, startDate, endDate, errorMessage)) {
         return false;
     }
 
-    if (status == "Confirmed") {
+    if (blockType == "Maintenance" && status == "Confirmed") {
+        const QDateTime maintenanceStart(QDate::fromString(QString::fromStdString(startDate), Qt::ISODate), QTime(0, 0));
+        const QDateTime maintenanceEnd(QDate::fromString(QString::fromStdString(endDate), Qt::ISODate), QTime(0, 0));
         for (const auto& booking : m_bookingManager.getBookings()) {
             if (!booking || booking->isCancelled() || booking->isDeleted()
                 || !booking->getRoom() || booking->getRoom()->getRoomNumber() != roomNumber
                 || getBookingState(*booking) == BookingState::COMPLETED) {
                 continue;
             }
-            if (startDate < booking->getCheckOutDate() && booking->getCheckInDate() < endDate) {
+            const QDateTime plannedStart = plannedBookingBoundary(*booking, true);
+            const QDateTime plannedEnd = plannedBookingBoundary(*booking, false);
+            // Modified: Reject restored Maintenance that overlaps an unfinished hourly booking, including a same-day stay.
+            if (maintenanceStart.isValid() && maintenanceEnd.isValid() && plannedStart.isValid() && plannedEnd.isValid()
+                && maintenanceStart < plannedEnd && plannedStart < maintenanceEnd) {
                 errorMessage = "Persisted maintenance conflicts with unfinished booking "
                     + booking->getBookingId() + ".";
                 return false;
@@ -802,7 +1125,9 @@ bool HotelManager::restoreRoomMaintenanceFromDatabase(const std::string& mainten
         }
     }
 
-    return m_roomManager.restoreRoomMaintenanceFromDatabase(maintenanceId, roomNumber, startDate, endDate, note, status, createdAt, errorMessage);
+    return m_roomManager.restoreRoomMaintenanceFromDatabase(
+        maintenanceId, roomNumber, startDate, endDate, note, status, createdAt,
+        blockType, startAt, endAt, completedAt, completedBy, errorMessage);
 }
 
 bool HotelManager::restoreMaintenanceGuestNoticeFromDatabase(const std::string& noticeId,

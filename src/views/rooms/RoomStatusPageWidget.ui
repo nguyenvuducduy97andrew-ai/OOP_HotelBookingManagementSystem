@@ -1,0 +1,483 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>RoomStatusPageWidget</class>
+ <widget class="QWidget" name="RoomStatusPageWidget">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>922</width>
+    <height>713</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Form</string>
+  </property>
+  <property name="styleSheet">
+   <string notr="true">
+RoomStatusPageWidget {
+    background-color: transparent;
+}
+
+QScrollArea {
+    background-color: transparent;
+    border: none;
+}
+
+QScrollArea &gt; QWidget &gt; QWidget {
+    background-color: transparent;
+}
+
+QScrollArea QWidget#scrollAreaWidgetContents {
+    background-color: transparent;
+}
+
+/* Base text color */
+QLabel, QCheckBox, QRadioButton {
+    color: #333333;
+}
+
+/* Filter buttons (All Room, Standard, etc.) */
+QPushButton#btnFilterAll, QPushButton#btnFilterStandard, QPushButton#btnFilterDeluxe, QPushButton#btnFilterSuite {
+    background-color: #F0F4F8;
+    color: #3B58FF;
+    border: 1px solid #D9E2EC;
+    border-radius: 15px; /* Rounded corners */
+    padding: 8px 16px;
+    font-weight: bold;
+}
+QPushButton#btnFilterAll:hover, QPushButton#btnFilterStandard:hover, QPushButton#btnFilterDeluxe:hover, QPushButton#btnFilterSuite:hover {
+    background-color: #E2E8F0;
+}
+QPushButton#btnFilterAll:checked, QPushButton#btnFilterStandard:checked, QPushButton#btnFilterDeluxe:checked, QPushButton#btnFilterSuite:checked {
+    background-color: #3B58FF;
+    color: #FFFFFF;
+}
+
+/* Search Bar */
+QLineEdit#txtSearchRoom {
+    background-color: #F8F9FA;
+    border: 1px solid #005BFE;
+    border-radius: 15px;
+    padding: 4px 15px;
+    color: #333333;
+}
+QLineEdit#txtSearchRoom:focus {
+    border: 1px solid #3B58FF;
+}
+
+/* Search Frame */
+QFrame#frameFilterPanel {
+    background-color: #F8F9FA;
+    border-radius: 15px;
+    border: none;
+}
+
+/* Increment/Decrement Buttons */
+QPushButton#btnAddAdult, QPushButton#btnMinusAdult, QPushButton#btnAddChild, QPushButton#btnMinusChild {
+    background-color: #FFFFFF;
+    color: #3B58FF;
+    border: 1px solid #3B58FF;
+    border-radius: 12px;
+    font-weight: bold;
+    font-size: 16px;
+    min-width: 24px;
+    min-height: 24px;
+    max-width: 24px;
+    max-height: 24px;
+}
+QPushButton#btnAddAdult:hover, QPushButton#btnMinusAdult:hover, QPushButton#btnAddChild:hover, QPushButton#btnMinusChild:hover {
+    background-color: #E2E8F0;
+}
+
+/* Check Availability Button */
+QPushButton#btnCheckAvailability {
+    background-color: #3B58FF;
+    color: white;
+    border-radius: 10px;
+    padding: 10px;
+    font-weight: bold;
+}
+QPushButton#btnCheckAvailability:hover {
+    background-color: #0044CC;
+}
+QPushButton#btnCheckAvailability:pressed {
+    background-color: #003399;
+    padding-top: 12px;
+    padding-left: 12px;
+    padding-bottom: 8px;
+    padding-right: 8px;
+}
+/* Date input - large, clear white container */
+QDateEdit {
+    background-color: #FFFFFF;
+    border: 1px solid #E2E8F0;
+    border-radius: 8px;
+    padding: 8px 12px;
+    color: #333333;
+    font-size: 14px;
+}
+QDateEdit::up-button, QDateEdit::down-button {
+    width: 0px;
+    border: none;
+}
+
+
+/* Modified: match the shared rounded scrollbar treatment used across operational pages. */
+QScrollBar:vertical {
+    border: none;
+    background: transparent;
+    width: 12px;
+    margin: 5px 3px 5px 0px;
+}
+QScrollBar::handle:vertical {
+    background: #C7D3E3;
+    border: 2px solid transparent;
+    min-height: 34px;
+    border-radius: 5px;
+}
+QScrollBar::handle:vertical:hover {
+    background: #94A9C2;
+}
+QScrollBar::handle:vertical:pressed {
+    background: #6E86A3;
+}
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    height: 0px;
+    border: none;
+    background: none;
+}
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+    background: none;
+}
+
+QLabel {
+    background-color: transparent;
+}</string>
+  </property>
+  <layout class="QGridLayout" name="gridLayout">
+   <item row="1" column="3">
+    <widget class="QPushButton" name="btnFilterSuite">
+     <property name="text">
+      <string>Suite</string>
+     </property>
+     <property name="checkable">
+      <bool>true</bool>
+     </property>
+     <property name="autoExclusive">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item row="0" column="0" colspan="4">
+    <widget class="QLineEdit" name="txtSearchRoom">
+     <property name="font">
+      <font>
+       <pointsize>15</pointsize>
+      </font>
+     </property>
+     <property name="placeholderText">
+      <string>Search for rooms and offers</string>
+     </property>
+    </widget>
+   </item>
+   <item row="1" column="1">
+    <widget class="QPushButton" name="btnFilterStandard">
+     <property name="text">
+      <string>Standard</string>
+     </property>
+     <property name="checkable">
+      <bool>true</bool>
+     </property>
+     <property name="autoExclusive">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item row="1" column="2">
+    <widget class="QPushButton" name="btnFilterDeluxe">
+     <property name="text">
+      <string>Deluxe</string>
+     </property>
+     <property name="checkable">
+      <bool>true</bool>
+     </property>
+     <property name="autoExclusive">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item row="1" column="0">
+    <widget class="QPushButton" name="btnFilterAll">
+     <property name="text">
+      <string>All Room</string>
+     </property>
+     <property name="checkable">
+      <bool>true</bool>
+     </property>
+     <property name="checked">
+      <bool>true</bool>
+     </property>
+     <property name="autoExclusive">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item row="2" column="0" colspan="5">
+    <widget class="QFrame" name="frameFilterPanel">
+     <property name="frameShape">
+      <enum>QFrame::Shape::StyledPanel</enum>
+     </property>
+     <property name="frameShadow">
+      <enum>QFrame::Shadow::Raised</enum>
+     </property>
+     <layout class="QGridLayout" name="gridLayout_2">
+      <property name="spacing">
+       <number>15</number>
+      </property>
+      <item row="3" column="10">
+       <widget class="QPushButton" name="btnCheckAvailability">
+        <property name="font">
+         <font>
+          <pointsize>13</pointsize>
+          <bold>true</bold>
+         </font>
+        </property>
+        <property name="text">
+         <string>Check Availablity</string>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="6" colspan="3">
+       <layout class="QHBoxLayout" name="horizontalLayout_Childrens">
+        <property name="spacing">
+         <number>8</number>
+        </property>
+        <item>
+         <widget class="QPushButton" name="btnMinusChild">
+          <property name="text">
+           <string>-</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="lblChildrenCount">
+          <property name="minimumSize">
+           <size>
+            <width>35</width>
+            <height>0</height>
+           </size>
+          </property>
+          <property name="font">
+           <font>
+            <pointsize>15</pointsize>
+           </font>
+          </property>
+          <property name="text">
+           <string>Num</string>
+          </property>
+          <property name="alignment">
+           <set>Qt::AlignmentFlag::AlignCenter</set>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="btnAddChild">
+          <property name="text">
+           <string>+</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <spacer name="spacer_Childrens">
+          <property name="orientation">
+           <enum>Qt::Orientation::Horizontal</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>40</width>
+            <height>20</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+       </layout>
+      </item>
+      <item row="1" column="0" colspan="3">
+       <widget class="QPushButton" name="dateEditCheckIn">
+        <property name="font">
+         <font>
+          <pointsize>-1</pointsize>
+         </font>
+        </property>
+        <property name="styleSheet">
+         <string notr="true">text-align: left; padding: 4px;</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="5">
+       <widget class="QLabel" name="lblCheckOutTitle">
+        <property name="font">
+         <font>
+          <pointsize>17</pointsize>
+          <bold>true</bold>
+         </font>
+        </property>
+        <property name="text">
+         <string>Check Out</string>
+        </property>
+       </widget>
+      </item>
+      <item row="7" column="0" colspan="11">
+       <widget class="QScrollArea" name="scrollArea">
+        <property name="maximumSize">
+         <size>
+          <width>16777205</width>
+          <height>16777215</height>
+         </size>
+        </property>
+        <property name="styleSheet">
+         <string notr="true">background-color: transparent; border: none;</string>
+        </property>
+        <property name="horizontalScrollBarPolicy">
+         <enum>Qt::ScrollBarPolicy::ScrollBarAlwaysOff</enum>
+        </property>
+        <property name="widgetResizable">
+         <bool>true</bool>
+        </property>
+        <widget class="QWidget" name="scrollAreaWidgetContents">
+         <property name="geometry">
+          <rect>
+           <x>0</x>
+           <y>0</y>
+           <width>874</width>
+           <height>436</height>
+          </rect>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">background-color: transparent; border: none;</string>
+         </property>
+        </widget>
+       </widget>
+      </item>
+      <item row="3" column="1" colspan="3">
+       <layout class="QHBoxLayout" name="horizontalLayout_Adults">
+        <property name="spacing">
+         <number>8</number>
+        </property>
+        <item>
+         <widget class="QPushButton" name="btnMinusAdult">
+          <property name="text">
+           <string>-</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="lblAdultCount">
+          <property name="minimumSize">
+           <size>
+            <width>35</width>
+            <height>0</height>
+           </size>
+          </property>
+          <property name="font">
+           <font>
+            <pointsize>15</pointsize>
+           </font>
+          </property>
+          <property name="text">
+           <string>Num</string>
+          </property>
+          <property name="alignment">
+           <set>Qt::AlignmentFlag::AlignCenter</set>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="btnAddAdult">
+          <property name="text">
+           <string>+</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <spacer name="spacer_Adults">
+          <property name="orientation">
+           <enum>Qt::Orientation::Horizontal</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>40</width>
+            <height>20</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+       </layout>
+      </item>
+      <item row="3" column="0">
+       <widget class="QLabel" name="lblAdultsInfo">
+        <property name="font">
+         <font>
+          <pointsize>18</pointsize>
+         </font>
+        </property>
+        <property name="text">
+         <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-size:15pt; font-weight:600;&quot;&gt;Adults&lt;/span&gt;&lt;br/&gt;&lt;span style=&quot; font-size:11pt; color:#6c757d;&quot;&gt;Older than 12 years&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+        </property>
+        <property name="textFormat">
+         <enum>Qt::TextFormat::RichText</enum>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="0">
+       <widget class="QLabel" name="lblCheckInTitle">
+        <property name="font">
+         <font>
+          <pointsize>17</pointsize>
+          <bold>true</bold>
+         </font>
+        </property>
+        <property name="styleSheet">
+         <string notr="true"/>
+        </property>
+        <property name="text">
+         <string>Check In</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="5" colspan="3">
+       <widget class="QPushButton" name="dateEditCheckOut">
+        <property name="font">
+         <font>
+          <pointsize>-1</pointsize>
+         </font>
+        </property>
+        <property name="styleSheet">
+         <string notr="true">text-align: left; padding: 4px;</string>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="5">
+       <widget class="QLabel" name="lblChildrenInfo">
+        <property name="font">
+         <font>
+          <pointsize>18</pointsize>
+         </font>
+        </property>
+        <property name="text">
+         <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-size:15pt; font-weight:600;&quot;&gt;Childrens&lt;/span&gt;&lt;br/&gt;&lt;span style=&quot; font-size:11pt; color:#6c757d;&quot;&gt;0 - 12 years&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+        </property>
+        <property name="textFormat">
+         <enum>Qt::TextFormat::RichText</enum>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

@@ -1,0 +1,345 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>BookingDialog</class>
+ <widget class="QDialog" name="BookingDialog">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>480</width>
+    <height>551</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Check-in Form</string>
+  </property>
+  <property name="styleSheet">
+   <string notr="true">
+/* Dialog background */
+QDialog#BookingDialog {
+    background-color: #F1F5F9;
+}
+
+/* Rounded white card */
+QFrame#cardFrame {
+    background-color: #FFFFFF;
+    border-radius: 16px;
+    border: 1px solid #E2E8F0;
+}
+
+/* Form title */
+QLabel#lblTitle {
+    font-size: 24px;
+    font-weight: bold;
+    color: #1E293B;
+    background: transparent;
+    border: none;
+    margin: 0px;
+    padding: 0px;
+    padding-bottom: 4px;
+}
+
+QLabel#lblSubtitle {
+    font-size: 13px; /* Increased previously in C++. */
+    font-weight: normal;
+    color: #94A3B8;
+    background: transparent;
+    border: none;
+    margin: 0px;
+    padding: 0px;
+}
+
+/* Horizontal separator */
+QFrame#headerLine {
+    background-color: #E2E8F0;
+    max-height: 1px;
+    border: none;
+}
+
+/* Field labels */
+QLabel#lblFullname, QLabel#lblIdNumber, QLabel#lblPhoneNumber, QLabel#lblDateIn, QLabel#lblDateOut {
+    font-size: 13px;
+    font-weight: 600;
+    color: #475569;
+    background: transparent;
+    border: none;
+    padding-left: 2px;
+}
+
+/* Input fields */
+QLineEdit, QDateTimeEdit {
+    background-color: #F8FAFC;
+    border: 1.5px solid #E2E8F0;
+    border-radius: 10px;
+    padding: 10px 14px;
+    color: #1E293B;
+    font-size: 14px;
+    min-height: 20px;
+}
+
+QLineEdit:focus, QDateTimeEdit:focus {
+    border: 1.5px solid #3B58FF;
+    background-color: #FFFFFF;
+}
+
+QLineEdit:hover, QDateTimeEdit:hover {
+    border: 1.5px solid #CBD5E1;
+}
+
+/* Hide DateTimeEdit spinner buttons */
+QDateTimeEdit::up-button, QDateTimeEdit::down-button {
+    width: 0px;
+    border: none;
+}
+
+/* Cancel button */
+QPushButton#btnCancel {
+    background-color: #F1F5F9;
+    color: #64748B;
+    border: 1.5px solid #E2E8F0;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: bold;
+    padding: 10px 24px;
+    min-height: 20px;
+}
+
+QPushButton#btnCancel:hover {
+    background-color: #E2E8F0;
+    color: #475569;
+    border: 1.5px solid #CBD5E1;
+}
+
+QPushButton#btnCancel:pressed {
+    background-color: #CBD5E1;
+}
+
+/* Confirm button */
+QPushButton#btnConfirm {
+    background-color: #3B58FF;
+    color: #FFFFFF;
+    border: none;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: bold;
+    padding: 10px 24px;
+    min-height: 20px;
+}
+
+QPushButton#btnConfirm:hover {
+    background-color: #0044CC;
+}
+
+QPushButton#btnConfirm:pressed {
+    background-color: #003399;
+}
+   </string>
+  </property>
+  <layout class="QVBoxLayout" name="mainLayout">
+   <property name="leftMargin">
+    <number>20</number>
+   </property>
+   <property name="topMargin">
+    <number>20</number>
+   </property>
+   <property name="rightMargin">
+    <number>20</number>
+   </property>
+   <property name="bottomMargin">
+    <number>20</number>
+   </property>
+   <item>
+    <widget class="QFrame" name="cardFrame">
+     <property name="frameShape">
+      <enum>QFrame::Shape::StyledPanel</enum>
+     </property>
+     <property name="frameShadow">
+      <enum>QFrame::Shadow::Raised</enum>
+     </property>
+     <layout class="QVBoxLayout" name="cardLayout">
+      <property name="spacing">
+       <number>16</number>
+      </property>
+      <property name="leftMargin">
+       <number>28</number>
+      </property>
+      <property name="topMargin">
+       <number>24</number>
+      </property>
+      <property name="rightMargin">
+       <number>28</number>
+      </property>
+      <property name="bottomMargin">
+       <number>24</number>
+      </property>
+      <item>
+       <widget class="QLabel" name="lblTitle">
+        <property name="text">
+         <string>Check-in Form</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="lblSubtitle">
+        <property name="text">
+         <string>Please fill in the guest information below</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QFrame" name="headerLine">
+        <property name="frameShape">
+         <enum>QFrame::Shape::HLine</enum>
+        </property>
+        <property name="frameShadow">
+         <enum>QFrame::Shadow::Sunken</enum>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <layout class="QFormLayout" name="formLayout">
+        <property name="horizontalSpacing">
+         <number>20</number>
+        </property>
+        <property name="verticalSpacing">
+         <number>14</number>
+        </property>
+        <item row="0" column="0">
+         <widget class="QLabel" name="lblFullname">
+          <property name="text">
+           <string>Customer Fullname</string>
+          </property>
+         </widget>
+        </item>
+        <item row="0" column="1">
+         <widget class="QLineEdit" name="txtFullname">
+          <property name="placeholderText">
+           <string>Enter full name</string>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="0">
+         <widget class="QLabel" name="lblIdNumber">
+          <property name="text">
+           <string>Identified Number</string>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="1">
+         <widget class="QLineEdit" name="txtIdNumber">
+          <property name="placeholderText">
+           <string>Enter ID number</string>
+          </property>
+         </widget>
+        </item>
+        <item row="2" column="0">
+         <widget class="QLabel" name="lblPhoneNumber">
+          <property name="text">
+           <string>Phone Number</string>
+          </property>
+         </widget>
+        </item>
+        <item row="2" column="1">
+         <widget class="QLineEdit" name="txtPhoneNumber">
+          <property name="placeholderText">
+           <string>Enter phone number</string>
+          </property>
+         </widget>
+        </item>
+        <item row="3" column="0">
+         <widget class="QLabel" name="lblDateIn">
+          <property name="text">
+           <string>Date In</string>
+          </property>
+         </widget>
+        </item>
+        <item row="3" column="1">
+         <widget class="QDateTimeEdit" name="dateTimeCheckIn">
+          <property name="displayFormat">
+           <string>d/M/yyyy  HH:mm</string>
+          </property>
+         </widget>
+        </item>
+        <item row="4" column="0">
+         <widget class="QLabel" name="lblDateOut">
+          <property name="text">
+           <string>Date Out</string>
+          </property>
+         </widget>
+        </item>
+        <item row="4" column="1">
+         <widget class="QDateTimeEdit" name="dateTimeCheckOut">
+          <property name="displayFormat">
+           <string>d/M/yyyy  HH:mm</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <spacer name="verticalSpacer">
+        <property name="orientation">
+         <enum>Qt::Orientation::Vertical</enum>
+        </property>
+        <property name="sizeHint" stdset="0">
+         <size>
+          <width>20</width>
+          <height>10</height>
+         </size>
+        </property>
+       </spacer>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="buttonLayout">
+        <property name="spacing">
+         <number>12</number>
+        </property>
+        <item>
+         <spacer name="buttonSpacer">
+          <property name="orientation">
+           <enum>Qt::Orientation::Horizontal</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>40</width>
+            <height>20</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+        <item>
+         <widget class="QPushButton" name="btnCancel">
+          <property name="minimumSize">
+           <size>
+            <width>120</width>
+            <height>44</height>
+           </size>
+          </property>
+          <property name="text">
+           <string>Cancel</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="btnConfirm">
+          <property name="minimumSize">
+           <size>
+            <width>120</width>
+            <height>40</height>
+           </size>
+          </property>
+          <property name="text">
+           <string>Confirm</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

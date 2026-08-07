@@ -44,20 +44,22 @@ xóa file này nếu chưa backup và chưa có hướng dẫn.
 
 Trạng thái phòng ở Room Status:
 - Available: phòng có thể bán trong ngày/khoảng ngày đang xem.
-- Awaiting check-in: có reservation đến hôm nay hoặc quá ngày đến nhưng staff
+- Awaiting check-in: có reservation đang đến hạn trong khung giờ đã đặt nhưng staff
   chưa Check in. Không phải Occupied, nhưng không được đặt chồng lịch.
 - Occupied: staff đã Check in thật; còn như vậy đến khi staff Check out thật.
+- Cleaning: tự tạo ngay sau Check out, mặc định 2 giờ. Staff chỉ bấm Mark room ready
+  khi phòng thực tế đã sẵn sàng sớm hơn.
 - Maintenance: maintenance đã Confirmed, phòng bị block dùng bình thường.
 
 Trạng thái reservation:
 - Upcoming: đã đặt, khách chưa check-in.
 - Active: khách đã được check-in.
 - Completed: đã checkout, được đưa vào Booking History/report.
-- Cancelled: hủy trước ngày đến, vẫn giữ lịch sử.
-- No-show: khách không đến vào/sau ngày dự kiến đến.
+- Cancelled: hủy trước Check in thực tế, vẫn giữ lịch sử. Nếu khách không đến, staff
+  ghi rõ điều đó trong lý do hủy thay vì dùng một trạng thái riêng.
 
 Ngày hệ thống lấy từ máy tính đang chạy. Đầu mỗi ca kiểm tra giờ/ngày của máy.
-Sai ngày có thể làm Check in, Check out, No-show và report sai.
+Sai ngày/giờ có thể làm Check in, Check out, cancellation reason và report sai.
 
 ===============================================================================
 4. CHECKLIST ĐẦU CA
@@ -81,7 +83,7 @@ trước khi Add để hạn chế duplicate. Có thể bấm header để sort;
 hướng sort hiện tại.
 
 Khi chọn một row customer, phần Customer reservations ở dưới sẽ hiện toàn bộ booking
-chưa bị xóa của khách đó: Upcoming, Active, Completed, Cancelled và No-show. Bảng
+chưa bị xóa của khách đó: Upcoming, Active, Completed và Cancelled. Bảng
 cho biết phòng, ngày dự kiến, actual check-out (nếu đã checkout), status và Reason.
 Đây khác với Booking History ở Dashboard (chỉ completed stay theo kỳ báo cáo). Đây là
 phần tra cứu; muốn check-in, checkout, cancel hoặc edit thì vào Reservation.
@@ -184,25 +186,38 @@ Reservation mới bắt đầu ở Room Status, không có nút New Reservation 
 Reservations page.
 
 1. Mở Room Status.
-2. Chọn date/guest filter nếu màn có hỗ trợ, xem trạng thái room.
-3. Click room phù hợp để xem details.
-4. Chọn Book/Reserve. Reservation form mở với room đã preselect.
-5. Với khách cũ, tìm và chọn ở Existing customer bằng document number, tên hoặc
+2. Chọn `Choose dates & times`. Ở chế độ Check-in, chọn lại bao nhiêu lần cũng
+   chỉ thay Check-in hiện tại; app tạm đặt checkout tối thiểu sau đó một giờ.
+   Chuyển sang Check-out rồi mới chọn ngày/giờ trả phòng. Week number không hiển
+   thị; lịch phải thấy đủ 7 thứ và bảng giờ phải thấy đủ 24 slot.
+3. Chọn Adults/Children và áp dụng availability filter.
+4. Click room phù hợp. Room Info mở trước để xem type, capacity, bed, hourly rate,
+   description và amenities. Đóng/Cancel ở đây sẽ không mở form đặt phòng.
+5. Chọn Booking trong Room Info. Reservation form mở với room và schedule đã chọn.
+6. Với khách cũ, tìm và chọn ở Existing customer bằng document number, tên hoặc
    phone. Với khách mới, chọn `New customer — enter details manually` rồi nhập
    thông tin theo country selector và format hint.
-6. Nhập planned Check-in/Check-out. Check-out phải sau Check-in; booking mới
+7. Kiểm tra planned Check-in/Check-out. Check-out phải sau Check-in; booking mới
    không được có planned check-in quá khứ.
-7. Nhập Adults/Children. Phải có ít nhất một adult; tổng không vượt capacity
+8. Kiểm tra Adults/Children. Phải có ít nhất một adult; tổng không vượt capacity
    room type.
-8. Confirm/Save.
-9. Kiểm tra booking mới xuất hiện Upcoming ở Reservation Management và Room
+9. Confirm/Save.
+10. Kiểm tra booking mới xuất hiện Upcoming ở Reservation Management và Room
    Status update.
 
 Không tin hoàn toàn vào screen cũ khi form đã mở lâu. Hệ thống validate availability
 lần cuối trước khi tạo để ngăn double booking.
 
+QUY ƯỚC DIALOG VÀ CUỘN CHUỘT:
+- Dialog chức năng có viền xanh nhạt bao trọn title, nền trong trắng, kích thước
+  cố định trong cửa sổ chính và có thể kéo bằng title.
+- Không kéo giãn dialog tự do.
+- Lăn chuột trên country/type/status/date/time/count/area không đổi giá trị; thao
+  tác đó dành cho cuộn trang. Hãy click hoặc dùng bàn phím để thay đổi.
+- Chỉ trường tiền như Base Price và Extra Fee cho phép dùng wheel để điều chỉnh.
+
 ===============================================================================
-8. RESERVATION MANAGEMENT: EDIT, CHECK IN, CANCEL, NO-SHOW, CHECK OUT
+8. RESERVATION MANAGEMENT: EDIT, CHECK IN, CANCEL, CHECK OUT
 ===============================================================================
 
 Reservations page có Search, filter trạng thái, Action legend và tooltips cho
@@ -227,26 +242,21 @@ Booking không tự Occupied chỉ vì đến ngày dự kiến.
 Check in chỉ hợp lệ hôm nay, vào/sau planned arrival và trước planned departure.
 Nếu khách đến muộn, kiểm tra ngày booking và policy khách sạn trước khi thao tác.
 
-8.3 Cancel trước ngày đến
+8.3 Cancel Upcoming reservation
 
-Cancel chỉ dùng trước planned check-in date. Nhập lý do rõ ràng. Record vẫn giữ
-Cancelled history. Vào ngày đến hoặc sau đó, khách chưa đến phải xử lý No-show,
-không dùng Cancel.
+Cancel chỉ dùng khi booking còn Upcoming, kể cả khi khách chưa đến vào/qua planned
+arrival. Nhập lý do rõ ràng, ví dụ `Guest did not arrive` nếu khách không đến.
+Record vẫn giữ Cancelled history. Không có nút hay trạng thái No-show riêng. Active
+booking không được Cancel; staff chỉ có thể Check out hoặc Early check-out.
 
-8.4 Mark no-show
-
-Vào hoặc sau planned arrival, nếu khách chưa đến và chưa check-in, chọn No-show
-và ghi lý do. No-show khác cancellation do khách yêu cầu. Không dùng No-show cho
-Active booking hoặc trước arrival date.
-
-8.5 Check out và issue invoice
+8.4 Check out và issue invoice
 
 1. Xác nhận khách thực sự rời đi.
 2. Chọn Active booking, chọn Check out.
 3. Actual checkout không được trước actual check-in và không ở tương lai. Nếu
-   checkout cùng ngày check-in, hệ thống tính một đêm.
+   checkout cùng ngày check-in, hệ thống tính tối thiểu một billable hour.
 4. Confirm. Booking thành Completed và hệ thống issue một invoice từ locked rate,
-   tax và actual number of nights.
+   tax và actual duration làm tròn half-up theo giờ.
 5. Kiểm tra Dashboard Booking History theo selected period.
 
 CẢNH BÁO TÀI CHÍNH: checkout bắt buộc nhập một payment có method, amount dương và
@@ -262,8 +272,8 @@ recorded amount/balance và dùng quy trình kế toán được khách sạn ph
 Dashboard có selected period: Today, week, month, year. Có hai KPI khác nhau:
 
 - Current occupancy: snapshot ngay lúc này, room có khách Check in thật.
-- Period occupancy to date: actual occupied room-night từ đầu kỳ đến hôm nay /
-  available room-night của phần kỳ đã trôi qua.
+- Period occupancy to date: actual occupied room-hours từ đầu kỳ đến thời điểm hiện
+  tại / saleable room-hours của phần kỳ đã trôi qua.
 
 Không diễn giải hai KPI như nhau. Một khách sạn có thể đầy hiện tại nhưng period
 occupancy thấp, hoặc ngược lại.
@@ -275,9 +285,27 @@ checkout date và selected range trước.
 
 Export Report tạo PDF landscape theo các khối đồng bộ; tiêu đề, mô tả và bảng của
 một mục sẽ đi cùng nhau nếu vừa trang, nếu không vừa thì cả khối qua trang kế.
-Chỉ khối dài hơn chính một trang mới bị tiếp tục sang trang khác. Bảng Cancelled &
-no-show có cột `Reason`; No-show hiển thị lý do staff đã nhập khi đánh dấu no-show.
+Chỉ khối dài hơn chính một trang mới bị tiếp tục sang trang khác. Bảng Cancelled có
+cột `Reason`; lý do ghi nhận được hiển thị trực tiếp để hỗ trợ tra cứu.
 Xác nhận selected period, đọc lại data và cẩn thận PII trước khi share/in.
+
+9.1 STATISTICS VÀ TRA CỨU INVOICE
+----------------------------------
+
+Mở Statistics để trực quan hóa dữ liệu invoice và booking, tách biệt với Dashboard
+nghiệp vụ. Trang này có:
+- Monthly Revenue: tổng invoice theo từng tháng trong năm hiện tại.
+- Selected-period Revenue Structure: cơ cấu room fee và service fee trong kỳ filter.
+- Weekly Bookings Quantity: booking có invoice, nhóm theo thứ trong tuần của ngày
+  check-in.
+- Most Booked Rooms: booking có invoice, nhóm theo room type.
+
+Invoice List cho phép search theo Invoice ID hoặc Booking ID. Có thể kết hợp bộ lọc
+price range với ngày payment From/To; khoảng ngày mặc định là từ một tháng trước đến
+hôm nay. Hover action button để xem mô tả, sau đó click để mở đầy đủ invoice details.
+
+Statistics chỉ dùng để visualization và lookup. Các thao tác check-in, cancel,
+checkout hoặc sửa booking vẫn thực hiện trong Reservation Management.
 
 ===============================================================================
 10. NHỮNG ĐIỀU CẦN TRÁNH
@@ -289,7 +317,7 @@ Không:
 - Set permanent unavailable cho sửa chữa vài ngày; dùng dated maintenance.
 - Confirm maintenance khi booking conflict còn live.
 - Check in khách chưa đến, hoặc Check out future date.
-- Cancel booking vào/sau arrival nếu bản chất là no-show.
+- Cancel Active hoặc Completed booking; chỉ Upcoming reservation mới được Cancel.
 - Giả định invoice nghĩa là khách đã thanh toán đủ.
 - Dùng screenshot/report cũ làm current operational state; refresh page.
 - Force-close app khi save hoặc copy DB live trong lúc app đang write.
@@ -300,9 +328,9 @@ Không:
 ===============================================================================
 
 “Room is already booked” hoặc room không có trong available list:
-Kiểm tra planned dates, Active stay, pending/confirmed maintenance và có đang edit
-chính booking đó không. Booking sát nhau hợp lệ: đơn cũ checkout ngày nào, đơn
-mới checkin đúng ngày đó; chỉ date overlap mới bị chặn.
+Kiểm tra planned timestamps, Active stay, pending/confirmed maintenance và có đang
+edit chính booking đó không. Booking kế tiếp chỉ hợp lệ từ planned checkout của
+đơn trước cộng 2 giờ Cleaning/turnover; không chỉ xét ngày.
 
 “Cannot create booking for archived customer/room”:
 Restore đúng record theo policy hoặc chọn record active. Không tạo duplicate.
@@ -312,8 +340,8 @@ Kiểm tra PC date/time và actual arrival. App không cho retrospective check-i
 trong normal reception flow.
 
 “Checkout date cannot be before actual check-in”:
-Kiểm tra đúng booking và ngày hệ thống. Checkout cùng ngày check-in được phép và
-được tính một đêm; chỉ ngày checkout trước ngày check-in mới bị từ chối.
+Kiểm tra đúng booking và ngày/giờ hệ thống. Checkout cùng ngày check-in được phép
+và tính tối thiểu một billable hour; actual checkout phải sau actual check-in.
 
 “Maintenance conflict” hoặc confirm bị từ chối:
 Live booking còn trùng. Move/reschedule/cancel theo chính sách, sau đó confirm lại.
@@ -369,9 +397,9 @@ C. Khách muốn đổi ngày hoặc đổi phòng trước khi đến
    báo quản lý vì room move/transfer là workflow chưa có riêng.
 
 D. Khách không đến
-1. Xác nhận booking Upcoming và hôm nay đã là ngày planned arrival hoặc sau đó.
-2. Chọn No-show, nhập lý do có ý nghĩa.
-3. Không chọn Cancel, vì Cancel chỉ hợp lệ trước ngày đến.
+1. Xác nhận booking vẫn Upcoming và chưa Check in.
+2. Chọn Cancel, nhập lý do rõ ràng như `Guest did not arrive`.
+3. Không có trạng thái No-show riêng; không Cancel Active hoặc Completed booking.
 4. Kiểm tra booking không còn block future availability.
 5. Nếu có charge/penalty, dùng quy trình kế toán ngoài app vì app hiện chỉ lưu
    một payment tại checkout, không có nghiệp vụ charge/penalty riêng.
@@ -381,7 +409,7 @@ E. Khách rời đi
 2. Xác nhận actual departure, không dùng future date.
 3. Chọn Check out và confirm.
 4. Xem invoice được issue và Booking History theo selected range.
-5. Trong hộp checkout, chọn method, nhập đúng amount đã thực nhận và received date.
+5. Trong hộp checkout, chọn method, nhập đúng amount đã thực nhận.
    Nếu chỉ nhận một phần, xem số dư còn lại trên invoice; các lần thu sau xử lý
    theo quy trình kế toán ngoài app.
 
@@ -418,9 +446,9 @@ Ví dụ 3:
 - Booking History được lọc theo actual checkout 31/07.
 
 Ví dụ 4:
-- Booking A: 29/07 -> 30/07.
-- Booking B: 30/07 -> 31/07 cùng một room.
-- Hai booking hợp lệ vì ngày end của A không trùng với ngày start của B.
+- Booking A: 29/07 10:00 -> 30/07 10:00.
+- Booking B: cùng room từ 30/07 12:00 trở đi.
+- Hai booking hợp lệ khi B bắt đầu từ planned checkout của A cộng ít nhất 2 giờ.
 
 Guest count:
 - Adults phải >= 1.
@@ -440,7 +468,7 @@ Price:
 
 Tình huống                                      Hành động đúng
 Khách chưa đến, trước ngày đến                  Cancel nếu khách hủy
-Khách chưa đến, ngày đến hoặc sau               No-show
+Khách chưa đến                                  Cancel Upcoming, ghi lý do `Guest did not arrive`
 Khách đến hôm nay                                Check in
 Khách đã check-in và đang ở                      Giữ Active/Occupied
 Khách rời đi                                     Check out

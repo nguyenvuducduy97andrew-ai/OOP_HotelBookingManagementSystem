@@ -3,5 +3,11 @@
         <file>occ_icon.png</file>
         <file>avl_icon.png</file>
         <file>mtn_icon.png</file>
+        <file>ic_dashboard.svg</file>
+        <file>ic_reservation.svg</file>
+        <file>ic_customer.svg</file>
+        <file>ic_room.svg</file>
+        <file>ic_room_status.svg</file>
+        <file>ic_statistics.svg</file>
     </qresource>
 </RCC>

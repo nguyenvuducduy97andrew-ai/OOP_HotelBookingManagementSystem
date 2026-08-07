@@ -18,7 +18,14 @@ public:
     std::shared_ptr<Room> findRoomByNumber(const std::string& roomNumber) const;
     bool roomNumberExists(const std::string& roomNumber) const;
 
-    bool registerRoom(RoomType type, const std::string& roomNumber, double baseRate, std::string& errorMessage);
+    bool registerRoom(RoomType type, const std::string& roomNumber, double baseRate, 
+                      double area, const std::string& bedType, int maxGuests, 
+                      const std::string& description, const std::string& amenities, 
+                      std::string& errorMessage);
+    bool updateRoomDetails(const std::string& roomNumber, double baseRate, double extraFee,
+                           double area, const std::string& bedType, int maxGuests,
+                           const std::string& description, const std::string& amenities,
+                           std::string& errorMessage);
     bool setRoomAvailability(const std::string& roomNumber, bool available, std::string& errorMessage);
     bool scheduleRoomMaintenance(const std::string& roomNumber,
                                  const std::string& startDate,
@@ -36,6 +43,14 @@ public:
     const std::vector<MaintenanceGuestNotice>& getMaintenanceGuestNotices() const;
     std::vector<MaintenanceGuestNotice> getMaintenanceGuestNotices(const std::string& maintenanceId) const;
     bool isRoomUnderMaintenance(const std::string& roomNumber, const std::string& date) const;
+    bool isRoomBlockedAt(const std::string& roomNumber, const std::string& at) const;
+    bool startCleaningAfterCheckout(const std::string& roomNumber,
+                                   const std::string& actualCheckoutAt,
+                                   std::string& errorMessage);
+    bool markRoomReady(const std::string& roomNumber,
+                       const std::string& readyAt,
+                       const std::string& completedBy,
+                       std::string& errorMessage);
     bool hasRoomMaintenanceConflict(const std::string& roomNumber,
                                     const std::string& startDate,
                                     const std::string& endDate,
@@ -48,12 +63,20 @@ public:
                                             const std::string& note,
                                             const std::string& status,
                                             const std::string& createdAt,
+                                            const std::string& blockType,
+                                            const std::string& startAt,
+                                            const std::string& endAt,
+                                            const std::string& completedAt,
+                                            const std::string& completedBy,
                                             std::string& errorMessage);
     bool validateRoomMaintenanceRestoration(const std::string& maintenanceId,
                                             const std::string& roomNumber,
                                             const std::string& startDate,
                                             const std::string& endDate,
                                             const std::string& status,
+                                            const std::string& blockType,
+                                            const std::string& startAt,
+                                            const std::string& endAt,
                                             std::string& errorMessage) const;
 
     bool restoreMaintenanceGuestNoticeFromDatabase(const std::string& noticeId,
