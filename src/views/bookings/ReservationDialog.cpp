@@ -22,7 +22,7 @@
 #include <QScrollArea>
 #include <QStackedLayout>
 #include <QTimeEdit>
-#include <QStyle>
+#include <QStringList>
 #include <algorithm>
 
 ReservationDialog::ReservationDialog(HotelManager* manager, QWidget *parent, std::shared_ptr<Room> previewRoom)
@@ -55,6 +55,11 @@ void setupReservationDialogStyle(QDialog* dialog) {
             padding: 6px 12px;
             font-size: 13px;
             color: #2B3674;
+        }
+        QLineEdit[invalid="true"], QComboBox[invalid="true"], QDateEdit[invalid="true"], QTimeEdit[invalid="true"], QSpinBox[invalid="true"] {
+            background-color: #FEE2E2;
+            border: 1px solid #EF4444;
+            color: #991B1B;
         }
         QComboBox {
             padding-right: 28px;
@@ -124,6 +129,11 @@ void setupReservationDialogStyle(QDialog* dialog) {
         QPushButton#btnSchedule:hover {
             background-color: #DBEAFE;
         }
+        QPushButton#btnSchedule[invalid="true"] {
+            background-color: #FEE2E2;
+            border: 1px solid #EF4444;
+            color: #991B1B;
+        }
         QLabel#validationFeedback {
             color: #92400E;
             background-color: #FFFBEB;
@@ -177,7 +187,10 @@ void setupReservationDialogStyle(QDialog* dialog) {
 
 void ReservationDialog::setupUI() {
     setupReservationDialogStyle(this);
-    const QSize preferredSize = m_previewRoom ? QSize(500, 620) : QSize(780, 700);
+    // Give the reservation form enough room to show its fields without relying on
+    // scrolling during normal use. The scroll area remains available for smaller
+    // owner windows and lower-resolution displays.
+    const QSize preferredSize = m_previewRoom ? QSize(500, 620) : QSize(880, 820);
     lockDialogToWorkingArea(this, preferredSize);
 
     auto* outerLayout = new QHBoxLayout(this);
@@ -221,10 +234,10 @@ void ReservationDialog::setupUI() {
     auto* formScroll = new QScrollArea(this);
     formScroll->setWidgetResizable(true);
     formScroll->setFrameShape(QFrame::NoFrame);
-    formScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    formScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     auto* formContent = new QWidget(formScroll);
     auto* formLayout = new QFormLayout(formContent);
-    formLayout->setContentsMargins(2, 2, 8, 2);
+    formLayout->setContentsMargins(2, 2, 2, 2);
     formLayout->setSpacing(12);
 
     auto* customerTypeRow = new QHBoxLayout();
@@ -402,7 +415,9 @@ void ReservationDialog::setupUI() {
     m_validationLabel->setObjectName("validationFeedback");
     m_validationLabel->setWordWrap(true);
     // Modified: Reserve one feedback line so guidance can appear without changing Reservation Dialog height.
-    m_validationLabel->setFixedHeight(44);
+    // Keep one feedback line reserved, but allow aggregated validation details to
+    // grow like CustomerDialog's error summary.
+    m_validationLabel->setMinimumHeight(44);
     m_validationLabel->setProperty("active", false);
     m_validationLabel->setText(QString());
     mainLayout->addWidget(m_validationLabel);
@@ -492,6 +507,31 @@ void ReservationDialog::setupUI() {
     connect(dialogClose, &QPushButton::clicked, this, &QDialog::reject);
     connect(saveBtn, &QPushButton::clicked, this, &ReservationDialog::onAccept);
 
+    const auto setInvalidState = [](QWidget* widget, bool invalid) {
+        if (!widget) {
+            return;
+        }
+        widget->setProperty("invalid", invalid);
+        widget->style()->unpolish(widget);
+        widget->style()->polish(widget);
+    };
+    const auto clearInvalidState = [setInvalidState](QWidget* widget) {
+        setInvalidState(widget, false);
+    };
+    const auto clearValidationStates = [this, setInvalidState]() {
+        setInvalidState(m_customerIdEdit, false);
+        setInvalidState(m_customerNameEdit, false);
+        setInvalidState(m_customerPhoneLocalEdit, false);
+        setInvalidState(m_existingCustomerCombo, false);
+        setInvalidState(m_adultCountSpin, false);
+        setInvalidState(m_childCountSpin, false);
+        setInvalidState(m_roomCombo, false);
+        setInvalidState(m_checkInDateEdit, false);
+        setInvalidState(m_checkOutDateEdit, false);
+        setInvalidState(m_checkInTimeEdit, false);
+        setInvalidState(m_checkOutTimeEdit, false);
+        setInvalidState(m_scheduleButton, false);
+    };
     const auto clearValidationFeedback = [this]() {
         if (m_validationLabel) {
             m_validationLabel->setText(QString());
@@ -500,11 +540,54 @@ void ReservationDialog::setupUI() {
             m_validationLabel->style()->polish(m_validationLabel);
         }
     };
-    connect(m_customerIdEdit, &QLineEdit::textEdited, this, clearValidationFeedback);
-    connect(m_customerNameEdit, &QLineEdit::textEdited, this, clearValidationFeedback);
-    connect(m_customerPhoneLocalEdit, &QLineEdit::textEdited, this, clearValidationFeedback);
-    connect(m_adultCountSpin, QOverload<int>::of(&QSpinBox::valueChanged), this, clearValidationFeedback);
-    connect(m_childCountSpin, QOverload<int>::of(&QSpinBox::valueChanged), this, clearValidationFeedback);
+    connect(m_customerIdEdit, &QLineEdit::textEdited, this, [clearValidationFeedback, clearInvalidState, this]() {
+        clearValidationFeedback();
+        clearInvalidState(m_customerIdEdit);
+    });
+    connect(m_customerNameEdit, &QLineEdit::textEdited, this, [clearValidationFeedback, clearInvalidState, this]() {
+        clearValidationFeedback();
+        clearInvalidState(m_customerNameEdit);
+    });
+    connect(m_customerPhoneLocalEdit, &QLineEdit::textEdited, this, [clearValidationFeedback, clearInvalidState, this]() {
+        clearValidationFeedback();
+        clearInvalidState(m_customerPhoneLocalEdit);
+    });
+    connect(m_adultCountSpin, QOverload<int>::of(&QSpinBox::valueChanged), this, [clearValidationFeedback, clearInvalidState, this]() {
+        clearValidationFeedback();
+        clearInvalidState(m_adultCountSpin);
+    });
+    connect(m_childCountSpin, QOverload<int>::of(&QSpinBox::valueChanged), this, [clearValidationFeedback, clearInvalidState, this]() {
+        clearValidationFeedback();
+        clearInvalidState(m_childCountSpin);
+    });
+    connect(m_roomCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [clearValidationFeedback, clearInvalidState, this]() {
+        clearValidationFeedback();
+        clearInvalidState(m_roomCombo);
+    });
+    connect(m_checkInDateEdit, &QDateEdit::dateChanged, this, [clearInvalidState, this]() {
+        clearInvalidState(m_checkInDateEdit);
+        clearInvalidState(m_checkOutDateEdit);
+        clearInvalidState(m_scheduleButton);
+    });
+    connect(m_checkOutDateEdit, &QDateEdit::dateChanged, this, [clearInvalidState, this]() {
+        clearInvalidState(m_checkInDateEdit);
+        clearInvalidState(m_checkOutDateEdit);
+        clearInvalidState(m_scheduleButton);
+    });
+    connect(m_checkInTimeEdit, &QTimeEdit::timeChanged, this, [clearInvalidState, this]() {
+        clearInvalidState(m_checkInTimeEdit);
+        clearInvalidState(m_checkOutTimeEdit);
+        clearInvalidState(m_scheduleButton);
+    });
+    connect(m_checkOutTimeEdit, &QTimeEdit::timeChanged, this, [clearInvalidState, this]() {
+        clearInvalidState(m_checkInTimeEdit);
+        clearInvalidState(m_checkOutTimeEdit);
+        clearInvalidState(m_scheduleButton);
+    });
+    connect(m_existingCustomerCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [clearValidationFeedback, clearInvalidState, this]() {
+        clearValidationFeedback();
+        clearInvalidState(m_existingCustomerCombo);
+    });
     disableNonMoneyWheelChanges(this);
 }
 
@@ -513,8 +596,9 @@ void ReservationDialog::expandBookingForm()
     if (!m_reservationPanel || m_reservationPanel->isVisible()) return;
 
     const QSize available = dialogAvailableSize(this);
-    // Keep the modal compact enough that Room Status remains visible around it.
-    const QSize expanded(qMin(1100, available.width()), qMin(650, available.height()));
+    // Widen the reservation panel and let its scroll area extend farther toward
+    // the action buttons, while still keeping the modal inside the working area.
+    const QSize expanded(qMin(1230, available.width()), qMin(800, available.height()));
     setFixedSize(expanded);
     m_reservationPanel->show();
 
@@ -858,6 +942,39 @@ void ReservationDialog::onAccept() {
     m_customerNameEdit->setText(customerName);
     m_customerPhoneLocalEdit->setText(phoneLocal);
 
+    const auto clearInvalidStates = [this]() {
+        auto resetWidget = [](QWidget* widget) {
+            if (!widget) {
+                return;
+            }
+            widget->setProperty("invalid", false);
+            widget->style()->unpolish(widget);
+            widget->style()->polish(widget);
+        };
+        resetWidget(m_customerIdEdit);
+        resetWidget(m_customerNameEdit);
+        resetWidget(m_customerPhoneLocalEdit);
+        resetWidget(m_existingCustomerCombo);
+        resetWidget(m_adultCountSpin);
+        resetWidget(m_childCountSpin);
+        resetWidget(m_roomCombo);
+        resetWidget(m_checkInDateEdit);
+        resetWidget(m_checkOutDateEdit);
+        resetWidget(m_checkInTimeEdit);
+        resetWidget(m_checkOutTimeEdit);
+        resetWidget(m_scheduleButton);
+    };
+    const auto markInvalid = [](QWidget* widget) {
+        if (!widget) {
+            return;
+        }
+        widget->setProperty("invalid", true);
+        widget->style()->unpolish(widget);
+        widget->style()->polish(widget);
+    };
+
+    clearInvalidStates();
+
     if (m_existingCustomerMode && !usingExistingCustomer) {
         const QString searchText = m_existingCustomerCombo->currentText().trimmed();
         if (!searchText.isEmpty() && searchText != "New customer — enter details manually") {
@@ -878,12 +995,82 @@ void ReservationDialog::onAccept() {
             }
             return;
         }
+        markInvalid(m_existingCustomerCombo);
         showValidationMessage("Select a customer from the search results, or choose New customer to enter a new profile.");
+        m_existingCustomerCombo->setFocus();
         return;
     }
 
-    if (!usingExistingCustomer && m_editingBookingId.empty() && !isValidDocumentNumber(documentType, idRule.key, customerId)) {
-        showValidationMessage(QString("%1 for %2 must be %3.").arg(documentType, idRule.name, documentNumberHint(documentType, idRule.key)));
+    // Match CustomerDialog: validate every visible input in one pass, highlight
+    // all invalid fields, summarize every issue, and focus the first one.
+    QStringList errors;
+    QWidget* firstInvalid = nullptr;
+    const auto addInvalid = [&errors, &firstInvalid, &markInvalid](QWidget* widget, const QString& message) {
+        errors << message;
+        markInvalid(widget);
+        if (!firstInvalid) {
+            firstInvalid = widget;
+        }
+    };
+
+    if (!usingExistingCustomer && m_editingBookingId.empty()
+        && !isValidDocumentNumber(documentType, idRule.key, customerId)) {
+        addInvalid(m_customerIdEdit,
+                   QString("%1 for %2 must be %3.").arg(documentType, idRule.name,
+                                                         documentNumberHint(documentType, idRule.key)));
+    }
+
+    if (!usingExistingCustomer && !HotelManager::isValidCustomerNameFormat(customerName.toStdString())) {
+        addInvalid(m_customerNameEdit,
+                   "Enter a legal name using letters, spaces, apostrophes, hyphens, or initials.");
+    }
+
+    static const QRegularExpression digitsPattern(QStringLiteral(R"(^\d+$)"));
+    if (!usingExistingCustomer && !digitsPattern.match(phoneLocal).hasMatch()) {
+        addInvalid(m_customerPhoneLocalEdit, "The phone number can contain digits only.");
+    }
+    if (!usingExistingCustomer
+        && (phoneLocal.size() < phoneRule.phoneMinDigits || phoneLocal.size() > phoneRule.phoneMaxDigits)) {
+        addInvalid(m_customerPhoneLocalEdit,
+                   QString("The phone number for %1 must be %2.").arg(phoneRule.name, phoneRule.phoneHint));
+    }
+    if (!usingExistingCustomer && !HotelManager::isValidPhoneNumberFormat(fullPhone.toStdString())) {
+        addInvalid(m_customerPhoneLocalEdit, "The phone number format is invalid.");
+    }
+
+    const QDateTime plannedCheckIn = QDateTime::fromString(getPlannedCheckInAt(), Qt::ISODate);
+    const QDateTime plannedCheckOut = QDateTime::fromString(getPlannedCheckOutAt(), Qt::ISODate);
+    if (!plannedCheckIn.isValid() || !plannedCheckOut.isValid()
+        || plannedCheckOut < plannedCheckIn.addSecs(60 * 60)) {
+        errors << "A reservation must be at least one hour long.";
+        markInvalid(m_scheduleButton);
+        markInvalid(m_checkInDateEdit);
+        markInvalid(m_checkOutDateEdit);
+        markInvalid(m_checkInTimeEdit);
+        markInvalid(m_checkOutTimeEdit);
+        if (!firstInvalid) firstInvalid = m_scheduleButton;
+    }
+
+    if (m_adultCountSpin->value() + m_childCountSpin->value() <= 0) {
+        errors << "A reservation must include at least one guest.";
+        markInvalid(m_adultCountSpin);
+        markInvalid(m_childCountSpin);
+        if (!firstInvalid) firstInvalid = m_adultCountSpin;
+    }
+
+    if (m_roomCombo->currentIndex() < 0) {
+        addInvalid(m_roomCombo, "No room is available for this schedule. Choose another date, hour, or guest count.");
+    } else if (m_confirmedRoomNumber.isEmpty()) {
+        addInvalid(m_roomCombo, "Select an available room before creating the reservation.");
+    } else if (m_roomCombo->currentData().toString() != m_confirmedRoomNumber) {
+        addInvalid(m_roomCombo, "The room list has changed. Select the intended room again before saving.");
+    }
+
+    if (!errors.isEmpty()) {
+        showValidationMessage(errors.join("\n"));
+        if (firstInvalid) {
+            firstInvalid->setFocus();
+        }
         return;
     }
 
@@ -905,27 +1092,6 @@ void ReservationDialog::onAccept() {
                 return;
             }
         }
-    }
-
-    if (!usingExistingCustomer && !HotelManager::isValidCustomerNameFormat(customerName.toStdString())) {
-        showValidationMessage("Enter a legal name using letters, spaces, apostrophes, hyphens, or initials.");
-        return;
-    }
-
-    static const QRegularExpression digitsPattern(QStringLiteral(R"(^\d+$)"));
-    if (!usingExistingCustomer && !digitsPattern.match(phoneLocal).hasMatch()) {
-        showValidationMessage("The phone number can contain digits only.");
-        return;
-    }
-
-    if (!usingExistingCustomer && (phoneLocal.size() < phoneRule.phoneMinDigits || phoneLocal.size() > phoneRule.phoneMaxDigits)) {
-        showValidationMessage(QString("The phone number for %1 must be %2.").arg(phoneRule.name, phoneRule.phoneHint));
-        return;
-    }
-
-    if (!usingExistingCustomer && !HotelManager::isValidPhoneNumberFormat(fullPhone.toStdString())) {
-        showValidationMessage("The phone number format is invalid.");
-        return;
     }
 
     if (!usingExistingCustomer && m_editingBookingId.empty() && m_manager) {
@@ -951,33 +1117,6 @@ void ReservationDialog::onAccept() {
                 return;
             }
         }
-    }
-
-    if (m_confirmedRoomNumber.isEmpty()) {
-        showValidationMessage("Select an available room before creating the reservation.");
-        return;
-    }
-
-    if (m_roomCombo->currentData().toString() != m_confirmedRoomNumber) {
-        showValidationMessage("The room list has changed. Select the intended room again before saving.");
-        return;
-    }
-
-    if (m_roomCombo->currentIndex() < 0) {
-        showValidationMessage("No room is available for this schedule. Choose another date, hour, or guest count.");
-        return;
-    }
-
-    const QDateTime plannedCheckIn = QDateTime::fromString(getPlannedCheckInAt(), Qt::ISODate);
-    const QDateTime plannedCheckOut = QDateTime::fromString(getPlannedCheckOutAt(), Qt::ISODate);
-    if (!plannedCheckIn.isValid() || !plannedCheckOut.isValid() || plannedCheckOut < plannedCheckIn.addSecs(60 * 60)) {
-        showValidationMessage("A reservation must be at least one hour long.");
-        return;
-    }
-
-    if (m_adultCountSpin->value() + m_childCountSpin->value() <= 0) {
-        showValidationMessage("A reservation must include at least one guest.");
-        return;
     }
 
     accept();

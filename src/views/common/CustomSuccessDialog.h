@@ -25,11 +25,12 @@ public:
             QFrame#successHeader { background:#FFFFFF; border:none; border-bottom:1px solid #E7EDF7; border-top-left-radius:13px; border-top-right-radius:13px; }
             QFrame#successBody { background:#FFFFFF; border:none; }
             QLabel#successWindowTitle { color:#1B3F83; font-size:13px; font-weight:800; background:transparent; border:none; }
-            QLabel#successHeaderIcon { color:#059669; font-size:16px; background:transparent; border:none; }
+            QLabel#successHeaderIcon { color: #059669; font-size:16px; background:transparent; border:none; }
             QPushButton#successWindowClose { background:transparent; color:#64748B; border:none; border-radius:8px; font-size:20px; }
             QPushButton#successWindowClose:hover { background:#F1F5F9; color:#1B3F83; }
             QLabel#iconLabel {
                 font-size: 42px;
+                color: #059669;
                 background: transparent;
                 border: none;
             }

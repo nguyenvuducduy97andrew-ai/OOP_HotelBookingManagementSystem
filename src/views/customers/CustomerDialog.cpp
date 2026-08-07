@@ -125,9 +125,10 @@ void CustomerDialog::setupStyle() {
             background-color: #F1F5F9;
             color: #A3AED0;
         }
-        QLineEdit[error="true"] {
+        QLineEdit[invalid="true"] {
             border: 1px solid #EF4444;
-            background-color: #FEF2F2;
+            background-color: #FEE2E2;
+            color: #991B1B;
         }
         QLabel#errorLabel {
             font-size: 12px;
@@ -328,7 +329,7 @@ QString CustomerDialog::getCustomerPhone() const {
 }
 
 void CustomerDialog::setFieldError(QLineEdit* field, bool hasError) {
-    field->setProperty("error", hasError);
+    field->setProperty("invalid", hasError);
     field->style()->unpolish(field);
     field->style()->polish(field);
 }

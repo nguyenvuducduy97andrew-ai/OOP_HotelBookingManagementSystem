@@ -212,6 +212,7 @@ void showReservationDetails(QWidget* parent, const std::shared_ptr<Booking>& boo
     const auto customer = booking->getCustomer();
     const auto room = booking->getRoom();
     QDialog dialog(parent);
+    dialog.setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint);
     dialog.setWindowTitle("Reservation details");
     dialog.setModal(true);
     dialog.setMinimumWidth(560);
@@ -285,6 +286,7 @@ bool requestReservationReason(
     QString& reason)
 {
     QDialog dialog(parent);
+    dialog.setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint);
     dialog.setWindowTitle(title);
     dialog.setModal(true);
     dialog.setMinimumWidth(380);
@@ -353,6 +355,7 @@ bool requestCheckoutPayment(QWidget* parent, double total, QString& method, doub
     dialog.setWindowTitle("Record checkout payment");
     dialog.setModal(true);
     dialog.setMinimumWidth(420);
+    dialog.setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint);
     // Modified: Give the checkout-payment dialog explicit colors so inherited page styles cannot render its controls white on white.
     dialog.setStyleSheet(
         "QDialog { background: #FFFFFF; border: 2px solid #93C5FD; border-radius: 18px; }"
@@ -580,8 +583,15 @@ void ReservationsPageWidget::setupUI() {
     auto* pageTitle = new QLabel("Reservation Management", this);
     pageTitle->setObjectName("pageTitle");
 
+    auto* btnAddBooking = new QPushButton("+ New Reservation", this);
+    btnAddBooking->setObjectName("btnAddBooking");
+    btnAddBooking->setCursor(Qt::PointingHandCursor);
+    connect(btnAddBooking, &QPushButton::clicked, this, [this]() {
+        openReservationDialog();
+    });
     headerRow->addWidget(pageTitle);
     headerRow->addStretch();
+    headerRow->addWidget(btnAddBooking);
     mainLayout->addLayout(headerRow);
 
     // Filter Row
@@ -615,7 +625,7 @@ void ReservationsPageWidget::setupUI() {
     m_tableWidget->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Stretch); // Let Customer Name take remaining space
     m_tableWidget->horizontalHeader()->setSectionResizeMode(8, QHeaderView::Fixed);
     // Modified: Reserve room for labelled action buttons so staff can understand each operation without an icon legend.
-    m_tableWidget->setColumnWidth(8, 330);
+    m_tableWidget->setColumnWidth(8, 340);
     // Modified: Left-align headers so their text does not visually clip against both section borders.
     m_tableWidget->horizontalHeader()->setDefaultAlignment(Qt::AlignLeft | Qt::AlignVCenter);
     m_tableWidget->setEditTriggers(QAbstractItemView::NoEditTriggers);

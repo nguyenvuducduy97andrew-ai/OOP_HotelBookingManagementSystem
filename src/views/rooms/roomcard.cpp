@@ -92,13 +92,13 @@ void RoomCard::setAwaiting(QString guestName, QString dateIn, QString dateOut) {
     ui->lblCheckInDate->setStyleSheet("color: #3F3A8F; font-size: 14px; background: transparent;");
     ui->lblCheckOutDate->setStyleSheet("color: #3F3A8F; font-size: 14px; background: transparent;");
 
-    ui->lblGuestName->setText(guestName.isEmpty() ? "Awaiting check-in" : QString("Awaiting: ") + guestName);
+    ui->lblGuestName->setText(guestName);
     ui->lblCheckInDate->setText("IN: " + dateIn);
     ui->lblCheckOutDate->setText("OUT: " + dateOut);
-    ui->lblStatusIcon->setPixmap(QPixmap());
-    ui->lblStatusIcon->setText("⏳");
-    ui->lblStatusIcon->setStyleSheet("color: white; font-size: 27px; background: transparent;");
-    ui->lblStatusIcon->setAlignment(Qt::AlignCenter);
+    ui->lblStatusIcon->setText("");
+    ui->lblStatusIcon->setStyleSheet("background: transparent;");
+    ui->lblStatusIcon->setPixmap(QPixmap(":/awt_icon.png"));
+    ui->lblStatusIcon->setScaledContents(true);
 }
 
 void RoomCard::setOccupied(QString guestName, QString idNumber, QString phoneNumber, QString dateIn, QString dateOut) { // Render the occupied state.

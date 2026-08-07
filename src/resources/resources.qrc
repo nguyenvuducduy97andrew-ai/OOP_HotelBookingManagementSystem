@@ -3,5 +3,6 @@
         <file>occ_icon.png</file>
         <file>avl_icon.png</file>
         <file>mtn_icon.png</file>
+        <file>awt_icon.png</file>
     </qresource>
 </RCC>
