@@ -8,6 +8,7 @@
 #include "HotelManager.h"
 #include "DataManager.h"
 
+
 namespace {
 QString applicationScrollBarStyleSheet()
 {
@@ -111,9 +112,6 @@ int main(int argc, char *argv[]) {
         QMessageBox::critical(nullptr, "Database Error", "Failed to load or initialize the database file. The application will close.");
         return -1;
     }
-
-    // Modified: Leave a newly initialized database empty; staff create all operational data through the application.
-
     // Modified: Authenticate the staff member before constructing the operational window with the shared HotelManager.
     LoginWindow loginWindow;
     if (loginWindow.exec() != QDialog::Accepted) {

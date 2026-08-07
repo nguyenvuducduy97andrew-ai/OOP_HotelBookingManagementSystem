@@ -190,7 +190,7 @@ void CustomerPageWidget::setupStyle() {
             border: 1px solid #D9E2F2;
             outline: none;
             selection-background-color: #EAF2FF;
-            selection-color: #005BFE;
+            selection-color: #3B58FF;
         }
         QComboBox#documentTypeFilter QAbstractItemView::item,
         QComboBox#issuingCountryFilter QAbstractItemView::item {
@@ -204,7 +204,7 @@ void CustomerPageWidget::setupStyle() {
         QComboBox#documentTypeFilter QAbstractItemView::item:selected,
         QComboBox#issuingCountryFilter QAbstractItemView::item:selected {
             background-color: #EAF2FF;
-            color: #005BFE;
+            color: #3B58FF;
         }
         QComboBox#documentTypeFilter QAbstractItemView QScrollBar:vertical,
         QComboBox#issuingCountryFilter QAbstractItemView QScrollBar:vertical {
@@ -254,7 +254,7 @@ void CustomerPageWidget::setupStyle() {
             border: 1px solid #10B981;
         }
         QPushButton#btnAddCustomer, QPushButton#btnEditCustomer, QPushButton#btnArchiveCustomer, QPushButton#btnDeleteCustomer {
-            background-color: #005BFE;
+            background-color: #3B58FF;
             color: #FFFFFF;
             font-weight: 700;
             border-radius: 10px;
@@ -272,7 +272,7 @@ void CustomerPageWidget::setupStyle() {
         QPushButton#btnEditCustomer:hover,
         QPushButton#btnArchiveCustomer:hover,
         QPushButton#btnDeleteCustomer:hover {
-            background-color: #2B7BFF;
+            background-color: #4F6BFF;
         }
         QPushButton#btnDeleteCustomer:hover {
             background-color: #DC2626;

@@ -40,7 +40,7 @@ QLabel, QCheckBox, QRadioButton {
 /* Filter buttons (All Room, Standard, etc.) */
 QPushButton#btnFilterAll, QPushButton#btnFilterStandard, QPushButton#btnFilterDeluxe, QPushButton#btnFilterSuite {
     background-color: #F0F4F8;
-    color: #005BFE;
+    color: #3B58FF;
     border: 1px solid #D9E2EC;
     border-radius: 15px; /* Rounded corners */
     padding: 8px 16px;
@@ -50,7 +50,7 @@ QPushButton#btnFilterAll:hover, QPushButton#btnFilterStandard:hover, QPushButton
     background-color: #E2E8F0;
 }
 QPushButton#btnFilterAll:checked, QPushButton#btnFilterStandard:checked, QPushButton#btnFilterDeluxe:checked, QPushButton#btnFilterSuite:checked {
-    background-color: #005BFE;
+    background-color: #3B58FF;
     color: #FFFFFF;
 }
 
@@ -63,7 +63,7 @@ QLineEdit#txtSearchRoom {
     color: #2B3674;
 }
 QLineEdit#txtSearchRoom:focus {
-    border: 1px solid #005BFE;
+    border: 1px solid #3B58FF;
 }
 
 /* Search Frame */
@@ -76,8 +76,8 @@ QFrame#frameFilterPanel {
 /* Increment/Decrement Buttons */
 QPushButton#btnAddAdult, QPushButton#btnMinusAdult, QPushButton#btnAddChild, QPushButton#btnMinusChild {
     background-color: #FFFFFF;
-    color: #005BFE;
-    border: 1px solid #005BFE;
+    color: #3B58FF;
+    border: 1px solid #3B58FF;
     border-radius: 12px;
     font-weight: bold;
     font-size: 16px;
@@ -92,7 +92,7 @@ QPushButton#btnAddAdult:hover, QPushButton#btnMinusAdult:hover, QPushButton#btnA
 
 /* Check Availability Button */
 QPushButton#btnCheckAvailability {
-    background-color: #005BFE;
+    background-color: #3B58FF;
     color: white;
     border-radius: 10px;
     padding: 10px;

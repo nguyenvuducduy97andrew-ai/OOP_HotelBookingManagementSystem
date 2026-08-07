@@ -27,6 +27,7 @@ public:
     ~DashboardWidget();
     void refreshDashboard();
 
+
 signals:
     void reservationActionRequested(const QString& bookingId, const QString& actionType);
 
@@ -38,6 +39,7 @@ private slots:
     void updateDateTime();
     void exportReport();
     void onBookingHistoryLinkClicked(const QUrl& url);
+    void onTrendChartHovered(const QPointF &point, bool state);
 
 private:
     // Timer declaration.
@@ -58,6 +60,12 @@ private:
     QFrame *m_reservationPanel = nullptr;
     QLabel *m_reservationPanelTitle = nullptr;
     QLabel *m_reservationPanelSubtitle = nullptr;
+    
+    class QScatterSeries* m_hoverScatter = nullptr;
+    class QLineSeries* m_seriesCurrentLine = nullptr;
+    class QLineSeries* m_seriesPrevLine = nullptr;
+    class QAreaSeries* m_seriesCurrentArea = nullptr;
+    class QAreaSeries* m_seriesPrevArea = nullptr;
     QTableWidget *m_reservationTable = nullptr;
     int m_selectedMiniCard = 0;
     int m_historyPage = 0;

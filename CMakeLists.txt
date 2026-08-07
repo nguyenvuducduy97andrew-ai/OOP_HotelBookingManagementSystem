@@ -105,3 +105,6 @@ target_link_libraries(HotelBookingManagement PRIVATE
     Qt6::Svg
 )
 
+
+add_executable(inject_mock src/inject_mock.cpp)
+target_link_libraries(inject_mock PRIVATE Qt6::Core Qt6::Sql)

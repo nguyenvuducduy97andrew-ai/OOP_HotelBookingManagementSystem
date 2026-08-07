@@ -88,7 +88,7 @@ void CustomerDialog::setupStyle() {
             color: #2B3674;
         }
         QLineEdit:focus {
-            border: 1px solid #005BFE;
+            border: 1px solid #3B58FF;
         }
         QComboBox {
             background-color: #F4F7FE;
@@ -100,7 +100,7 @@ void CustomerDialog::setupStyle() {
             color: #2B3674;
         }
         QComboBox:focus {
-            border: 1px solid #005BFE;
+            border: 1px solid #3B58FF;
         }
         QComboBox QAbstractItemView {
             background-color: #FFFFFF;
@@ -109,7 +109,7 @@ void CustomerDialog::setupStyle() {
             outline: 0;
             padding: 4px;
             selection-background-color: #E6F0FF;
-            selection-color: #005BFE;
+            selection-color: #3B58FF;
         }
         QComboBox QAbstractItemView::item {
             min-height: 30px;
@@ -119,7 +119,7 @@ void CustomerDialog::setupStyle() {
         QComboBox QAbstractItemView::item:hover,
         QComboBox QAbstractItemView::item:selected {
             background-color: #E6F0FF;
-            color: #005BFE;
+            color: #3B58FF;
         }
         QLineEdit:disabled {
             background-color: #F1F5F9;
@@ -140,7 +140,7 @@ void CustomerDialog::setupStyle() {
             padding: 8px 10px;
         }
         QPushButton#btnSave {
-            background-color: #005BFE;
+            background-color: #3B58FF;
             color: #FFFFFF;
             font-weight: 700;
             border-radius: 8px;
@@ -150,7 +150,7 @@ void CustomerDialog::setupStyle() {
             min-width: 90px;
         }
         QPushButton#btnSave:hover {
-            background-color: #2B7BFF;
+            background-color: #4F6BFF;
         }
         QPushButton#btnCancelDialog {
             background-color: #E9EDF7;
@@ -175,7 +175,7 @@ void CustomerDialog::setupUI() {
 
     auto* titleRow = new QHBoxLayout();
     auto* dialogIcon = new QLabel("♙", this);
-    dialogIcon->setStyleSheet("color:#005BFE; font-size:17px; background:transparent; border:none;");
+    dialogIcon->setStyleSheet("color:#3B58FF; font-size:17px; background:transparent; border:none;");
     auto* titleLabel = new QLabel(m_customer ? "Edit customer details" : "Add a new customer", this);
     titleLabel->setObjectName("dialogTitle");
     auto* dialogClose = new QPushButton(this);

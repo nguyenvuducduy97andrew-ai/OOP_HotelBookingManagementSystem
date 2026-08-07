@@ -15,8 +15,22 @@
 #include <QStackedWidget>
 #include <QSizePolicy>
 #include <QVBoxLayout>
-
+#include <QPainter>
+#include <QSvgRenderer>
 namespace {
+
+QIcon createTintedIcon(const QString& svgPath, const QColor& color) {
+    QPixmap pixmap(24, 24);
+    pixmap.fill(Qt::transparent);
+    QPainter painter(&pixmap);
+    QSvgRenderer renderer(svgPath);
+    renderer.render(&painter);
+    painter.setCompositionMode(QPainter::CompositionMode_SourceIn);
+    painter.fillRect(pixmap.rect(), color);
+    painter.end();
+    return QIcon(pixmap);
+}
+
 // Modified: Apply one unobtrusive scrollbar and focus treatment across pages so tables, lists, and combo popups feel consistent.
 void applyGlobalPresentationStyle()
 {
@@ -64,11 +78,11 @@ void applyGlobalPresentationStyle()
         }
         QComboBox QAbstractItemView::item:selected {
             background: #EAF2FF;
-            color: #155EEF;
+            color: #3B58FF;
             border-radius: 5px;
         }
         QLineEdit:focus, QComboBox:focus, QDateTimeEdit:focus, QSpinBox:focus {
-            border-color: #2B7BFF;
+            border-color: #3B58FF;
         }
         QLineEdit:disabled, QComboBox:disabled, QDateTimeEdit:disabled, QSpinBox:disabled {
             color: #8FA0BD;
@@ -331,13 +345,25 @@ MainWindow::MainWindow(HotelManager* manager, QWidget *parent)
 }
 
 void MainWindow::updateButtonStyle(QPushButton* activeBtn) {
-    QList<QPushButton*> buttons = { ui->btnDashboard, ui->btnReservation, ui->btnCustomer, ui->btnRoom, ui->btnStatistics };
+    QList<QPushButton*> buttons = { ui->btnDashboard, ui->btnReservation, ui->btnCustomer, ui->btnRoom, ui->btnRoomStatus, ui->btnStatistics };
+    
+    QMap<QPushButton*, QString> buttonIcons = {
+        {ui->btnDashboard, ":/ic_dashboard.svg"},
+        {ui->btnReservation, ":/ic_reservation.svg"},
+        {ui->btnCustomer, ":/ic_customer.svg"},
+        {ui->btnRoom, ":/ic_room.svg"},
+        {ui->btnRoomStatus, ":/ic_room_status.svg"},
+        {ui->btnStatistics, ":/ic_statistics.svg"}
+    };
 
     for (QPushButton* btn : buttons) {
         bool isActive = (btn == activeBtn);
         btn->setProperty("active", isActive);
         btn->style()->unpolish(btn);
         btn->style()->polish(btn);
+        
+        QColor iconColor = isActive ? QColor("#3B58FF") : QColor("#2B3674");
+        btn->setIcon(createTintedIcon(buttonIcons[btn], iconColor));
     }
 }
 
@@ -351,6 +377,7 @@ void MainWindow::showReservationSubPage(int index)
     if (boundedIndex == 0) m_roomStatusPage->refreshData();
     else m_reservationsPage->refreshData();
 }
+
 
 MainWindow::~MainWindow()
 {

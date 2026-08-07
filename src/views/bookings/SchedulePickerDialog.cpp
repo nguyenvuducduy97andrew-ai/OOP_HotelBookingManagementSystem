@@ -80,17 +80,17 @@ SchedulePickerDialog::SchedulePickerDialog(const QDateTime& initialCheckIn,
         QLabel#pickerHint { color: #6B7FA8; font-weight: 500; }
         QLabel#pickerHint[error="true"] { color: #B45309; }
         QPushButton { border-radius: 9px; padding: 8px 12px; font-weight: 700; }
-        QPushButton#modeButton:checked { background: #005BFE; color: #FFFFFF; border: 1px solid #005BFE; }
+        QPushButton#modeButton:checked { background: #3B58FF; color: #FFFFFF; border: 1px solid #3B58FF; }
         QPushButton#modeButton:!checked { background: #F4F7FE; color: #2B3674; border: 1px solid #D9E2F2; }
         QPushButton#hourButton { background: #F4F7FE; color: #2B3674; border: 1px solid #D9E2F2; min-width: 0px; padding: 8px 6px; }
         QPushButton#hourButton:hover:enabled { background: #DBEAFE; border-color: #93C5FD; }
-        QPushButton#hourButton:checked { background: #005BFE; color: #FFFFFF; border-color: #005BFE; }
+        QPushButton#hourButton:checked { background: #3B58FF; color: #FFFFFF; border-color: #3B58FF; }
         QPushButton#hourButton:disabled { color: #A3AED0; background: #F1F5F9; border-color: #E2E8F0; }
-        QPushButton#applyButton { background: #005BFE; color: #FFFFFF; border: 1px solid #005BFE; min-width: 124px; }
-        QPushButton#applyButton:hover { background: #2B7BFF; }
+        QPushButton#applyButton { background: #3B58FF; color: #FFFFFF; border: 1px solid #3B58FF; min-width: 124px; }
+        QPushButton#applyButton:hover { background: #4F6BFF; }
         QPushButton#cancelButton { background: #E9EDF7; color: #2B3674; border: none; min-width: 100px; }
         QCalendarWidget QWidget { color: #2B3674; background: #FFFFFF; }
-        QCalendarWidget QAbstractItemView:enabled { selection-background-color: #005BFE; selection-color: #FFFFFF; }
+        QCalendarWidget QAbstractItemView:enabled { selection-background-color: #3B58FF; selection-color: #FFFFFF; }
         QCalendarWidget QAbstractItemView:disabled { color: #A3AED0; }
         QCalendarWidget QToolButton { color: #2B3674; background: transparent; }
         QCalendarWidget QMenu { background: #FFFFFF; color: #2B3674; }
@@ -108,10 +108,10 @@ SchedulePickerDialog::SchedulePickerDialog(const QDateTime& initialCheckIn,
     auto* headerLayout = new QHBoxLayout(header);
     headerLayout->setContentsMargins(22, 0, 12, 0);
     auto* scheduleIcon = new QLabel("◷", header);
-    scheduleIcon->setStyleSheet("color:#005BFE; font-size:18px; background:transparent; border:none;");
+    scheduleIcon->setStyleSheet("color:#3B58FF; font-size:18px; background:transparent; border:none;");
     auto* title = new QLabel(dialogTitle, header);
     title->setObjectName("pickerTitle");
-    auto* close = new QPushButton(header);
+    auto* close = new QPushButton("×",header);
     close->setObjectName("windowClose");
     styleDialogCloseButton(close);
     headerLayout->addWidget(scheduleIcon);
@@ -230,7 +230,7 @@ SchedulePickerDialog::SchedulePickerDialog(const QDateTime& initialCheckIn,
     applyButton->setObjectName("applyButton");
     // Modified: Set footer button colors directly so the action text remains above an opaque, high-contrast button on every platform theme.
     cancelButton->setStyleSheet("QPushButton { background:#E9EDF7; color:#2B3674; border:none; border-radius:9px; padding:8px 16px; font-weight:700; min-width:108px; }");
-    applyButton->setStyleSheet("QPushButton { background:#005BFE; color:#FFFFFF; border:1px solid #005BFE; border-radius:9px; padding:8px 16px; font-weight:700; min-width:136px; }");
+    applyButton->setStyleSheet("QPushButton { background:#3B58FF; color:#FFFFFF; border:1px solid #3B58FF; border-radius:9px; padding:8px 16px; font-weight:700; min-width:136px; }");
     buttons->setFixedHeight(46);
     buttons->setCenterButtons(false);
     scrollArea->setWidget(content);

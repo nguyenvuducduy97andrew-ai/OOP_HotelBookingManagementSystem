@@ -42,16 +42,24 @@ public:
                  const QString &label,
                  const QString &value);
 
+    bool isActive() const { return m_isActive; }
+    void setActive(bool active);
+
 signals:
     void clicked();
 
 protected:
+    void enterEvent(QEnterEvent *event) override;
+    void leaveEvent(QEvent *event) override;
     void mousePressEvent(QMouseEvent *event) override;
+    void mouseReleaseEvent(QMouseEvent *event) override;
 
 private:
     QLabel *m_iconLabel;
     QLabel *m_textLabel;
     QLabel *m_valueLabel;
+    bool m_isActive = false;
+    void updateStyle(bool hover);
 };
 
 // ---------------------------------------------------------------

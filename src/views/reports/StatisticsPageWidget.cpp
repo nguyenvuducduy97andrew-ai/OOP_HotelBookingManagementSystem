@@ -219,24 +219,87 @@ void StatisticsPageWidget::setupUI() {
 }
 
 void StatisticsPageWidget::setupCharts() {
-    // Revenue bar chart.
     m_barChart = new QChart();
-    // Modified: localize revenue-axis labels with comma-separated currency grouping.
     m_barChart->setLocale(QLocale(QLocale::English, QLocale::UnitedStates));
     m_barChart->setLocalizeNumbers(true);
-    m_barSeries = new QBarSeries();
-    m_barChart->addSeries(m_barSeries);
-    // The section QLabel already supplies the title.
+    
+    m_revenueLineSeries = new QLineSeries();
+    m_revenueLineSeries->setName("Revenue (VNĐ)");
+    
+    QPen linePen(QColor("#3B58FF"));
+    linePen.setWidth(3);
+    m_revenueLineSeries->setPen(linePen);
+    m_revenueLineSeries->setPointsVisible(true);
+    m_revenueLineSeries->setPointLabelsFormat("@yPoint");
+    m_revenueLineSeries->setPointLabelsVisible(false);
+
+    m_revenueAreaSeries = new QAreaSeries(m_revenueLineSeries);
+    m_revenueAreaSeries->setName("Revenue (VNĐ)");
+    
+    QLinearGradient gradient(QPointF(0, 0), QPointF(0, 1));
+    gradient.setColorAt(0.0, QColor(59, 88, 255, 100)); // #3B58FF with alpha
+    gradient.setColorAt(1.0, QColor(59, 88, 255, 0));
+    gradient.setCoordinateMode(QGradient::ObjectBoundingMode);
+    m_revenueAreaSeries->setBrush(gradient);
+
+    QPen borderPen(Qt::transparent);
+    m_revenueAreaSeries->setPen(borderPen);
+
+    m_barChart->addSeries(m_revenueAreaSeries);
+    
+    m_revenueHoverScatter = new QScatterSeries();
+    m_revenueHoverScatter->setMarkerShape(QScatterSeries::MarkerShapeCircle);
+    m_revenueHoverScatter->setMarkerSize(12.0);
+    m_revenueHoverScatter->setColor(QColor("#FFFFFF")); // fill white
+    m_revenueHoverScatter->setPen(QPen(QColor("#3B58FF"), 3)); // blue border
+    m_revenueHoverScatter->setName(""); // Disable auto-naming
+    m_barChart->addSeries(m_revenueHoverScatter);
+
+    auto *invisibleScatter = new QScatterSeries();
+    invisibleScatter->setMarkerShape(QScatterSeries::MarkerShapeCircle);
+    invisibleScatter->setMarkerSize(15.0);
+    invisibleScatter->setColor(Qt::transparent);
+    invisibleScatter->setPen(QPen(Qt::transparent));
+    invisibleScatter->setName("");
+    // We will populate invisibleScatter in refreshData
+    m_barChart->addSeries(invisibleScatter);
+    connect(invisibleScatter, &QScatterSeries::hovered, this, &StatisticsPageWidget::onRevenueChartHovered);
+
+    // Hide scatter series from legend
+    for (auto marker : m_barChart->legend()->markers(m_revenueHoverScatter)) {
+        marker->setVisible(false);
+    }
+    for (auto marker : m_barChart->legend()->markers(invisibleScatter)) {
+        marker->setVisible(false);
+    }
+
     m_barChart->setAnimationOptions(QChart::SeriesAnimations);
+    m_barChart->setBackgroundBrush(Qt::transparent);
 
     m_barAxisX = new QBarCategoryAxis();
+    m_barAxisX->setGridLineVisible(false);
+    m_barAxisX->setLabelsColor(QColor("#A3AED0"));
+    
     m_barAxisY = new QValueAxis();
+    m_barAxisY->setGridLineColor(QColor("#F1F5F9"));
+    m_barAxisY->setLabelsColor(QColor("#A3AED0"));
+    
     m_barChart->addAxis(m_barAxisX, Qt::AlignBottom);
     m_barChart->addAxis(m_barAxisY, Qt::AlignLeft);
-    m_barSeries->attachAxis(m_barAxisX);
-    m_barSeries->attachAxis(m_barAxisY);
-    m_barChart->legend()->setVisible(true);
+    m_revenueAreaSeries->attachAxis(m_barAxisX);
+    m_revenueAreaSeries->attachAxis(m_barAxisY);
+    m_revenueHoverScatter->attachAxis(m_barAxisX);
+    m_revenueHoverScatter->attachAxis(m_barAxisY);
+    invisibleScatter->attachAxis(m_barAxisX);
+    invisibleScatter->attachAxis(m_barAxisY);
+    
+    // Store invisibleScatter pointer so we can clear/append in refreshData
+    m_invisibleHoverScatter = invisibleScatter;
+
+    m_barChart->legend()->setVisible(false);
     m_barChart->legend()->setAlignment(Qt::AlignBottom);
+
+    connect(m_revenueLineSeries, &QLineSeries::hovered, this, &StatisticsPageWidget::onRevenueChartHovered);
 
     // Selected-period revenue donut chart.
     m_pieChart = new QChart();
@@ -284,13 +347,13 @@ void StatisticsPageWidget::setupFilterBar(QVBoxLayout* parentLayout) {
     m_searchEdit->setPlaceholderText("Find Invoice ID, Booking...");
     addSearchIcon(m_searchEdit);
     m_searchEdit->setStyleSheet("QLineEdit { " + commonInputStyle + " min-width: 200px; }"
-                                "QLineEdit:focus { border: 1px solid #005BFE; }");
+                                "QLineEdit:focus { border: 1px solid #3B58FF; }");
 
     // Amount filter.
     m_amountFilter = new QComboBox(this);
     m_amountFilter->addItems({ "All Price Ranges", "Below 1,000,000 VND", "1,000,000 VND - 5,000,000 VND", "Above 5,000,000 VND" });
     m_amountFilter->setStyleSheet("QComboBox { " + commonInputStyle + " }"
-                                  "QComboBox QAbstractItemView { background-color: #FFFFFF; color: #2B3674; selection-background-color: #005BFE; selection-color: #FFFFFF; border: 1px solid #E9EDF7; }");
+                                  "QComboBox QAbstractItemView { background-color: #FFFFFF; color: #2B3674; selection-background-color: #3B58FF; selection-color: #FFFFFF; border: 1px solid #E9EDF7; }");
 
     // Invoice issue-date filter.
     m_dateFrom = QDate::currentDate().addMonths(-1);
@@ -498,21 +561,31 @@ void StatisticsPageWidget::refreshData() {
         filteredServiceFee += serviceCharge;
     }
 
-    m_barSeries->clear();
+    m_revenueLineSeries->clear();
+    if (m_invisibleHoverScatter) m_invisibleHoverScatter->clear();
     m_barAxisX->clear();
-    QBarSet* revSet = new QBarSet("Revenue (VNĐ)");
-    revSet->setColor(QColor("#005BFE"));
+    
     QStringList months;
     double maxVal = 0;
+    QVector<double> targets(12);
     for (int i = 1; i <= 12; ++i) {
-        *revSet << monthlyRevenue[i];
+        m_revenueLineSeries->append(i - 1, monthlyRevenue[i]);
+        if (m_invisibleHoverScatter) m_invisibleHoverScatter->append(i - 1, monthlyRevenue[i]);
         months << QString("T%1").arg(i);
         if (monthlyRevenue[i] > maxVal) maxVal = monthlyRevenue[i];
     }
-    m_barSeries->append(revSet);
+    
     m_barAxisX->append(months);
     if (maxVal == 0) maxVal = 1000000;
     m_barAxisY->setRange(0, maxVal + (maxVal * 0.1));
+
+    m_revenueAreaSeries->setOpacity(0.0);
+    QPropertyAnimation* anim = new QPropertyAnimation(m_revenueAreaSeries, "opacity", this);
+    anim->setDuration(1200);
+    anim->setStartValue(0.0);
+    anim->setEndValue(1.0);
+    anim->setEasingCurve(QEasingCurve::InOutQuad);
+    anim->start(QAbstractAnimation::DeleteWhenStopped);
 
     m_pieSeries->clear();
     if (filteredRoomFee > 0 || filteredServiceFee > 0) {
@@ -588,5 +661,17 @@ void StatisticsPageWidget::onViewInvoiceClicked(const QString& invoiceId) {
             dialog.exec();
             return;
         }
+    }
+}
+
+void StatisticsPageWidget::onRevenueChartHovered(const QPointF &point, bool state) {
+    if (state) {
+        m_revenueHoverScatter->clear();
+        m_revenueHoverScatter->append(point);
+        QString text = formatMoney(point.y()) + " VNĐ";
+        QToolTip::showText(QCursor::pos(), text, this);
+    } else {
+        m_revenueHoverScatter->clear();
+        QToolTip::hideText();
     }
 }

@@ -65,12 +65,12 @@ void setupReservationDialogStyle(QDialog* dialog) {
             padding-right: 28px;
         }
         QLineEdit:focus, QComboBox:focus, QDateEdit:focus, QTimeEdit:focus, QSpinBox:focus {
-            border: 1px solid #005BFE;
+            border: 1px solid #3B58FF;
         }
         QComboBox QAbstractItemView {
             background-color: #FFFFFF;
             color: #2B3674;
-            selection-background-color: #005BFE;
+            selection-background-color: #3B58FF;
             selection-color: #FFFFFF;
             border: 1px solid #E9EDF7;
         }
@@ -81,7 +81,7 @@ void setupReservationDialogStyle(QDialog* dialog) {
         QCalendarWidget QAbstractItemView:enabled {
             color: #2B3674;
             background-color: #FFFFFF;
-            selection-background-color: #005BFE;
+            selection-background-color: #3B58FF;
             selection-color: #FFFFFF;
         }
         QCalendarWidget QAbstractItemView:disabled {
@@ -96,7 +96,7 @@ void setupReservationDialogStyle(QDialog* dialog) {
             color: #2B3674;
         }
         QPushButton#btnSave {
-            background-color: #005BFE;
+            background-color: #3B58FF;
             color: #FFFFFF;
             font-weight: 600;
             border-radius: 8px;
@@ -104,7 +104,7 @@ void setupReservationDialogStyle(QDialog* dialog) {
             font-size: 13px;
         }
         QPushButton#btnSave:hover {
-            background-color: #2B7BFF;
+            background-color: #4F6BFF;
         }
         QPushButton#btnCancel {
             background-color: #E9EDF7;
@@ -119,7 +119,7 @@ void setupReservationDialogStyle(QDialog* dialog) {
             background-color: #D3DDF4;
         }
         QPushButton#btnSchedule {
-            color: #005BFE;
+            color: #3B58FF;
             background-color: #EFF6FF;
             border: 1px solid #BFDBFE;
             border-radius: 8px;
@@ -213,7 +213,7 @@ void ReservationDialog::setupUI() {
     // Modified: Frameless reservation dialogs retain an in-surface title and explanation instead of relying on a harsh native title bar.
     auto* titleRow = new QHBoxLayout();
     auto* dialogIcon = new QLabel("▣", this);
-    dialogIcon->setStyleSheet("color:#005BFE; font-size:17px; background:transparent; border:none;");
+    dialogIcon->setStyleSheet("color:#3B58FF; font-size:17px; background:transparent; border:none;");
     auto* dialogTitle = new QLabel("Create reservation", this);
     dialogTitle->setObjectName("reservationDialogTitle");
     auto* dialogClose = new QPushButton(this);

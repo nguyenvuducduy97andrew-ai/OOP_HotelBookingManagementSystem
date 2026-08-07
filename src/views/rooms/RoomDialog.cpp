@@ -169,17 +169,21 @@ void setupDialogStyle(QDialog* dialog) {
             border: 1px solid #EF4444;
             color: #991B1B;
         }
+        QDateEdit QAbstractItemView {
+            selection-background-color: #3B58FF;
+            selection-color: #FFFFFF;
+        }
         QTextEdit {
-            selection-background-color: #005BFE;
+            selection-background-color: #3B58FF;
             selection-color: #FFFFFF;
         }
         QLineEdit:focus, QComboBox:focus, QDoubleSpinBox:focus, QSpinBox:focus, QDateEdit:focus, QTextEdit:focus {
-            border: 1px solid #005BFE;
+            border: 1px solid #3B58FF;
         }
         QComboBox QAbstractItemView {
             background-color: #FFFFFF;
             color: #2B3674;
-            selection-background-color: #005BFE;
+            selection-background-color: #3B58FF;
             selection-color: #FFFFFF;
             border: 1px solid #E9EDF7;
         }
@@ -190,7 +194,7 @@ void setupDialogStyle(QDialog* dialog) {
         QCalendarWidget QAbstractItemView:enabled {
             color: #2B3674;
             background-color: #FFFFFF;
-            selection-background-color: #005BFE;
+            selection-background-color: #3B58FF;
             selection-color: #FFFFFF;
         }
         QCalendarWidget QAbstractItemView:disabled {
@@ -232,7 +236,7 @@ void setupDialogStyle(QDialog* dialog) {
         }
         QPushButton#btnConfirmMaintenance:hover { background-color: #D1FAE5; }
         QPushButton#btnSave {
-            background-color: #005BFE;
+            background-color: #3B58FF;
             color: #FFFFFF;
             font-weight: 600;
             border-radius: 8px;
@@ -240,7 +244,7 @@ void setupDialogStyle(QDialog* dialog) {
             font-size: 13px;
         }
         QPushButton#btnSave:hover {
-            background-color: #2B7BFF;
+            background-color: #4F6BFF;
         }
         QPushButton#btnCancel {
             background-color: #E9EDF7;
@@ -255,7 +259,7 @@ void setupDialogStyle(QDialog* dialog) {
             background-color: #D3DDF4;
         }
         QPushButton#btnAddAmenity {
-            background-color: #005BFE;
+            background-color: #3B58FF;
             color: #FFFFFF;
             border-radius: 8px;
             padding: 6px 12px;
@@ -263,7 +267,7 @@ void setupDialogStyle(QDialog* dialog) {
             font-size: 13px;
         }
         QPushButton#btnAddAmenity:hover {
-            background-color: #2B7BFF;
+            background-color: #4F6BFF;
         }
         QLabel#roomDialogTitle {
             font-size: 20px;
@@ -292,8 +296,8 @@ void RoomDialog::setupUI() {
     auto* headerLayout = new QHBoxLayout(header);
     headerLayout->setContentsMargins(24, 0, 12, 0);
     // Modified: Use an unmistakable pencil icon when editing an existing room instead of reusing the room/add icon.
-    auto* roomDialogIcon = new QLabel(m_isEditMode ? "✎" : "⌂", header);
-    roomDialogIcon->setStyleSheet("color:#005BFE; font-size:18px; background:transparent; border:none;");
+    auto* roomDialogIcon = new QLabel(m_isEditMode ? "📝" : "⌂", header);
+    roomDialogIcon->setStyleSheet("color:#3B58FF; font-size:18px; background:transparent; border:none;");
     auto* roomDialogTitle = new QLabel(m_isEditMode ? "Edit room" : "Add a new room", header);
     roomDialogTitle->setObjectName("roomDialogTitle");
     auto* roomDialogClose = new QPushButton(header);
@@ -466,9 +470,9 @@ void RoomDialog::setupUI() {
     m_deleteAmenityBtn = new QPushButton("Delete", this);
     m_resetAmenityBtn = new QPushButton("Reset", this);
     
-    m_chooseAmenityBtn->setStyleSheet("QPushButton { background-color: #005BFE; color: white; border-radius: 8px; padding: 6px 12px; font-weight: bold; } QPushButton:hover { background-color: #004ecc; }");
+    m_chooseAmenityBtn->setStyleSheet("QPushButton { background-color: #3B58FF; color: white; border-radius: 8px; padding: 6px 12px; font-weight: bold; } QPushButton:hover { background-color: #4F6BFF; }");
     m_deleteAmenityBtn->setStyleSheet("QPushButton { background-color: #FEE2E2; color: #DC2626; border-radius: 8px; padding: 6px 12px; font-weight: bold; } QPushButton:hover { background-color: #FCA5A5; }");
-    m_resetAmenityBtn->setStyleSheet("QPushButton { background-color: #F1F5F9; color: #475569; border-radius: 8px; padding: 6px 12px; font-weight: bold; } QPushButton:hover { background-color: #E2E8F0; }");
+    m_resetAmenityBtn->setStyleSheet("QPushButton { background-color: #F8FAFC; color: #475569; border-radius: 12px; padding: 8px 16px; font-weight: bold; border: 2px solid transparent; } QPushButton:hover { background-color: #E2E8F0; }");
     
     // Modified: Amenities are direct toggles; a separate Choose action made selection ambiguous and added an unnecessary step.
     m_chooseAmenityBtn->setVisible(false);

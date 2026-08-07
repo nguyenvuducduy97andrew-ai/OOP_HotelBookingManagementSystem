@@ -22,8 +22,8 @@ public:
         // Modified: Replace the platform-dark title bar with an opaque in-app header; no translucent surface is used.
         setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint);
 
-        const QString confirmBtnColor = useSoftWarningTone ? "#D97706" : (isWarning ? "#EF4444" : "#005BFE");
-        const QString confirmBtnHover = useSoftWarningTone ? "#B45309" : (isWarning ? "#DC2626" : "#2B7BFF");
+        const QString confirmBtnColor = useSoftWarningTone ? "#D97706" : (isWarning ? "#EF4444" : "#3B58FF");
+        const QString confirmBtnHover = useSoftWarningTone ? "#B45309" : (isWarning ? "#DC2626" : "#4F6BFF");
         const QString accentBackground = useSoftWarningTone ? "#FFFBEB" : "#F4F7FE";
         const QString accentBorder = useSoftWarningTone ? "#FDE68A" : "#DCE6F5";
 
@@ -45,7 +45,7 @@ public:
                 background: transparent; color: #64748B; border: none; border-radius: 8px; font-size: 20px; font-weight: 400;
             }
             QPushButton#windowClose:hover { background: #F1F5F9; color: #1B3F83; }
-            QLabel#headerIcon { color: #005BFE; font-size: 16px; background: transparent; border: none; }
+            QLabel#headerIcon { color: #3B58FF; font-size: 16px; background: transparent; border: none; }
             QFrame#dialogBody { background: #FFFFFF; border: none; }
             }
             QFrame#noticePanel {
