@@ -60,6 +60,7 @@ private slots:
 private:
     void setupUI();
     void populateAmenities(const QStringList& amenities, bool checkAll);
+    void setFieldInvalid(QWidget* field, bool invalid);
 
     QLineEdit* m_roomNumberEdit;
     QDoubleSpinBox* m_basePriceSpin;

@@ -56,11 +56,11 @@ QPushButton#btnFilterAll:checked, QPushButton#btnFilterStandard:checked, QPushBu
 
 /* Search Bar */
 QLineEdit#txtSearchRoom {
-    background-color: #FFFFFF;
-    border: 1px solid #a8a8a8;
-    border-radius: 15px;
+    background-color: #F4F7FE;
+    border: 1px solid #E9EDF7;
+    border-radius: 10px;
     padding: 4px 15px;
-    color: #333333;
+    color: #2B3674;
 }
 QLineEdit#txtSearchRoom:focus {
     border: 1px solid #005BFE;

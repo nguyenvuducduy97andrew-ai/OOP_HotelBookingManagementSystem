@@ -161,6 +161,12 @@ void setupDialogStyle(QDialog* dialog) {
             font-size: 13px;
             color: #2B3674;
         }
+        QLineEdit[invalid="true"], QComboBox[invalid="true"], QDoubleSpinBox[invalid="true"],
+        QSpinBox[invalid="true"], QDateEdit[invalid="true"], QTextEdit[invalid="true"] {
+            background-color: #FEE2E2;
+            border: 1px solid #EF4444;
+            color: #991B1B;
+        }
         QTextEdit {
             selection-background-color: #005BFE;
             selection-color: #FFFFFF;
@@ -491,13 +497,29 @@ void RoomDialog::setupUI() {
 
     connect(m_typeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &RoomDialog::onTypeChanged);
     connect(m_availabilityCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &RoomDialog::onStatusChanged);
+    connect(m_roomNumberEdit, &QLineEdit::textEdited, this, [this]() { setFieldInvalid(m_roomNumberEdit, false); });
+    connect(m_basePriceSpin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this,
+            [this]() { setFieldInvalid(m_basePriceSpin, false); });
+    connect(m_availabilityCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+            [this]() {
+        setFieldInvalid(m_availabilityCombo, false);
+        setFieldInvalid(m_existingMaintenanceCombo, false);
+    });
     connect(m_maintenanceStartDateEdit, &QDateEdit::dateChanged, this, [this](const QDate& startDate) {
+        setFieldInvalid(m_maintenanceStartDateEdit, false);
+        setFieldInvalid(m_maintenanceEndDateEdit, false);
         // Modified: Keep the inclusive full-day Maintenance end date selectable from its start date onward.
         m_maintenanceEndDateEdit->setMinimumDate(startDate);
         if (m_maintenanceEndDateEdit->date() < startDate) {
             m_maintenanceEndDateEdit->setDate(startDate);
         }
     });
+    connect(m_maintenanceEndDateEdit, &QDateEdit::dateChanged, this, [this]() {
+        setFieldInvalid(m_maintenanceStartDateEdit, false);
+        setFieldInvalid(m_maintenanceEndDateEdit, false);
+    });
+    connect(m_existingMaintenanceCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+            [this]() { setFieldInvalid(m_existingMaintenanceCombo, false); });
     connect(m_cancelMaintenanceBtn, &QPushButton::clicked, this, &RoomDialog::markSelectedMaintenanceForCancellation);
     connect(m_confirmMaintenanceBtn, &QPushButton::clicked, this, &RoomDialog::markSelectedMaintenanceForConfirmation);
     connect(m_addAmenityBtn, &QPushButton::clicked, this, &RoomDialog::onAddCustomAmenity);
@@ -563,24 +585,50 @@ void RoomDialog::onTypeChanged(int index) {
 }
 
 void RoomDialog::onAccept() {
+    setFieldInvalid(m_roomNumberEdit, false);
+    setFieldInvalid(m_basePriceSpin, false);
+    setFieldInvalid(m_availabilityCombo, false);
+    setFieldInvalid(m_maintenanceStartDateEdit, false);
+    setFieldInvalid(m_maintenanceEndDateEdit, false);
+    setFieldInvalid(m_existingMaintenanceCombo, false);
+
     if (m_roomNumberEdit->text().trimmed().isEmpty()) {
+        setFieldInvalid(m_roomNumberEdit, true);
+        m_roomNumberEdit->setFocus();
         QMessageBox::warning(this, "Missing information", "Please enter the room number.");
         return;
     }
     if (m_basePriceSpin->value() <= 0) {
+        setFieldInvalid(m_basePriceSpin, true);
+        m_basePriceSpin->setFocus();
         QMessageBox::warning(this, "Invalid value", "Please enter a room price greater than 0.");
         return;
     }
     if (shouldScheduleMaintenance() && m_maintenanceEndDateEdit->date() < m_maintenanceStartDateEdit->date()) {
         // Modified: Permit a one-day Maintenance case while preserving the selected end day as fully unavailable.
+        setFieldInvalid(m_maintenanceStartDateEdit, true);
+        setFieldInvalid(m_maintenanceEndDateEdit, true);
+        m_maintenanceEndDateEdit->setFocus();
         QMessageBox::warning(this, "Invalid maintenance dates", "Maintenance cannot end before its start date.");
         return;
     }
     if ((!m_maintenanceIdToCancel.isEmpty() || !m_maintenanceIdToConfirm.isEmpty()) && shouldScheduleMaintenance()) {
+        setFieldInvalid(m_availabilityCombo, true);
+        setFieldInvalid(m_existingMaintenanceCombo, true);
+        m_availabilityCombo->setFocus();
         QMessageBox::warning(this, "Complete one maintenance action", "Save the schedule cancellation first, then create a new maintenance schedule.");
         return;
     }
     accept();
+}
+
+void RoomDialog::setFieldInvalid(QWidget* field, bool invalid) {
+    if (!field) {
+        return;
+    }
+    field->setProperty("invalid", invalid);
+    field->style()->unpolish(field);
+    field->style()->polish(field);
 }
 
 QString RoomDialog::getRoomNumber() const {

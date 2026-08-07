@@ -413,7 +413,7 @@ void DashboardWidget::populateData()
                            "Currently occupied " + QString::number(occupiedRooms) + "/" + QString::number(totalRooms) + " rooms", true);
     // Modified: Label dashboard arrival KPIs as actual arrivals so staff do not confuse them with planned reservations.
     ui->statCard3->setData("This month's arrivals", QString::number(bookingsThisMonth),
-                           "Actual check-ins for " + QString::number(statsToday.month()), true);
+                           "Actual check-ins for " + QString::number(statsToday.month()), true); 
     ui->statCard4->setData("This year's arrivals", QString::number(bookingsThisYear),
                            "Actual check-ins for " + QString::number(statsToday.year()), true);
     ui->miniCard1->setData("📅", QColor("#E8F0FF"), "Today's upcoming check-ins", QString::number(upcomingCount));
