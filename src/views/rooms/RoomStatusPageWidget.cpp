@@ -19,7 +19,7 @@
 #include <QScrollArea>
 #include <QSignalBlocker>
 #include <QTimer>
-#include <QVBoxLayout>
+#include <QHBoxLayout>
 #include <algorithm>
 #include <unordered_map>
 #include <unordered_set>
@@ -69,8 +69,8 @@ RoomStatusPageWidget::RoomStatusPageWidget(HotelManager* manager, QWidget *paren
     const QDateTime now = QDateTime::currentDateTime();
     m_selectedCheckIn = QDateTime(now.date(), QTime(now.time().hour(), 0)).addSecs(60 * 60);
     m_selectedCheckOut = m_selectedCheckIn.addSecs(60 * 60);
-    ui->dateEditCheckIn->setDate(m_selectedCheckIn.date());
-    ui->dateEditCheckOut->setDate(m_selectedCheckOut.date());
+    ui->dateEditCheckIn->setText(m_selectedCheckIn.date().toString("dd/MM/yyyy"));
+    ui->dateEditCheckOut->setText(m_selectedCheckOut.date().toString("dd/MM/yyyy"));
 
     auto* filterLayout = qobject_cast<QGridLayout*>(ui->frameFilterPanel->layout());
     if (filterLayout) {
@@ -128,7 +128,7 @@ RoomStatusPageWidget::RoomStatusPageWidget(HotelManager* manager, QWidget *paren
     connect(ui->dateEditCheckOut, &QPushButton::clicked, this, [this]() {
         openSchedulePicker(true);
     });
-
+    }
 
 
     connect(ui->btnAddAdult, &QPushButton::clicked, this, [this]() {
@@ -531,20 +531,21 @@ void RoomStatusPageWidget::rebuildFloorSections()
         auto* section = new QFrame(ui->scrollAreaWidgetContents);
         section->setObjectName("floorSection");
         section->setStyleSheet(
-            "QFrame#floorSection { background:transparent; border:none; }"
-            "QLabel#floorLabel { color:#64748B; font-size:16px; font-weight:600; padding:0px; }");
-        auto* sectionLayout = new QVBoxLayout(section);
-        sectionLayout->setContentsMargins(0, 0, 0, 20);
-        sectionLayout->setSpacing(8);
+            "QFrame#floorSection { background: #FFFFFF; border:1px solid #E2E8F0; border-radius:14px; }"
+            "QLabel#floorLabel { color: #1D4ED8; background: #EFF6FF; border:1px solid #BFDBFE; "
+            "border-radius:10px; font-size:16px; font-weight:800; padding:12px 8px; }");
+        auto* sectionLayout = new QHBoxLayout(section);
+        sectionLayout->setContentsMargins(12, 12, 12, 12);
+        sectionLayout->setSpacing(14);
 
         auto* floorLabel = new QLabel(
             floorIt.key() > 0 ? QString("Floor %1").arg(floorIt.key()) : QString("Other"), section);
         floorLabel->setObjectName("floorLabel");
-        floorLabel->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+        floorLabel->setAlignment(Qt::AlignLeft | Qt::AlignTop);
         floorLabel->setFixedWidth(86);
-        floorLabel->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding);
+        floorLabel->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Preferred);
 
-        sectionLayout->addWidget(floorLabel);
+        sectionLayout->addWidget(floorLabel, 0, Qt::AlignTop);
 
         auto* roomsWidget = new QWidget(section);
         auto* roomsLayout = new QGridLayout(roomsWidget);
