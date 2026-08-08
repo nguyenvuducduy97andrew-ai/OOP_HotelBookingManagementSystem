@@ -19,8 +19,8 @@ public:
         setStyleSheet(R"(
             QDialog {
                 background-color: #FFFFFF;
-                border: 2px solid #93C5FD;
-                border-radius: 18px;
+                border: 1px solid #CBD5E1;
+                border-radius: 16px;
             }
             QLabel#titleLabel {
                 font-size: 18px;

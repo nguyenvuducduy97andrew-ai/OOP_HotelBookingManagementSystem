@@ -8,17 +8,17 @@ A C++17 / Qt6 desktop application for hotel rooms, customers, reservations, chec
 
 ## Current capabilities
 
-- Support 3 types of polymorphoric room types: `StandardRoom`, `DeluxeRoom`, and `SuiteRoom`.
+- Support 3 types of polymorphic room types: `StandardRoom`, `DeluxeRoom`, and `SuiteRoom`.
 - Customer management with archive/delete workflows, searchable/filterable/sortable lists, country-aware ID and phone validation and a selected-customer booking-history panel.
 - Reservation customer picker searches active guests by document number, name, or phone, then reuses their stored identity key saving time re-registering them.
 - Reservation creation from Reservation Page, upcoming-reservation editing, active-stay extension, cancellation, checkout, and invoice generation.
 - Room selection uses a review-first flow: a Room Status card opens `RoomInfoDialog`, and only its explicit **Booking** action opens `ReservationDialog` with the room and selected schedule prefilled.
 - Standard, Deluxe, and Suite room reviews use a shared image carousel: one centered photo, softly faded adjacent previews, previous/next controls, and an image-position label. The same gallery is used by Room Management and the booking review step.
-- Adult/child counts is limited for each room (editable) and booking is rejected if it exceeds the selected room's capacity.
+- Adult/child count is limited for each room (editable) and booking is rejected if it exceeds the selected room's capacity.
 - Confirmed booking rate and tax snapshots: checkout invoices are validated against the booked price, tax, and actual stay duration.
 - Dated room maintenance workflows: conflict-free intervals are confirmed immediately; conflicting intervals become an internal guest-contact case until their bookings are resolved.
 - Shared timestamp availability rules for Reservation and Room Status, including booking intervals, the two-hour turnover buffer, Cleaning, soft holds, archived rooms, permanent room availability, and Maintenance periods.
-- Room Status distinguishes a `Available` room from `Awaiting check-in` (an arrival due today or overdue but not yet checked in), `Occupied`, and `Maintenance`.
+- Room Status distinguishes an `Available` room from `Awaiting check-in` (an arrival due today or overdue but not yet checked in), `Occupied`, and `Maintenance`.
 - Dashboard Booking History for completed stays in the selected period, with seven entries per page.
 - Statistical page for visualizing monthly invoice revenue, today's revenue composition, booking distribution by weekday, and booked room types, with a searchable and filterable invoice list and invoice-detail action.
 - Report PDF export with measured, whole-section pagination, planned/actual timestamps, invoice-based hourly KPIs, saleable room-hour occupancy, room inventory, actual-arrival top rooms, completed stays, and a dedicated reason column for cancellations.
@@ -26,9 +26,9 @@ A C++17 / Qt6 desktop application for hotel rooms, customers, reservations, chec
 
 ## Sign-in and staff context
 
-The application loads the local database first, then requires sign-in before creating `MainWindow`.This prevents the old login flow from creating a second, unconfigured `MainWindow` and provides the actor context required by the forthcoming audit log.
+The application loads the local database first, then requires sign-in before creating `MainWindow`. This prevents the old login flow from creating a second, unconfigured `MainWindow` and provides the actor context required by the forthcoming audit log.
 
-The current project only has on default account. Its password is verified as a SHA-256 digest rather than stored as plaintext, but this is not a production credential system: no database-backed staff records, password reset, lockout policy, or role authorization.
+The current project only has one default account. Its password is verified as a SHA-256 digest rather than stored as plaintext, but this is not a production credential system: no database-backed staff records, password reset, lockout policy, or role authorization.
 
 ## Booking workflow
 
@@ -42,7 +42,7 @@ Room Reservation/Room Status
                                 └── create booking and commit SQLite changes
 ```
 
-The Rerservation page is the only entry point for creating a reservation. Clicking a candidate room first opens a read-only room review. Closing that dialog has no booking effect; only **Booking** advances to Reservation. The reservation dialog validates the final customer, timestamp range, capacity, and availability before creation, so neither the card selection nor room review bypasses business rules.
+The Reservation page is the only entry point for creating a reservation. Clicking a candidate room first opens a read-only room review. Closing that dialog has no booking effect; only **Booking** advances to Reservation. The reservation dialog validates the final customer, timestamp range, capacity, and availability before creation, so neither the card selection nor room review bypasses business rules.
 
 After a successful reservation mutation, `bookingChanged` refreshes Room Status and Dashboard. A cancelled booking initiated from the Room Status flow returns the user to Room Status.
 

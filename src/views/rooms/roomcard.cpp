@@ -20,12 +20,22 @@ std::string RoomCard::getStatus() const {
 }
 
 void RoomCard::mousePressEvent(QMouseEvent* event) {
-    this->move(this->x() + 2, this->y() + 2);
+    if (event->button() == Qt::LeftButton) {
+        event->accept();
+    } else {
+        QWidget::mousePressEvent(event);
+    }
 }
 
 void RoomCard::mouseReleaseEvent(QMouseEvent* event) {
-    this->move(this->x() - 2, this->y() - 2);
-    emit cardClicked();
+    if (event->button() == Qt::LeftButton) {
+        if (rect().contains(event->position().toPoint())) {
+            emit cardClicked();
+        }
+        event->accept();
+    } else {
+        QWidget::mouseReleaseEvent(event);
+    }
 }
 
 

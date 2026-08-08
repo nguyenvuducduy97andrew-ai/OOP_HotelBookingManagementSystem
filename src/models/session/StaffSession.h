@@ -16,6 +16,11 @@ public:
     const std::string& displayName() const;
     const std::string& role() const;
 
+    StaffSession(const StaffSession&) = delete;
+    StaffSession& operator=(const StaffSession&) = delete;
+    StaffSession(StaffSession&&) = delete;
+    StaffSession& operator=(StaffSession&&) = delete;
+
 private:
     StaffSession() = default;
 

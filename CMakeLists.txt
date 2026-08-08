@@ -33,7 +33,6 @@ file(GLOB_RECURSE DATABASE_SOURCES CONFIGURE_DEPENDS
 file(GLOB_RECURSE VIEW_SOURCES CONFIGURE_DEPENDS
     "src/views/*.cpp" "src/views/*.h" "src/views/*.ui"
 )
-list(FILTER VIEW_SOURCES EXCLUDE REGEX ".*/views/legacy/.*")
 
 set(MODEL_INCLUDE_DIRS
     src/models
@@ -97,8 +96,6 @@ target_include_directories(HotelBookingManagement PRIVATE ${VIEW_INCLUDE_DIRS})
 target_precompile_headers(HotelBookingManagement PRIVATE src/pch/widgets_pch.h)
 
 target_link_libraries(HotelBookingManagement PRIVATE
-    models_lib
-    controllers_lib
     database_lib
     Qt6::Widgets
     Qt6::Charts

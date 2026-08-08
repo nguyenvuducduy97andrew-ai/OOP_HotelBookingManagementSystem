@@ -18,12 +18,12 @@ public:
 
         setStyleSheet(R"(
             QDialog {
-                background-color: #EFF6FF;
-                border: 2px solid #93C5FD;
-                border-radius: 18px;
+                background-color: #FFFFFF;
+                border: 1px solid #CBD5E1;
+                border-radius: 16px;
             }
-            QFrame#successHeader { background:#FFFFFF; border:none; border-bottom:1px solid #E7EDF7; border-top-left-radius:13px; border-top-right-radius:13px; }
-            QFrame#successBody { background:#FFFFFF; border:none; }
+            QFrame#successHeader { background:#FFFFFF; border:none; border-bottom:1px solid #E7EDF7; border-top-left-radius:15px; border-top-right-radius:15px; }
+            QFrame#successBody { background:#FFFFFF; border:none; border-bottom-left-radius:15px; border-bottom-right-radius:15px; }
             QLabel#successWindowTitle { color:#1B3F83; font-size:13px; font-weight:800; background:transparent; border:none; }
             QLabel#successHeaderIcon { color: #059669; font-size:16px; background:transparent; border:none; }
             QPushButton#successWindowClose { background:transparent; color:#64748B; border:none; border-radius:8px; font-size:20px; }
@@ -56,8 +56,7 @@ public:
         )");
 
         auto* layout = new QVBoxLayout(this);
-        // Modified: Keep the success dialog's white content inside a consistent pale-blue outer shell.
-        layout->setContentsMargins(3, 3, 3, 3);
+        layout->setContentsMargins(0, 0, 0, 0);
         layout->setSpacing(0);
         auto* header = new QFrame(this);
         header->setObjectName("successHeader");
