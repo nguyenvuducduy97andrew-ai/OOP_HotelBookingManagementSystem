@@ -4,8 +4,7 @@ HOTEL BOOKING MANAGEMENT SYSTEM - ENGINEERING GUIDE
 1. PURPOSE
 ----------
 
-This guide describes how to extend and maintain the application after the 2026
-controller refactor. It is the implementation-oriented companion to README.md,
+This guide describes how to extend and maintain the application. It is the implementation-oriented companion to README.md,
 ARCHITECTURE.md, and DATABASE_GUIDE.md.
 
 The application is a Qt 6 desktop system using C++17 and SQLite. It manages
@@ -20,8 +19,7 @@ slots; actual check-in and checkout timestamps use seconds; invoices round actua
 duration half-up to billable hours with a one-hour minimum. A completed checkout
 creates a two-hour Cleaning block. Confirmed Maintenance and Cleaning reduce
 saleable report capacity, while an awaiting Maintenance case is a soft scheduling
-hold only. Do not reintroduce nightly calculations or a separate no-show state:
-a missed arrival is a cancelled booking with an explanatory reason.
+hold only. A missed arrival is a cancelled booking with an explanatory reason.
 
 
 2. PROJECT MAP
@@ -74,8 +72,7 @@ There are no controller service directories or forwarding service classes.
    mutations through DataManager.
 7. The final snapshot is saved when the event loop exits.
 
-Do not construct a second HotelManager for a page, dialog, or shortcut. It would
-create a second object graph and break the single canonical state assumption.
+Do not construct a second HotelManager for a page, dialog, or shortcut.
 
 
 4. CONTROLLER ARCHITECTURE
@@ -119,7 +116,7 @@ HotelManager is both:
 - the coordinator for workflows spanning multiple domains.
 
 Forward directly for a single-domain operation. Coordinate in HotelManager when
-a decision needs data from two or more managers. Never reintroduce private Core
+a decision needs data from two or more managers. Never introduce private Core
 callbacks, service friends, temporary Manager(*this) objects, or manager accessors
 for views.
 
@@ -294,7 +291,6 @@ behavior synchronized whenever persistence changes.
 
 Every operational view stores or receives HotelManager, never a domain manager.
 Do not include RoomManager.h, CustomerManager.h, or BookingManager.h from views.
-Do not expose hotelManager.roomManager()-style mutable accessors.
 
 StatisticsPageWidget is read-only. It obtains invoice and booking collections from
 HotelManager, constructs chart series and invoice filters locally, and opens
@@ -388,7 +384,7 @@ does not alter a hovered non-monetary input.
 11. PROHIBITED REGRESSIONS
 --------------------------
 
-Do not reintroduce:
+Do not introduce:
 - Service forwarding classes around managers;
 - Manager -> HotelManager callbacks;
 - friend access used for controller mutation;

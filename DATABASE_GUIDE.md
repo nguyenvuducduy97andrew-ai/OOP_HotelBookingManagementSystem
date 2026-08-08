@@ -328,15 +328,3 @@ Backup này chỉ là safety net cho reconciliation, không phải cơ chế bac
 ## 12. Tóm tắt
 
 `hotel_data.db` là SQLite project-local được staged-load qua facade `HotelManager` vào các collection do `CustomerManager`, `RoomManager` và `BookingManager` sở hữu, rồi lưu lại bằng transaction upsert. Trước khi publish bằng move-assignment, loader xác minh canonical pointer identity cho Booking → Customer/Room và Invoice → Booking. Primary/foreign keys liên kết guest, room, booking, maintenance notice và invoice. `DataVersion` là token chống stale write overwrite, không phải audit log. Thiết kế hiện tại hợp lý cho đồ án hoặc dữ liệu nhỏ; để scale thực tế cần dirty tracking, payment ledger, migration versioning, security và server backend.
-
-## 13. Kiểm thử database và persistence
-
-CTest `HotelBookingManagementBusinessTests` tạo một file SQLite legacy trong thư mục tạm, load file đó qua `DataManager`, rồi kiểm tra Customer legacy vẫn tồn tại và các cột identity hiện hành đã được migrate. Test không dùng, không copy và không sửa `data/hotel_data.db` của project.
-
-Các workflow test khác dùng domain managers in-memory. Vì vậy test database migration chỉ kiểm migration/load tối thiểu; các case tiếp theo nên bổ sung khi schema thay đổi: foreign-key integrity, stale `DataVersion`, rollback khi upsert lỗi, và explicit duplicate reconciliation. Chạy bằng:
-
-```text
-cmake -S . -B build -DBUILD_TESTING=ON
-cmake --build build --target HotelBookingManagementBusinessTests
-ctest --test-dir build --output-on-failure
-```

@@ -212,12 +212,6 @@ Small application icons stay in `src/resources/resources.qrc` and use normal `AU
 
 The resource policy is build-tool independent: MinGW Makefiles, Ninja, MSVC, and IDE-driven CMake builds receive the same target definition. CMake 3.17 is the project minimum because Qt big-resource object generation is reliable from that version. Generator choice, parallel job count, compiler cache, and build-directory placement are optional local accelerators rather than correctness requirements.
 
-## Automated business verification
-
-`tests/BusinessWorkflowTests.cpp` is a headless executable, intentionally outside the view layer. It links only the model, Hotel/Booking/Customer/Room managers, and `DataManager` with Qt Core/SQL. CTest launches it with the configured Qt and compiler runtime paths on Windows.
-
-The suite protects the cross-domain contracts most likely to regress: timestamp availability, the two-hour turnover buffer, Cleaning release, full-day Maintenance semantics, explicit lifecycle transitions, hourly rounding, room-change/self-exclusion behavior, customer reuse/new-customer rollback, quote immutability, and SQLite migration of a legacy Customer table. Add a test here whenever a domain rule is changed; visual layout and user-journey checks remain manual UI verification.
-
 
 ## Dependency rules
 
@@ -236,8 +230,6 @@ The suite protects the cross-domain contracts most likely to regress: timestamp 
 ## Design patterns
 
 - **Facade:** `HotelManager` is the single application-facing controller boundary.
-- **Composition:** `HotelManager` owns persistent domain managers by value.
 - **Factory:** `RoomFactory` creates concrete room subtypes.
 - **Singleton:** `DataManager` and `StaffSession` provide process-level contexts.
-- **Staged publication:** DataManager constructs and validates a full aggregate before move-assignment.
-- **Immutable snapshot:** invoices preserve historical billing inputs independently of later customer or room edits.
+
