@@ -322,6 +322,11 @@ decodes close to the requested size, QPixmapCache reuses composed display crops,
 a render signature avoids identical work, and a short resize debounce prevents
 continuous rescaling while a window is moving.
 
+The Dashboard mini reservations panel is also view-only. Keep the Guest column
+compact enough to fit the currently visible name, let the time/status columns
+remain readable, and allow horizontal scrolling for long action sets instead of
+hard-clipping buttons.
+
 Room photos live under src/resources/room_images/<type>/. CMake sorts and embeds
 them with qt_add_resources(... BIG_RESOURCES ... OPTIONS -no-compress). Keep the
 small operational icons in resources.qrc. Do not move full-size JPEG galleries

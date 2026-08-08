@@ -39,6 +39,7 @@ private:
     HotelManager* m_manager;
     QString m_searchQuery;
     QString m_selectedTypeFilter; // "All", "Standard", "Deluxe", "Suite"
+    QString m_selectedRoomNumber;
     std::unordered_set<std::string> m_occupiedRoomNumbers;
 
     QLineEdit* m_searchEdit;

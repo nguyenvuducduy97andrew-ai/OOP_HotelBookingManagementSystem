@@ -268,6 +268,10 @@ occupancy concepts:
 Do not read these as the same KPI. A property can be busy right now while period
 occupancy is low, or quiet right now after a busy month.
 
+The mini reservations panel on Dashboard keeps Guest compact so the time columns
+remain readable. If a row has several action buttons, the table can scroll
+horizontally to reveal the rest of the actions.
+
 Revenue, ADR and RevPAR are invoice-based, not confirmed cash collection.
 Booking History contains completed stays whose actual checkout is inside selected
 range. It displays up to seven entries per page; use page buttons for more.

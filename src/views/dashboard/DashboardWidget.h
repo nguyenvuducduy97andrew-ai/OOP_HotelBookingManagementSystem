@@ -7,6 +7,7 @@
 #include <QColor>
 #include <QTimer>
 #include <QTextBrowser>
+#include <QPointF>
 
 class QUrl;
 class QLabel;
@@ -69,4 +70,6 @@ private:
     QTableWidget *m_reservationTable = nullptr;
     int m_selectedMiniCard = 0;
     int m_historyPage = 0;
+    QPointF m_lastChartHoverPoint;
+    bool m_isChartHoverActive = false;
 };

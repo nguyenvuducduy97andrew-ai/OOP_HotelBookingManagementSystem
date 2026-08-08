@@ -285,6 +285,10 @@ Dashboard có selected period: Today, week, month, year. Có hai KPI khác nhau:
 Không diễn giải hai KPI như nhau. Một khách sạn có thể đầy hiện tại nhưng period
 occupancy thấp, hoặc ngược lại.
 
+Bảng mini reservations trong Dashboard giữ cột Guest gọn hơn để các cột thời gian
+ở phía sau dễ đọc hơn. Khi phần Actions quá dài, bảng có thể kéo ngang để hiện
+thêm các nút còn lại.
+
 Revenue, ADR, RevPAR là invoice-based, không phải tiền đã thu. Booking History
 chỉ có completed stay whose actual checkout nằm trong selected range. Có tối đa
 7 stay/page; dùng page button để xem trang sau. Nếu thiếu stay, kiểm tra actual

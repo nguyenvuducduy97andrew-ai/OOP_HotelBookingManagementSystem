@@ -22,6 +22,7 @@ A C++17 / Qt6 desktop application for hotel rooms, customers, reservations, chec
 - Shared timestamp availability rules for Reservation and Room Status, including booking intervals, the two-hour turnover buffer, Cleaning, soft holds, archived rooms, permanent room availability, and Maintenance periods.
 - Room Status distinguishes a sellable `Available` room from `Awaiting check-in` (an arrival due today or overdue but not yet checked in), `Occupied`, and `Maintenance`.
 - Dashboard Booking History for completed stays in the selected period, with seven entries per page.
+- The Dashboard mini reservations panel keeps the Guest column compact so the planned check-in, planned check-out, Status, and Actions columns remain readable; the table scrolls horizontally when an action set does not fit.
 - A dedicated Statistics page for visualizing monthly invoice revenue, today's revenue composition, booking distribution by weekday, and booked room types, with a searchable and filterable invoice list and invoice-detail action.
 - A4 landscape PDF export with measured, whole-section pagination, planned/actual timestamps, invoice-based hourly KPIs, saleable room-hour occupancy, room inventory, actual-arrival top rooms, completed stays, and a dedicated reason column for cancellations.
 - SQLite schema migration, immutable invoice snapshots, staged loading, explicit administrator-only duplicate reconciliation, and transactional upsert persistence.

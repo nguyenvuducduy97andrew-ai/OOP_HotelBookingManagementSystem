@@ -141,7 +141,10 @@ DashboardWidget::DashboardWidget(HotelManager *manager, QWidget *parent)
     m_reservationTable->verticalHeader()->hide();
     m_reservationTable->verticalHeader()->setDefaultSectionSize(44);
     m_reservationTable->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
-    m_reservationTable->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
+    m_reservationTable->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Interactive);
+    m_reservationTable->horizontalHeader()->setSectionResizeMode(6, QHeaderView::Fixed);
+    m_reservationTable->setColumnWidth(6, 180);
+    m_reservationTable->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     m_reservationTable->setMaximumHeight(250);
     m_reservationTable->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
     reservationLayout->addWidget(m_reservationPanelTitle);
@@ -225,6 +228,8 @@ void DashboardWidget::refreshMiniCardReservations()
     }
     const QDate today = QDate::currentDate();
     int row = 0;
+    int guestColumnWidth = m_reservationTable->horizontalHeader()->fontMetrics().horizontalAdvance("Guest") + 28;
+    int actionsColumnWidth = m_reservationTable->horizontalHeader()->fontMetrics().horizontalAdvance("Actions") + 28;
 
     for (const auto& booking : m_manager->getBookings()) {
         if (!booking || booking->isDeleted()) continue;
@@ -243,13 +248,16 @@ void DashboardWidget::refreshMiniCardReservations()
 
         const auto customer = booking->getCustomer();
         const auto room = booking->getRoom();
+        const QString guestName = customer ? QString::fromStdString(customer->getName()) : QStringLiteral("Unavailable guest");
+        guestColumnWidth = qMax(guestColumnWidth,
+                    m_reservationTable->horizontalHeader()->fontMetrics().horizontalAdvance(guestName) + 28);
         QString status;
         if (state == BookingState::UPCOMING) status = "Upcoming";
         else if (state == BookingState::ACTIVE) status = "Active";
         else status = "Cancelled";
         m_reservationTable->insertRow(row);
         m_reservationTable->setItem(row, 0, new QTableWidgetItem(QString::fromStdString(booking->getBookingId())));
-        m_reservationTable->setItem(row, 1, new QTableWidgetItem(customer ? QString::fromStdString(customer->getName()) : "Unavailable guest"));
+        m_reservationTable->setItem(row, 1, new QTableWidgetItem(guestName));
         m_reservationTable->setItem(row, 2, new QTableWidgetItem(room ? QString::fromStdString(room->getRoomNumber()) : "—"));
         m_reservationTable->setItem(row, 3, new QTableWidgetItem(plannedIn.isValid() ? plannedIn.toString("dd MMM yyyy, HH:mm") : "—"));
         m_reservationTable->setItem(row, 4, new QTableWidgetItem(plannedOut.isValid() ? plannedOut.toString("dd MMM yyyy, HH:mm") : "—"));
@@ -258,6 +266,7 @@ void DashboardWidget::refreshMiniCardReservations()
         auto *actions = new QWidget(m_reservationTable);
         actions->setStyleSheet("background:transparent;");
         auto *actionLayout = new QHBoxLayout(actions);
+        actionLayout->setSizeConstraint(QLayout::SetMinimumSize);
         actionLayout->setContentsMargins(4, 2, 4, 2);
         actionLayout->setSpacing(6);
         const auto addAction = [this, actions, actionLayout, booking](const QString& text,
@@ -287,11 +296,17 @@ void DashboardWidget::refreshMiniCardReservations()
             actionLayout->addWidget(none);
         }
         actionLayout->addStretch();
+        actions->setMinimumWidth(actions->sizeHint().width() + 10);
+        actionsColumnWidth = qMax(actionsColumnWidth, actions->minimumWidth());
         m_reservationTable->setCellWidget(row, 6, actions);
         ++row;
     }
 
     m_reservationPanelSubtitle->setText(QString("%1 reservation%2").arg(row).arg(row == 1 ? "" : "s"));
+    if (m_reservationTable->columnCount() > 1) {
+        m_reservationTable->setColumnWidth(1, guestColumnWidth);
+        m_reservationTable->setColumnWidth(6, qMax(actionsColumnWidth, 180));
+    }
     if (row == 0) {
         m_reservationTable->setRowCount(1);
         auto *empty = new QTableWidgetItem("No matching reservations.");
@@ -1591,13 +1606,34 @@ DashboardWidget::~DashboardWidget()
 
 void DashboardWidget::onTrendChartHovered(const QPointF &point, bool state)
 {
-    if (state) {
-        m_hoverScatter->clear();
-        m_hoverScatter->append(point);
-        QString text = QString("%1 Bookings").arg(qRound(point.y()));
-        QToolTip::showText(QCursor::pos(), text, this);
-    } else {
-        m_hoverScatter->clear();
-        QToolTip::hideText();
+    if (!m_hoverScatter) {
+        return;
     }
+
+    if (!state) {
+        if (m_isChartHoverActive) {
+            m_hoverScatter->clear();
+            m_isChartHoverActive = false;
+            m_lastChartHoverPoint = QPointF();
+            QToolTip::hideText();
+        }
+        return;
+    }
+
+    if (!qIsFinite(point.x()) || !qIsFinite(point.y())) {
+        return;
+    }
+
+    const QPointF normalizedPoint(point.x(), qMax(0.0, point.y()));
+    if (m_isChartHoverActive && m_lastChartHoverPoint == normalizedPoint) {
+        return;
+    }
+
+    m_hoverScatter->clear();
+    m_hoverScatter->append(normalizedPoint);
+    m_lastChartHoverPoint = normalizedPoint;
+    m_isChartHoverActive = true;
+
+    const QString text = QString("%1 Bookings").arg(qRound(normalizedPoint.y()));
+    QToolTip::showText(QCursor::pos(), text, this);
 }

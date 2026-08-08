@@ -530,6 +530,10 @@ QWidget* RoomPageWidget::createRoomCard(const std::shared_ptr<Room>& room) {
 }
 
 void RoomPageWidget::refreshData() {
+    const QString previousSelection = m_roomListWidget->currentItem()
+        ? m_roomListWidget->currentItem()->data(Qt::UserRole).toString()
+        : m_selectedRoomNumber;
+
     m_roomListWidget->clear();
     if (!m_manager) return;
 
@@ -560,7 +564,22 @@ void RoomPageWidget::refreshData() {
     }
 
     if (m_roomListWidget->count() > 0) {
-        m_roomListWidget->setCurrentRow(0);
+        bool restoredSelection = false;
+        for (int index = 0; index < m_roomListWidget->count(); ++index) {
+            QListWidgetItem* item = m_roomListWidget->item(index);
+            if (!item) {
+                continue;
+            }
+            if (item->data(Qt::UserRole).toString() == previousSelection) {
+                m_roomListWidget->setCurrentRow(index);
+                restoredSelection = true;
+                break;
+            }
+        }
+
+        if (!restoredSelection) {
+            m_roomListWidget->setCurrentRow(0);
+        }
     } else {
         updateDetailPanel(nullptr);
     }
@@ -569,11 +588,13 @@ void RoomPageWidget::refreshData() {
 void RoomPageWidget::onRoomSelectionChanged() {
     auto* item = m_roomListWidget->currentItem();
     if (!item) {
+        m_selectedRoomNumber.clear();
         updateDetailPanel(nullptr);
         return;
     }
 
-    std::string roomNum = item->data(Qt::UserRole).toString().toStdString();
+    m_selectedRoomNumber = item->data(Qt::UserRole).toString();
+    std::string roomNum = m_selectedRoomNumber.toStdString();
     auto room = m_manager->findRoomByNumber(roomNum);
     updateDetailPanel(room);
 }

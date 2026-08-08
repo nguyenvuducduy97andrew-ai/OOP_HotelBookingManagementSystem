@@ -202,6 +202,8 @@ RoomStatusPageWidget -> RoomInfoDialog -> bookingRequested -> MainWindow -> Rese
 
 `RoomImageCarousel` is a shared view component used by both `RoomInfoDialog` and the persistent Room Management detail panel. The component receives a room-type gallery name rather than a model or manager reference. Standard, Deluxe, and Suite therefore share navigation, faded adjacent previews, cropping, and counters without duplicating UI logic. A gallery switch loads only the selected type. `QImageReader` decodes near the final widget size, `QPixmapCache` retains display-ready crops, a render signature suppresses identical work, and resize events are debounced before refreshing. Image presentation remains entirely inside the view layer.
 
+The Dashboard mini reservations panel is also view-only. It sizes the Guest column to the content visible at the moment, keeps the time/status/action columns readable, and allows horizontal scrolling when the action set does not fit in the available width.
+
 Custom dialog chrome is a view-only concern. `DialogWindowBehavior.h` bounds and locks dialog geometry, enables dragging from custom headers, and blocks accidental mouse-wheel changes on non-monetary selectors/spin boxes. It does not access `HotelManager`, model objects, or persistence. Price/fee controls opt into wheel adjustment explicitly.
 
 `StatisticsPageWidget` is a read-only visualization and invoice-exploration view. It reads bookings and invoices through the `HotelManager` facade, builds its chart series and filtered table locally, and opens `InvoiceDialog` for invoice details. Booking changes and completed checkout events trigger `refreshData()` so its visualizations remain synchronized with the shared manager state.

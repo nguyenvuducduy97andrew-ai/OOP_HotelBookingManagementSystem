@@ -123,6 +123,8 @@ Các trạng thái thuần UI như mode `Check-in`/`Check-out` của schedule pi
 
 Gallery ảnh của Standard, Deluxe và Suite cũng không nằm trong bảng `Room` hay file SQLite. Ảnh là tài nguyên chỉ đọc tại `src/resources/room_images/<type>/`, được CMake nhúng vào executable bằng Qt `BIG_RESOURCES` và được `RoomImageCarousel` hiển thị theo `roomType`. Thêm, đổi hoặc tối ưu ảnh không tạo revision database; ngược lại, lỗi tải ảnh không được phép làm thay đổi giá, trạng thái, capacity, lịch khả dụng hoặc booking của phòng.
 
+Dashboard mini reservations panel cũng là UI thuần view. Nó chỉ phản ánh booking hiện tại trong bộ nhớ, giữ cột Guest gọn theo nội dung hiển thị và cho phép cuộn ngang khi dãy action quá rộng; không có dữ liệu layout nào được lưu vào SQLite.
+
 ### 4.4 `RoomMaintenance`
 
 | Loại | Giá trị |
