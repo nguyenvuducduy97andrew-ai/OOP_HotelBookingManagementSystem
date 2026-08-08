@@ -19,6 +19,7 @@
 #include <QPainter>
 #include <QLocale>
 #include <vector>
+#include <unordered_map>
 
 namespace {
 QString formatMoney(double value)
@@ -63,7 +64,7 @@ RoomPageWidget::RoomPageWidget(HotelManager* manager, QWidget *parent)
     m_statusRefreshTimer->setInterval(30 * 1000);
     // Modified: Refresh visible room status periodically so an expired Cleaning block returns to Available without requiring manual navigation.
     connect(m_statusRefreshTimer, &QTimer::timeout, this, [this]() {
-        if (isVisible()) {
+        if (isVisible() && roomStateSignature() != m_lastRoomStateSignature) {
             refreshData();
         }
     });
@@ -564,6 +565,7 @@ void RoomPageWidget::refreshData() {
     } else {
         updateDetailPanel(nullptr);
     }
+    m_lastRoomStateSignature = roomStateSignature();
 }
 
 void RoomPageWidget::onRoomSelectionChanged() {
@@ -755,6 +757,60 @@ std::shared_ptr<Booking> RoomPageWidget::getAwaitingBooking(const std::string& r
         }
     }
     return nullptr;
+}
+
+QString RoomPageWidget::roomStateSignature() const
+{
+    if (!m_manager) return {};
+
+    const QDateTime now = QDateTime::currentDateTime();
+    std::unordered_map<std::string, QString> bookingStateByRoom;
+    std::unordered_set<std::string> activeRooms;
+    for (const auto& booking : m_manager->getBookings()) {
+        if (!booking || booking->isCancelled() || booking->isDeleted() || !booking->getRoom()) continue;
+
+        const std::string roomNumber = booking->getRoom()->getRoomNumber();
+        const BookingState state = m_manager->getBookingState(*booking);
+        if (state == BookingState::ACTIVE) {
+            activeRooms.insert(roomNumber);
+            bookingStateByRoom[roomNumber] = "occupied:" + QString::fromStdString(booking->getBookingId());
+            continue;
+        }
+        if (state != BookingState::UPCOMING || activeRooms.find(roomNumber) != activeRooms.end()) continue;
+
+        QDateTime plannedStart = QDateTime::fromString(
+            QString::fromStdString(booking->getPlannedCheckInAt()), Qt::ISODateWithMs);
+        QDateTime plannedEnd = QDateTime::fromString(
+            QString::fromStdString(booking->getPlannedCheckOutAt()), Qt::ISODateWithMs);
+        if (!plannedStart.isValid()) {
+            plannedStart = QDateTime(
+                QDate::fromString(QString::fromStdString(booking->getCheckInDate()), Qt::ISODate), QTime(0, 0));
+        }
+        if (!plannedEnd.isValid()) {
+            plannedEnd = QDateTime(
+                QDate::fromString(QString::fromStdString(booking->getCheckOutDate()), Qt::ISODate), QTime(0, 0));
+        }
+        if (plannedStart.isValid() && plannedEnd.isValid() && plannedStart <= now && now < plannedEnd) {
+            bookingStateByRoom[roomNumber] = "awaiting:" + QString::fromStdString(booking->getBookingId());
+        }
+    }
+
+    QStringList stateParts;
+    stateParts.reserve(static_cast<int>(m_manager->getRooms().size()));
+    for (const auto& room : m_manager->getRooms()) {
+        if (!room || room->isArchived()) continue;
+
+        QString state = "available";
+        if (!room->getIsAvailable()
+            || m_manager->isRoomBlockedAt(room->getRoomNumber(), now.toString(Qt::ISODateWithMs).toStdString())) {
+            state = "maintenance";
+        } else {
+            const auto bookingState = bookingStateByRoom.find(room->getRoomNumber());
+            if (bookingState != bookingStateByRoom.end()) state = bookingState->second;
+        }
+        stateParts.append(QString::fromStdString(room->getRoomNumber()) + '=' + state);
+    }
+    return stateParts.join('|');
 }
 
 void RoomPageWidget::onAddRoomClicked() {

@@ -35,6 +35,7 @@ private:
     void refreshOccupancyCache();
     bool isRoomOccupied(const std::string& roomNumber) const;
     std::shared_ptr<Booking> getAwaitingBooking(const std::string& roomNumber) const;
+    QString roomStateSignature() const;
 
     HotelManager* m_manager;
     QString m_searchQuery;
@@ -68,4 +69,5 @@ private:
     QPushButton* m_deleteRoomBtn;
     QPushButton* m_markRoomReadyBtn;
     QTimer* m_statusRefreshTimer = nullptr;
+    QString m_lastRoomStateSignature;
 };

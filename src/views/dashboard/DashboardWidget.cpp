@@ -1592,12 +1592,9 @@ DashboardWidget::~DashboardWidget()
 void DashboardWidget::onTrendChartHovered(const QPointF &point, bool state)
 {
     if (state) {
-        m_hoverScatter->clear();
-        m_hoverScatter->append(point);
         QString text = QString("%1 Bookings").arg(qRound(point.y()));
         QToolTip::showText(QCursor::pos(), text, this);
     } else {
-        m_hoverScatter->clear();
         QToolTip::hideText();
     }
 }
