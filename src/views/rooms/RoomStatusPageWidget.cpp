@@ -478,6 +478,10 @@ void RoomStatusPageWidget::applyFilters() {
         QWidget* section = m_floorSectionByNumber.value(floorIt.key(), nullptr);
         if (!roomsLayout || !section) continue;
 
+        for (int c = 0; c < 4; ++c) {
+            roomsLayout->setColumnStretch(c, 1);
+        }
+
         int visibleIndex = 0;
         for (RoomCard* card : floorIt.value()) {
             const bool matchType = type == "All" || card->getRoomType() == type;
@@ -502,8 +506,7 @@ void RoomStatusPageWidget::applyFilters() {
             const bool visible = matchType && matchSearch && matchAvail;
             card->setVisible(visible);
             if (visible) {
-                roomsLayout->addWidget(card, visibleIndex / columns, visibleIndex % columns,
-                                       Qt::AlignTop | Qt::AlignLeft);
+                roomsLayout->addWidget(card, visibleIndex / columns, visibleIndex % columns);
                 ++visibleIndex;
             }
         }
@@ -563,9 +566,11 @@ void RoomStatusPageWidget::rebuildFloorSections()
         auto* roomsWidget = new QWidget(section);
         auto* roomsLayout = new QGridLayout(roomsWidget);
         roomsLayout->setContentsMargins(0, 0, 0, 0);
-        roomsLayout->setHorizontalSpacing(10);
-        roomsLayout->setVerticalSpacing(10);
-        roomsLayout->setAlignment(Qt::AlignTop | Qt::AlignLeft);
+        roomsLayout->setHorizontalSpacing(14);
+        roomsLayout->setVerticalSpacing(14);
+        for (int c = 0; c < 4; ++c) {
+            roomsLayout->setColumnStretch(c, 1);
+        }
         sectionLayout->addWidget(roomsWidget, 1);
         gridLayout->addWidget(section, sectionRow++, 0);
 
@@ -578,10 +583,7 @@ void RoomStatusPageWidget::rebuildFloorSections()
 
 int RoomStatusPageWidget::floorColumnCount() const
 {
-    const int viewportWidth = ui->scrollArea->viewport()->width();
-    constexpr int floorLabelAndSpacing = 124;
-    constexpr int cardWidthAndSpacing = 225;
-    return std::max(1, (viewportWidth - floorLabelAndSpacing) / cardWidthAndSpacing);
+    return 4;
 }
 
 void RoomStatusPageWidget::clearFloorSections()

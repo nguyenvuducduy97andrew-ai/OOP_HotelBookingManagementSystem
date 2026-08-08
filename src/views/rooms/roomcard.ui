@@ -12,7 +12,7 @@
   </property>
   <property name="minimumSize">
    <size>
-    <width>215</width>
+    <width>0</width>
     <height>130</height>
    </size>
   </property>
@@ -93,13 +93,13 @@ QWidget#RoomCard QLabel {
         </property>
         <property name="minimumSize">
          <size>
-          <width>70</width>
+          <width>78</width>
           <height>0</height>
          </size>
         </property>
         <property name="maximumSize">
          <size>
-          <width>85</width>
+          <width>78</width>
           <height>16777215</height>
          </size>
         </property>

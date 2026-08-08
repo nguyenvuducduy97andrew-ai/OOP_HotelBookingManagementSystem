@@ -98,10 +98,12 @@ void setupReservationDialogStyle(QDialog* dialog) {
         QPushButton#btnSave {
             background-color: #3B58FF;
             color: #FFFFFF;
-            font-weight: 600;
-            border-radius: 8px;
-            padding: 8px 16px;
-            font-size: 13px;
+            font-weight: 700;
+            border-radius: 10px;
+            padding: 10px 24px;
+            min-height: 22px;
+            min-width: 120px;
+            font-size: 14px;
         }
         QPushButton#btnSave:hover {
             background-color: #4F6BFF;
@@ -109,10 +111,12 @@ void setupReservationDialogStyle(QDialog* dialog) {
         QPushButton#btnCancel {
             background-color: #E9EDF7;
             color: #2B3674;
-            font-weight: 600;
-            border-radius: 8px;
-            padding: 8px 16px;
-            font-size: 13px;
+            font-weight: 700;
+            border-radius: 10px;
+            padding: 10px 24px;
+            min-height: 22px;
+            min-width: 110px;
+            font-size: 14px;
             border: none;
         }
         QPushButton#btnCancel:hover {
@@ -146,14 +150,6 @@ void setupReservationDialogStyle(QDialog* dialog) {
             background: transparent;
             border: none;
             padding: 0;
-        }
-        QLabel#roomReview {
-            color: #2B3674;
-            background-color: #F4F7FE;
-            border: 1px solid #D9E2F2;
-            border-radius: 9px;
-            padding: 10px 12px;
-            font-weight: 500;
         }
         QFrame#customerDetailsContainer {
             background: #F8FAFC;
@@ -198,11 +194,11 @@ void ReservationDialog::setupUI() {
     outerLayout->setSpacing(0);
 
     if (m_previewRoom) {
-        auto* roomInfo = new RoomInfoDialog(m_previewRoom, this);
-        roomInfo->setEmbeddedMode();
-        outerLayout->addWidget(roomInfo);
-        connect(roomInfo, &RoomInfoDialog::bookingClicked, this, &ReservationDialog::expandBookingForm);
-        connect(roomInfo, &RoomInfoDialog::cancelClicked, this, &QDialog::reject);
+        m_roomInfoDialog = new RoomInfoDialog(m_previewRoom, this);
+        m_roomInfoDialog->setEmbeddedMode();
+        outerLayout->addWidget(m_roomInfoDialog);
+        connect(m_roomInfoDialog, &RoomInfoDialog::bookingClicked, this, &ReservationDialog::expandBookingForm);
+        connect(m_roomInfoDialog, &RoomInfoDialog::cancelClicked, this, &QDialog::reject);
     }
 
     m_reservationPanel = new QWidget(this);
@@ -401,12 +397,7 @@ void ReservationDialog::setupUI() {
     m_roomCombo = new QComboBox(this);
     roomRow->addWidget(m_roomCombo, 1);
     // Modified: Selecting a room in the list is the single confirmation gesture; a second Select button caused redundant, error-prone state.
-    m_confirmRoomButton = nullptr;
     formLayout->addRow("Available Rooms:", roomRow);
-    m_roomReviewLabel = new QLabel(this);
-    m_roomReviewLabel->setObjectName("roomReview");
-    m_roomReviewLabel->setWordWrap(true);
-    formLayout->addRow("Room review:", m_roomReviewLabel);
 
     formScroll->setWidget(formContent);
     mainLayout->addWidget(formScroll, 1);
@@ -427,8 +418,12 @@ void ReservationDialog::setupUI() {
     btnLayout->addStretch();
     auto* cancelBtn = new QPushButton("Cancel", this);
     cancelBtn->setObjectName("btnCancel");
+    cancelBtn->setMinimumSize(115, 42);
+    cancelBtn->setCursor(Qt::PointingHandCursor);
     auto* saveBtn = new QPushButton("Book Room", this);
     saveBtn->setObjectName("btnSave");
+    saveBtn->setMinimumSize(130, 42);
+    saveBtn->setCursor(Qt::PointingHandCursor);
 
     btnLayout->addWidget(cancelBtn);
     btnLayout->addWidget(saveBtn);
@@ -594,6 +589,10 @@ void ReservationDialog::setupUI() {
 void ReservationDialog::expandBookingForm()
 {
     if (!m_reservationPanel || m_reservationPanel->isVisible()) return;
+
+    if (m_roomInfoDialog) {
+        m_roomInfoDialog->setActionsVisible(false);
+    }
 
     const QSize available = dialogAvailableSize(this);
     // Widen the reservation panel and let its scroll area extend farther toward
@@ -924,6 +923,12 @@ void ReservationDialog::confirmPendingRoom()
     }
     // Modified: A room selection is committed in one click, while the review panel immediately confirms the exact selected room and rate.
     m_confirmedRoomNumber = m_roomCombo->currentData().toString();
+    if (m_roomInfoDialog && m_manager) {
+        const auto room = m_manager->findRoomByNumber(m_confirmedRoomNumber.toStdString());
+        if (room) {
+            m_roomInfoDialog->setRoom(room);
+        }
+    }
     updateRoomReview();
 }
 

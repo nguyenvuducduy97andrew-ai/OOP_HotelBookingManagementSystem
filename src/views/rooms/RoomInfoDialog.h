@@ -20,6 +20,8 @@ public:
     explicit RoomInfoDialog(std::shared_ptr<Room> room, QWidget *parent = nullptr);
     ~RoomInfoDialog() override = default;
     void setEmbeddedMode(bool embedded = true);
+    void setRoom(std::shared_ptr<Room> room);
+    void setActionsVisible(bool visible);
 
 signals:
     void bookingClicked();
