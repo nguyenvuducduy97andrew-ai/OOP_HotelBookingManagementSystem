@@ -137,7 +137,7 @@ MainWindow::MainWindow(HotelManager* manager, QWidget *parent)
     textLayout->setContentsMargins(0, 0, 0, 0);
     textLayout->setSpacing(1);
 
-    auto* titleLabel = new QLabel("OOP-25C10", textContainer);
+    auto* titleLabel = new QLabel("GrandVilla", textContainer);
     titleLabel->setObjectName("brandTitle");
     titleLabel->setStyleSheet("QLabel#brandTitle { font-size: 15px; font-weight: 800; color: #1E3A8A; background: transparent; border: none; }");
 

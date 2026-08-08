@@ -128,6 +128,14 @@ RoomStatusPageWidget::RoomStatusPageWidget(HotelManager* manager, QWidget *paren
                 { openSchedulePicker(false); });
         connect(m_checkOutScheduleField, &QPushButton::clicked, this, [this]()
                 { openSchedulePicker(true); });
+        connect(
+            m_roomTypeCombo,
+            &QComboBox::currentIndexChanged,
+            this,
+            [this](int)
+            {
+                applyFilters();
+            });
     }
 
 
