@@ -19,7 +19,7 @@
 #include <QScrollArea>
 #include <QSignalBlocker>
 #include <QTimer>
-#include <QHBoxLayout>
+#include <QVBoxLayout>
 #include <algorithm>
 #include <unordered_map>
 #include <unordered_set>
@@ -531,21 +531,27 @@ void RoomStatusPageWidget::rebuildFloorSections()
         auto* section = new QFrame(ui->scrollAreaWidgetContents);
         section->setObjectName("floorSection");
         section->setStyleSheet(
-            "QFrame#floorSection { background: #FFFFFF; border:1px solid #E2E8F0; border-radius:14px; }"
-            "QLabel#floorLabel { color: #1D4ED8; background: #EFF6FF; border:1px solid #BFDBFE; "
-            "border-radius:10px; font-size:16px; font-weight:800; padding:12px 8px; }");
-        auto* sectionLayout = new QHBoxLayout(section);
-        sectionLayout->setContentsMargins(12, 12, 12, 12);
-        sectionLayout->setSpacing(14);
+            "QFrame#floorSection { background:transparent; border:none; }"
+            "QLabel#floorLabel { color: #64748B; font-size:16px; font-weight:600; padding:0px; }");
+        auto* sectionLayout = new QVBoxLayout(section);
+        sectionLayout->setContentsMargins(0, 0, 0, 20);
+        sectionLayout->setSpacing(8);
 
         auto* floorLabel = new QLabel(
             floorIt.key() > 0 ? QString("Floor %1").arg(floorIt.key()) : QString("Other"), section);
         floorLabel->setObjectName("floorLabel");
-        floorLabel->setAlignment(Qt::AlignLeft | Qt::AlignTop);
+        floorLabel->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
         floorLabel->setFixedWidth(86);
-        floorLabel->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Preferred);
-
-        sectionLayout->addWidget(floorLabel, 0, Qt::AlignTop);
+        floorLabel->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding);
+        
+        auto* hLine = new QFrame(section);
+        hLine->setObjectName("floorLine");
+        hLine->setFrameShape(QFrame::HLine);
+        hLine->setFrameShadow(QFrame::Plain);
+        hLine->setFixedHeight(1);
+        hLine->setStyleSheet("background-color: #CBD5E1;");
+        sectionLayout->addWidget(floorLabel);
+        sectionLayout->addWidget(hLine);
 
         auto* roomsWidget = new QWidget(section);
         auto* roomsLayout = new QGridLayout(roomsWidget);
