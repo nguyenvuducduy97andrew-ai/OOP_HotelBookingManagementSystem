@@ -47,7 +47,6 @@ public:
             QPushButton#windowClose:hover { background: #F1F5F9; color: #1B3F83; }
             QLabel#headerIcon { color: #3B58FF; font-size: 16px; background: transparent; border: none; }
             QFrame#dialogBody { background: #FFFFFF; border: none; }
-            }
             QFrame#noticePanel {
                 background-color: %3;
                 border: 1px solid %4;

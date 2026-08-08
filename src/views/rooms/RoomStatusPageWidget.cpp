@@ -1,7 +1,6 @@
 #include "RoomStatusPageWidget.h"
 #include "ui_RoomStatusPageWidget.h"
 #include "Customer.h"
-#include "RoomManager.h"
 #include "RoomInfoDialog.h"
 #include "SchedulePickerDialog.h"
 #include "SearchFieldUi.h"
