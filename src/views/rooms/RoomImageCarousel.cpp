@@ -59,9 +59,9 @@ RoomImageCarousel::RoomImageCarousel(int imageHeight, QWidget* parent)
         button->setCursor(Qt::PointingHandCursor);
         button->setFocusPolicy(Qt::NoFocus);
         button->setStyleSheet(
-            "QPushButton { background:#FFFFFF; color:#005BFE; border:1px solid #BFDBFE; border-radius:10px; font-size:17px; font-weight:800; padding:0px; }"
-            "QPushButton:hover { background:#EAF2FF; border-color:#60A5FA; }"
-            "QPushButton:pressed { background:#DBEAFE; }");
+            "QPushButton { background:#FFFFFF; color:#475569; border:1px solid #E2E8F0; border-radius:8px; font-size:16px; font-weight:700; padding:0px; }"
+            "QPushButton:hover { background:#F8FAFC; color:#005BFE; border-color:#CBD5E1; }"
+            "QPushButton:pressed { background:#F1F5F9; }");
     }
     m_previousButton->setToolTip("Previous room image");
     m_nextButton->setToolTip("Next room image");
@@ -78,7 +78,7 @@ RoomImageCarousel::RoomImageCarousel(int imageHeight, QWidget* parent)
 
     for (QLabel* image : {m_previousPreview, m_currentImage, m_nextPreview}) {
         image->setAlignment(Qt::AlignCenter);
-        image->setStyleSheet("background:#E2E8F0; border:1px solid #D9EAFE; border-radius:12px;");
+        image->setStyleSheet("background:#F1F5F9; border:1px solid #E2E8F0; border-radius:10px;");
     }
     auto* previousOpacity = new QGraphicsOpacityEffect(m_previousPreview);
     previousOpacity->setOpacity(0.34);

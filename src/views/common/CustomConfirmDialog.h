@@ -29,16 +29,16 @@ public:
 
         setStyleSheet(QString(R"(
             QDialog {
-                background-color: #EFF6FF;
-                border: 2px solid #93C5FD;
-                border-radius: 18px;
+                background-color: #FFFFFF;
+                border: 1px solid #CBD5E1;
+                border-radius: 16px;
             }
             QFrame#dialogHeader {
                 background: #FFFFFF;
                 border: none;
                 border-bottom: 1px solid #E7EDF7;
-                border-top-left-radius: 13px;
-                border-top-right-radius: 13px;
+                border-top-left-radius: 15px;
+                border-top-right-radius: 15px;
             }
             QLabel#windowTitle { color: #1B3F83; font-size: 13px; font-weight: 800; background: transparent; border: none; }
             QPushButton#windowClose {
@@ -46,7 +46,12 @@ public:
             }
             QPushButton#windowClose:hover { background: #F1F5F9; color: #1B3F83; }
             QLabel#headerIcon { color: #3B58FF; font-size: 16px; background: transparent; border: none; }
-            QFrame#dialogBody { background: #FFFFFF; border: none; }
+            QFrame#dialogBody {
+                background: #FFFFFF;
+                border: none;
+                border-bottom-left-radius: 15px;
+                border-bottom-right-radius: 15px;
+            }
             QFrame#noticePanel {
                 background-color: %3;
                 border: 1px solid %4;
@@ -58,10 +63,14 @@ public:
                 min-width: 42px;
                 color: %1;
             }
-            QLabel#titleLabel { font-size: 16px; font-weight: 800; color: #1B3F83; }
             QLabel#msgLabel {
-                font-size: 12px;
+                font-size: 13px;
                 color: #2B3674;
+                font-weight: 600;
+            }
+            QLabel#secondaryLabel {
+                font-size: 12px;
+                color: #A3AED0;
                 font-weight: 500;
             }
             QPushButton#btnConfirm {
@@ -95,8 +104,7 @@ public:
         auto* layout = new QVBoxLayout(this);
         // Modified: Let operational warnings grow to fit affected-booking details instead of clipping important consequences in a fixed-height dialog.
         layout->setSizeConstraint(QLayout::SetFixedSize);
-        // Modified: Keep a visible light-blue shell around both the custom header and confirmation content.
-        layout->setContentsMargins(3, 3, 3, 3);
+        layout->setContentsMargins(0, 0, 0, 0);
         layout->setSpacing(0);
 
         auto* header = new QFrame(this);

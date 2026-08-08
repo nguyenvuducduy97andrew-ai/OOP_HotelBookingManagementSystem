@@ -139,9 +139,9 @@ void setupDialogStyle(QDialog* dialog) {
     dialog->setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint);
     dialog->setStyleSheet(R"(
         QDialog {
-            background-color: #EFF6FF;
-            border: 2px solid #93C5FD;
-            border-radius: 18px;
+            background-color: #FFFFFF;
+            border: 1px solid #CBD5E1;
+            border-radius: 16px;
         }
         QCheckBox {
             font-size: 13px;

@@ -38,8 +38,8 @@ void setupReservationDialogStyle(QDialog* dialog) {
     dialog->setStyleSheet(R"(
         QDialog {
             background-color: #FFFFFF;
-            border: 2px solid #93C5FD;
-            border-radius: 18px;
+            border: 1px solid #CBD5E1;
+            border-radius: 16px;
         }
         QLabel {
             font-size: 13px;

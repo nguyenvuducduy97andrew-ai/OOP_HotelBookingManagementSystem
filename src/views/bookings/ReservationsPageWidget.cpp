@@ -119,13 +119,13 @@ void showReservationFeedback(
     // Modified: Render feedback in an opaque custom dialog shell so it matches the application instead of inheriting the system-dark title bar.
     dialog.setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint);
     dialog.setStyleSheet(QString(
-        "QDialog { background: #EFF6FF; border: 2px solid #93C5FD; border-radius: 18px; }"
-        "QFrame#feedbackHeader { background:#FFFFFF; border:none; border-bottom:1px solid #E7EDF7; border-top-left-radius:13px; border-top-right-radius:13px; }"
+        "QDialog { background: #FFFFFF; border: 1px solid #CBD5E1; border-radius: 16px; }"
+        "QFrame#feedbackHeader { background:#FFFFFF; border:none; border-bottom:1px solid #E7EDF7; border-top-left-radius:15px; border-top-right-radius:15px; }"
         "QLabel#feedbackWindowTitle { color:#1B3F83; font-size:13px; font-weight:800; background:transparent; border:none; }"
         "QLabel#feedbackHeaderIcon { color:%3; font-size:16px; background:transparent; border:none; }"
         "QPushButton#feedbackWindowClose { background:transparent; color:#64748B; border:none; border-radius:8px; font-size:20px; }"
         "QPushButton#feedbackWindowClose:hover { background:#F1F5F9; color:#1B3F83; }"
-        "QFrame#feedbackBody { background:#FFFFFF; border:none; }"
+        "QFrame#feedbackBody { background:#FFFFFF; border:none; border-bottom-left-radius:15px; border-bottom-right-radius:15px; }"
         "QFrame#feedbackPanel { background: %1; border: 1px solid %2; border-radius: 14px; }"
         // Modified: Prevent the application-wide QLabel background from creating white rectangles inside colored feedback panels.
         "QFrame#feedbackPanel QLabel { background: transparent; border: none; }"
@@ -139,8 +139,7 @@ void showReservationFeedback(
 
     auto* layout = new QVBoxLayout(&dialog);
     layout->setSizeConstraint(QLayout::SetFixedSize);
-    // Modified: Frame feedback dialogs with the same pale-blue shell used by all custom operational dialogs.
-    layout->setContentsMargins(3, 3, 3, 3);
+    layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(0);
     auto* header = new QFrame(&dialog);
     header->setObjectName("feedbackHeader");
@@ -218,7 +217,7 @@ void showReservationDetails(QWidget* parent, const std::shared_ptr<Booking>& boo
     dialog.setMinimumWidth(560);
     dialog.setWindowFlags(dialog.windowFlags() & ~Qt::WindowContextHelpButtonHint);
     dialog.setStyleSheet(
-        "QDialog { background: #FFFFFF; border: 2px solid #93C5FD; border-radius: 18px; }"
+        "QDialog { background: #FFFFFF; border: 1px solid #CBD5E1; border-radius: 16px; }"
         "QFrame#detailsPanel { background: #F8FAFC; border: 1px solid #DCE6F5; border-radius: 14px; }"
         "QFrame#detailsPanel QLabel { background: transparent; border: none; }"
         "QLabel#detailsTitle { color: #1B3F83; font-size: 18px; font-weight: 800; }"
@@ -292,7 +291,7 @@ bool requestReservationReason(
     dialog.setModal(true);
     dialog.setMinimumWidth(380);
     dialog.setStyleSheet(
-        "QDialog { background: #FFFFFF; border: 2px solid #93C5FD; border-radius: 18px; }"
+        "QDialog { background: #FFFFFF; border: 1px solid #CBD5E1; border-radius: 16px; }"
         "QLabel { color: #2B3674; font-size: 13px; }"
         "QLabel#dialogTitle { color: #1B3F83; font-size: 17px; font-weight: 800; }"
         "QLabel#dialogSubtitle { color: #64748B; font-size: 12px; }"
@@ -359,7 +358,7 @@ bool requestCheckoutPayment(QWidget* parent, double total, QString& method, doub
     dialog.setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint);
     // Modified: Give the checkout-payment dialog explicit colors so inherited page styles cannot render its controls white on white.
     dialog.setStyleSheet(
-        "QDialog { background: #FFFFFF; border: 2px solid #93C5FD; border-radius: 18px; }"
+        "QDialog { background: #FFFFFF; border: 1px solid #CBD5E1; border-radius: 16px; }"
         "QLabel { color: #2B3674; font-size: 13px; font-weight: 600; }"
         "QLabel#dialogTitle { color: #1B3F83; font-size: 17px; font-weight: 800; }"
         "QLabel#dialogSubtitle { color: #64748B; font-size: 12px; font-weight: 500; }"

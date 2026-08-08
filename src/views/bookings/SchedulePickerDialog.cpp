@@ -71,8 +71,8 @@ SchedulePickerDialog::SchedulePickerDialog(const QDateTime& initialCheckIn,
     // Modified: Use an opaque custom header to avoid the platform-dark title bar without allowing background content to bleed through.
     setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint);
     setStyleSheet(R"(
-        QDialog { background: #FAFCFF; border: 2px solid #93C5FD; border-radius: 18px; }
-        QFrame#dialogHeader { background: #FFFFFF; border: none; border-bottom: 1px solid #E7EDF7;border-top-left-radius: 13px; border-top-right-radius: 13px; }
+        QDialog { background: #FFFFFF; border: 1px solid #CBD5E1; border-radius: 16px; }
+        QFrame#dialogHeader { background: #FFFFFF; border: none; border-bottom: 1px solid #E7EDF7; border-top-left-radius: 15px; border-top-right-radius: 15px; }
         QLabel#pickerTitle { color: #163779; font-size: 19px; font-weight: 800; background: transparent; border: none; }
         QPushButton#windowClose { background: #FFF7F7; color: #B91C1C; border: 1px solid #ff7c7c; border-radius: 8px; padding: 0px; font-family: "Segoe UI"; font-size: 12px; font-weight: 800; }
         QPushButton#windowClose:hover { background: #f59e9e; color: #FFFFFF; }

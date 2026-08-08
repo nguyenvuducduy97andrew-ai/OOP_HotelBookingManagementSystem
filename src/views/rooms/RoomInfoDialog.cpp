@@ -31,13 +31,13 @@ QString RoomInfoDialog::formatMoney(double amount) {
 
 void RoomInfoDialog::setupUI() {
     auto* mainLayout = new QVBoxLayout(this);
-    mainLayout->setContentsMargins(8, 8, 8, 8);
+    mainLayout->setContentsMargins(0, 0, 0, 0);
     
     auto* bgFrame = new QFrame(this);
     bgFrame->setObjectName("bgFrame");
     auto* frameLayout = new QVBoxLayout(bgFrame);
-    frameLayout->setContentsMargins(16, 16, 16, 16);
-    frameLayout->setSpacing(7);
+    frameLayout->setContentsMargins(24, 20, 24, 20);
+    frameLayout->setSpacing(8);
     
     // Header row
     auto* headerLayout = new QHBoxLayout();
@@ -142,14 +142,14 @@ void RoomInfoDialog::setupUI() {
 void RoomInfoDialog::setupStyle() {
     setStyleSheet(R"(
         QDialog {
-            background-color: #EFF6FF;
-            border: 2px solid #93C5FD;
-            border-radius: 18px;
+            background-color: #FFFFFF;
+            border: 1px solid #CBD5E1;
+            border-radius: 16px;
         }
         QFrame#bgFrame {
             background-color: #FFFFFF;
-            border-radius: 20px;
-            border: 1px solid #D9EAFE;
+            border-radius: 16px;
+            border: none;
         }
         QLabel#titleLabel {
             font-size: 24px;
@@ -165,65 +165,67 @@ void RoomInfoDialog::setupStyle() {
             font-size: 13px;
         }
         QLabel#specLabel {
-            font-size: 15px;
+            font-size: 14px;
             font-weight: 700;
             color: #1B2559;
         }
         QLabel#extraFeeLabel {
-            background-color: #F4F7FE;
-            color: #3B58FF;
+            background-color: #F8FAFC;
+            color: #1E3A8A;
+            border: 1px solid #E2E8F0;
             padding: 8px;
             border-radius: 8px;
             font-weight: 700;
             font-size: 14px;
         }
         QLabel#basePriceLabel {
-            background-color: #EFF6FF;
-            color: #1D4ED8;
-            border: 1px solid #BFDBFE;
+            background-color: #F8FAFC;
+            color: #1E3A8A;
+            border: 1px solid #E2E8F0;
             padding: 8px;
             border-radius: 8px;
             font-weight: 800;
             font-size: 15px;
         }
         QLabel#sectionTitle {
-            font-size: 16px;
+            font-size: 15px;
             font-weight: 700;
             color: #1B2559;
         }
         QTextEdit#descLabel {
-            font-size: 14px;
-            color: #A3AED0;
+            font-size: 13px;
+            color: #64748B;
             background-color: transparent;
         }
         QLabel#amLabel {
-            font-size: 14px;
-            color: #A3AED0;
+            font-size: 13px;
+            color: #64748B;
             font-weight: 500;
         }
         QPushButton#btnCancel {
-            background-color: #F4F7FE;
-            color: #2B3674;
+            background-color: #F1F5F9;
+            color: #475569;
             font-weight: 700;
-            border-radius: 12px;
+            border-radius: 10px;
             padding: 10px 20px;
             font-size: 14px;
-            border: none;
+            border: 1px solid #E2E8F0;
         }
         QPushButton#btnCancel:hover {
-            background-color: #E9EDF7;
+            background-color: #E2E8F0;
+            color: #1E293B;
         }
         QPushButton#btnBooking {
-            background-color: #3B58FF;
+            background-color: #005BFE;
             color: #FFFFFF;
             font-weight: 700;
-            border-radius: 12px;
+            border-radius: 10px;
             padding: 10px 20px;
             font-size: 14px;
             border: none;
         }
         QPushButton#btnBooking:hover {
-            background-color: #4F6BFF;
+            background-color: #2563EB;
         }
     )");
 }
@@ -257,7 +259,7 @@ void RoomInfoDialog::populateData() {
         hasAmenities = true;
         
         QLabel* pill = new QLabel("✓ " + am, m_amContainer);
-        pill->setStyleSheet("background-color: #F4F7FE; color: #3B58FF; border: 1px solid #E9EDF7; padding: 6px 12px; border-radius: 12px; font-weight: 600; font-size: 13px;");
+        pill->setStyleSheet("background-color: #F8FAFC; color: #334155; border: 1px solid #E2E8F0; padding: 6px 12px; border-radius: 8px; font-weight: 600; font-size: 13px;");
         m_amLayout->addWidget(pill, row, col);
         
         col++;

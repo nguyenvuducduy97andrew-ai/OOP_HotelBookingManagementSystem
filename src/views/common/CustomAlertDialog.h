@@ -22,22 +22,22 @@ public:
         setMinimumWidth(420);
         setStyleSheet(R"(
             QDialog {
-                background:#EFF6FF;
-                border:2px solid #93C5FD;
-                border-radius:18px;
+                background:#FFFFFF;
+                border:1px solid #CBD5E1;
+                border-radius:16px;
             }
             QFrame#alertHeader {
                 background:#FFFFFF;
                 border:none;
                 border-bottom:1px solid #E7EDF7;
-                border-top-left-radius:14px;
-                border-top-right-radius:14px;
+                border-top-left-radius:15px;
+                border-top-right-radius:15px;
             }
             QFrame#alertBody {
                 background:#FFFFFF;
                 border:none;
-                border-bottom-left-radius:14px;
-                border-bottom-right-radius:14px;
+                border-bottom-left-radius:15px;
+                border-bottom-right-radius:15px;
             }
             QLabel#alertHeaderIcon, QLabel#alertWindowTitle,
             QLabel#alertIcon, QLabel#alertMessage {
@@ -65,7 +65,7 @@ public:
 
         auto* rootLayout = new QVBoxLayout(this);
         rootLayout->setSizeConstraint(QLayout::SetFixedSize);
-        rootLayout->setContentsMargins(3, 3, 3, 3);
+        rootLayout->setContentsMargins(0, 0, 0, 0);
         rootLayout->setSpacing(0);
 
         auto* header = new QFrame(this);
