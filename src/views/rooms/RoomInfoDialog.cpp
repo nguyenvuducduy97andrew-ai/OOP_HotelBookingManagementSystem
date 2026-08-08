@@ -362,3 +362,18 @@ void RoomInfoDialog::setEmbeddedMode(bool embedded) {
     setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding);
     show();
 }
+
+void RoomInfoDialog::setRoom(std::shared_ptr<Room> room) {
+    m_room = room;
+    populateData();
+}
+
+void RoomInfoDialog::setActionsVisible(bool visible) {
+    if (m_btnCancel) {
+        m_btnCancel->setVisible(visible);
+    }
+    if (m_btnBooking) {
+        m_btnBooking->setVisible(visible);
+    }
+}
+

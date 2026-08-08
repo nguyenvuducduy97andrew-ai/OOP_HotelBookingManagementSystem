@@ -13,6 +13,7 @@ class QLabel;
 class QPushButton;
 class QStackedLayout;
 class Room;
+class RoomInfoDialog;
 class QWidget;
 
 class ReservationDialog : public QDialog {
@@ -87,9 +88,10 @@ private:
     QSpinBox* m_adultCountSpin;
     QSpinBox* m_childCountSpin;
     QComboBox* m_roomCombo;
-    QLabel* m_roomReviewLabel;
-    QPushButton* m_confirmRoomButton;
+    QLabel* m_roomReviewLabel = nullptr;
+    QPushButton* m_confirmRoomButton = nullptr;
     QString m_confirmedRoomNumber;
     std::shared_ptr<Room> m_previewRoom;
+    RoomInfoDialog* m_roomInfoDialog = nullptr;
     QWidget* m_reservationPanel = nullptr;
 };

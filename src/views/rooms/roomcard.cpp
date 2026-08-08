@@ -8,6 +8,11 @@ RoomCard::RoomCard(QWidget *parent)
     ui->setupUi(this);
     this->setAttribute(Qt::WA_StyledBackground, true);
     this->setCursor(Qt::PointingHandCursor);
+    this->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    this->setFixedHeight(130);
+    if (ui->frameStatusBadge) {
+        ui->frameStatusBadge->setFixedWidth(78);
+    }
 }
 
 RoomCard::~RoomCard()
