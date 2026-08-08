@@ -58,7 +58,7 @@ void RoomCard::setAvailable() { // Render the available state.
     m_guestName = ""; m_idNumber = ""; m_phoneNumber = ""; m_dateIn = ""; m_dateOut = "";
 
     ui->frameStatusBadge->setStyleSheet("QFrame#frameStatusBadge { background-color: #05CD99; border-radius: 10px; }");
-    ui->frameCardContainer->setStyleSheet("QFrame#frameCardContainer { background-color: #FFFFFF; border: 1px solid #E9EDF7; border-radius: 16px; }");
+    ui->frameCardContainer->setStyleSheet("QFrame#frameCardContainer { background-color: #eafff1; border: 1px solid #E9EDF7; border-radius: 16px; }");
 
     ui->lblGuestName->setStyleSheet("color: #05CD99; background-color: transparent; font-size: 18px; font-weight: bold; border: none;");
     ui->lblCheckOutDate->hide();
@@ -87,7 +87,7 @@ void RoomCard::setAwaiting(QString guestName, QString dateIn, QString dateOut) {
     ui->lblGuestName->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
 
     ui->frameStatusBadge->setStyleSheet("QFrame#frameStatusBadge { background-color: #3B58FF; border-radius: 10px; }");
-    ui->frameCardContainer->setStyleSheet("QFrame#frameCardContainer { background-color: #FFFFFF; border: 1px solid #E9EDF7; border-radius: 16px; }");
+    ui->frameCardContainer->setStyleSheet("QFrame#frameCardContainer { background-color: #e7e7fb; border: 1px solid #E9EDF7; border-radius: 16px; }");
     ui->lblGuestName->setStyleSheet("color: #1B2559; background: transparent; font-size: 14px; font-weight: bold; border: none;");
     ui->lblCheckInDate->setStyleSheet("color: #A3AED0; font-size: 14px; background: transparent;");
     ui->lblCheckOutDate->setStyleSheet("color: #A3AED0; font-size: 14px; background: transparent;");
@@ -119,7 +119,7 @@ void RoomCard::setOccupied(QString guestName, QString idNumber, QString phoneNum
     ui->lblGuestName->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
 
     ui->frameStatusBadge->setStyleSheet("QFrame#frameStatusBadge { background-color: #FFB547; border-radius: 10px; }");
-    ui->frameCardContainer->setStyleSheet("QFrame#frameCardContainer { background-color: #FFFFFF; border: 1px solid #E9EDF7; border-radius: 16px; }");
+    ui->frameCardContainer->setStyleSheet("QFrame#frameCardContainer { background-color: #fffbee; border: 1px solid #E9EDF7; border-radius: 16px; }");
 
     ui->lblGuestName->setStyleSheet("color: #1B2559; background: transparent; font-size: 14px; font-weight: bold; border: none;");
     ui->lblCheckInDate->setStyleSheet("color: #A3AED0; font-size: 14px; background: transparent;");
@@ -143,7 +143,7 @@ void RoomCard::setMaintenance() {
     ui->lineDivider->hide();
 
     ui->frameStatusBadge->setStyleSheet("QFrame#frameStatusBadge { background-color: #A3AED0; border-radius: 10px; }");
-    ui->frameCardContainer->setStyleSheet("QFrame#frameCardContainer { background-color: #FFFFFF; border: 1px solid #E9EDF7; border-radius: 16px; }");
+    ui->frameCardContainer->setStyleSheet("QFrame#frameCardContainer { background-color: #f0f5ff; border: 1px solid #E9EDF7; border-radius: 16px; }");
 
     ui->lblGuestName->setStyleSheet("color: #1B2559; background: transparent; font-size: 16px; font-weight: bold; border: none;");
     ui->lblGuestName->setText("");
@@ -189,7 +189,7 @@ void RoomCard::setTempAvailMode(bool enabled) {
         ui->lblGuestName->setText("");
         
         ui->frameStatusBadge->setStyleSheet("QFrame#frameStatusBadge { background-color: #05CD99; border-radius: 10px; }");
-        ui->frameCardContainer->setStyleSheet("QFrame#frameCardContainer { background-color: #FFFFFF; border: 1px solid #E9EDF7; border-radius: 16px; }");
+        ui->frameCardContainer->setStyleSheet("QFrame#frameCardContainer { background-color: #ecffee; border: 1px solid #E9EDF7; border-radius: 16px; }");
 
         ui->lblGuestName->setStyleSheet("color: #1B2559; background: transparent; font-size: 18px; font-weight: bold; border: none;");
         
