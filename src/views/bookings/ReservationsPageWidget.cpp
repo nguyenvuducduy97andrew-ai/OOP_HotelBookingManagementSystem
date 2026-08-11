@@ -806,17 +806,24 @@ void ReservationsPageWidget::refreshData() {
         };
 
         if (state == BookingState::ACTIVE) {
-            const QDateTime plannedEnd = QDateTime::fromString(
+            QDateTime plannedEnd = QDateTime::fromString(
                 QString::fromStdString(booking->getPlannedCheckOutAt()), Qt::ISODateWithMs);
-            const bool mayEarlyCheckout = plannedEnd.isValid() && QDateTime::currentDateTime() < plannedEnd;
-            // Modified: Label each active-stay operation directly; early checkout remains distinct from the normal checkout path.
-            addActionButton("💳 Check out", "checkout",
-                "QPushButton { background-color: #ECFDF5; color: #065F46; border: 1px solid #A7F3D0; border-radius: 8px; font-weight: 700; padding: 0 9px; }",
-                "Record payment, check out the guest, and issue an invoice");
-            addActionButton("↗ Early check-out", "earlycheckout",
-                "QPushButton { background-color: #FFF7ED; color: #C2410C; border: 1px solid #FED7AA; border-radius: 8px; font-weight: 700; padding: 0 9px; }",
-                mayEarlyCheckout ? "Check out before the planned departure time" : "Available only before the planned departure time",
-                mayEarlyCheckout);
+            if (!plannedEnd.isValid()) {
+                plannedEnd = QDateTime(
+                    QDate::fromString(QString::fromStdString(booking->getCheckOutDate()), Qt::ISODate), QTime(0, 0));
+            }
+            const bool beforePlannedCheckout = plannedEnd.isValid()
+                && QDateTime::currentDateTime() < plannedEnd;
+            // Modified: Show exactly one checkout path based on whether the planned departure time has been reached.
+            if (beforePlannedCheckout) {
+                addActionButton("↗ Early check-out", "earlycheckout",
+                    "QPushButton { background-color: #FFF7ED; color: #C2410C; border: 1px solid #FED7AA; border-radius: 8px; font-weight: 700; padding: 0 9px; }",
+                    "Check out before the planned departure time");
+            } else {
+                addActionButton("💳 Check out", "checkout",
+                    "QPushButton { background-color: #FEF2F2; color: #B91C1C; border: 1px solid #FECACA; border-radius: 8px; font-weight: 700; padding: 0 9px; }",
+                    "Record payment, check out the guest, and issue an invoice");
+            }
             // Modified: Keep controlled active-stay extension available without allowing unrestricted reservation editing.
             addActionButton("⏱ Extend", "extend",
                 "QPushButton { background-color: #EFF6FF; color: #1D4ED8; border: 1px solid #BFDBFE; border-radius: 8px; font-weight: 700; padding: 0 9px; }",

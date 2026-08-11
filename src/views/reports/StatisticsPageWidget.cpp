@@ -569,13 +569,15 @@ void StatisticsPageWidget::refreshData() {
     if (m_invisibleHoverScatter) m_invisibleHoverScatter->clear();
     m_barAxisX->clear();
     
-    QStringList months;
+    const QStringList months = {
+        "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+    };
     double maxVal = 0;
     QVector<double> targets(12);
     for (int i = 1; i <= 12; ++i) {
         m_revenueLineSeries->append(i - 1, monthlyRevenue[i]);
         if (m_invisibleHoverScatter) m_invisibleHoverScatter->append(i - 1, monthlyRevenue[i]);
-        months << QString("T%1").arg(i);
         if (monthlyRevenue[i] > maxVal) maxVal = monthlyRevenue[i];
     }
     

@@ -44,6 +44,7 @@ public:
 
     bool isActive() const { return m_isActive; }
     void setActive(bool active);
+    void setAlert(bool alert);
 
 signals:
     void clicked();
@@ -59,6 +60,7 @@ private:
     QLabel *m_textLabel;
     QLabel *m_valueLabel;
     bool m_isActive = false;
+    bool m_isAlert = false;
     void updateStyle(bool hover);
 };
 

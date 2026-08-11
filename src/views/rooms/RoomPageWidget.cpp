@@ -116,30 +116,36 @@ void setupRoomPageStyle(QWidget* widget) {
             font-weight: 600;
         }
         QPushButton#btnAddRoom:hover { background-color: #4F6BFF; }
-        QPushButton.filterBtn {
-            background-color: #F4F7FE;
-            color: #A3AED0;
-            font-weight: 600;
-            border-radius: 8px;
-            padding: 6px 14px;
-            border: 1px solid #E9EDF7;
-            font-size: 12px;
-        }
         QPushButton[typeFilterBtn="true"] {
             background-color: #F8FAFC;
             color: #475569;
             border-radius: 8px;
             padding: 8px 16px;
             font-weight: 600;
-            border: 1px solid transparent;
+            border: 1px solid #E2E8F0;
         }
         QPushButton[typeFilterBtn="true"]:hover {
-            background-color: #E2E8F0;
+            background-color: #E8EEFF;
+            color: #2B6DEF;
+            border-color: #BFD0FF;
+        }
+        QPushButton[typeFilterBtn="true"]:pressed {
+            background-color: #DCE6FF;
+            color: #1D4ED8;
+            border-color: #8FB0FF;
         }
         QPushButton[typeFilterBtn="true"]:checked {
-            background-color: #EAF2FF;
-            color: #3B58FF;
+            background-color: #3B58FF;
+            color: #FFFFFF;
             border: 1px solid #3B58FF;
+        }
+        QPushButton[typeFilterBtn="true"]:checked:hover {
+            background-color: #4F6BFF;
+            border-color: #4F6BFF;
+        }
+        QPushButton[typeFilterBtn="true"]:checked:pressed {
+            background-color: #2A3EB5;
+            border-color: #2A3EB5;
         }
         QFrame#detailFrame {
             background-color: #FFFFFF;
@@ -259,17 +265,20 @@ void RoomPageWidget::setupUI() {
     // Filter Buttons Row
     auto* filterRow = new QHBoxLayout();
     m_filterAllBtn = new QPushButton("All", this);
-    m_filterAllBtn->setProperty("class", "filterBtn");
-    m_filterAllBtn->setProperty("active", true);
-
     m_filterStdBtn = new QPushButton("Standard", this);
-    m_filterStdBtn->setProperty("class", "filterBtn");
-
     m_filterDlxBtn = new QPushButton("Deluxe", this);
-    m_filterDlxBtn->setProperty("class", "filterBtn");
-
     m_filterSuiBtn = new QPushButton("Suite", this);
-    m_filterSuiBtn->setProperty("class", "filterBtn");
+
+    const QList<QPushButton*> filterButtons = {
+        m_filterAllBtn, m_filterStdBtn, m_filterDlxBtn, m_filterSuiBtn
+    };
+    for (auto* button : filterButtons) {
+        button->setProperty("typeFilterBtn", true);
+        button->setCheckable(true);
+        button->setAutoExclusive(true);
+        button->setCursor(Qt::PointingHandCursor);
+    }
+    m_filterAllBtn->setChecked(true);
 
     filterRow->addWidget(m_filterAllBtn);
     filterRow->addWidget(m_filterStdBtn);
@@ -416,13 +425,6 @@ void RoomPageWidget::onSearchChanged(const QString& text) {
 void RoomPageWidget::onFilterTypeSelected() {
     auto* clickedBtn = qobject_cast<QPushButton*>(sender());
     if (!clickedBtn) return;
-
-    QList<QPushButton*> buttons = {m_filterAllBtn, m_filterStdBtn, m_filterDlxBtn, m_filterSuiBtn};
-    for (auto* btn : buttons) {
-        btn->setProperty("active", btn == clickedBtn);
-        btn->style()->unpolish(btn);
-        btn->style()->polish(btn);
-    }
 
     if (clickedBtn == m_filterAllBtn) m_selectedTypeFilter = "All";
     else if (clickedBtn == m_filterStdBtn) m_selectedTypeFilter = "Standard";

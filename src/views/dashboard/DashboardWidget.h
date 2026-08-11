@@ -53,6 +53,7 @@ private:
     void refreshBookingHistoryView();
     void toggleMiniCardReservations(int cardIndex);
     void refreshMiniCardReservations();
+    void refreshCheckoutAlertState(const QDateTime& now);
     QString buildBookingHistoryHtml() const;
     QString buildReportHtml() const;
 
@@ -69,4 +70,6 @@ private:
     QTableWidget *m_reservationTable = nullptr;
     int m_selectedMiniCard = 0;
     int m_historyPage = 0;
+    qint64 m_checkoutAlertMinute = -1;
+    bool m_hasOverdueCheckout = false;
 };

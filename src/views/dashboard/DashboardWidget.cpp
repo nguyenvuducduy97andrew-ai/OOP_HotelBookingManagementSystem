@@ -140,9 +140,10 @@ DashboardWidget::DashboardWidget(HotelManager *manager, QWidget *parent)
     m_reservationTable->setSelectionMode(QAbstractItemView::SingleSelection);
     m_reservationTable->verticalHeader()->hide();
     m_reservationTable->verticalHeader()->setDefaultSectionSize(44);
-    m_reservationTable->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
-    m_reservationTable->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
-    m_reservationTable->setMaximumHeight(250);
+    m_reservationTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+    m_reservationTable->horizontalHeader()->setStretchLastSection(true);
+    m_reservationTable->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    m_reservationTable->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     m_reservationTable->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
     reservationLayout->addWidget(m_reservationPanelTitle);
     reservationLayout->addWidget(m_reservationPanelSubtitle);
@@ -219,11 +220,21 @@ void DashboardWidget::refreshMiniCardReservations()
     m_reservationPanelTitle->setText(titles[m_selectedMiniCard]);
     m_reservationTable->clearSpans();
     m_reservationTable->setRowCount(0);
+    const auto fitReservationTableToRows = [this]() {
+        constexpr int maxVisibleReservationRows = 5;
+        const int visibleRowCount = qMax(1, qMin(m_reservationTable->rowCount(), maxVisibleReservationRows));
+        const int tableHeight = m_reservationTable->horizontalHeader()->sizeHint().height()
+            + visibleRowCount * m_reservationTable->verticalHeader()->defaultSectionSize()
+            + 2 * m_reservationTable->frameWidth();
+        m_reservationTable->setFixedHeight(tableHeight);
+    };
     if (!m_manager) {
         m_reservationPanelSubtitle->setText("0 reservations");
+        fitReservationTableToRows();
         return;
     }
     const QDate today = QDate::currentDate();
+    const QDateTime now = QDateTime::currentDateTime();
     int row = 0;
 
     for (const auto& booking : m_manager->getBookings()) {
@@ -233,11 +244,17 @@ void DashboardWidget::refreshMiniCardReservations()
         QDateTime plannedOut = QDateTime::fromString(QString::fromStdString(booking->getPlannedCheckOutAt()), Qt::ISODateWithMs);
         if (!plannedIn.isValid()) plannedIn = QDateTime(QDate::fromString(QString::fromStdString(booking->getCheckInDate()), Qt::ISODate), QTime(0, 0));
         if (!plannedOut.isValid()) plannedOut = QDateTime(QDate::fromString(QString::fromStdString(booking->getCheckOutDate()), Qt::ISODate), QTime(0, 0));
+        const bool isOverdueCheckout = state == BookingState::ACTIVE
+            && plannedOut.isValid() && plannedOut < now;
+        const bool highlightOverdueCheckout = m_selectedMiniCard == 3 && isOverdueCheckout;
 
         const bool matches =
             (m_selectedMiniCard == 1 && state == BookingState::UPCOMING && plannedIn.date() == today)
             || (m_selectedMiniCard == 2 && state == BookingState::ACTIVE)
-            || (m_selectedMiniCard == 3 && (state == BookingState::UPCOMING || state == BookingState::ACTIVE) && plannedOut.date() == today)
+            || (m_selectedMiniCard == 3
+                && ((state == BookingState::UPCOMING && plannedOut.date() == today)
+                    || (state == BookingState::ACTIVE
+                        && (plannedOut.date() == today || isOverdueCheckout))))
             || (m_selectedMiniCard == 4 && (state == BookingState::CANCELLED || state == BookingState::NO_SHOW));
         if (!matches) continue;
 
@@ -256,7 +273,7 @@ void DashboardWidget::refreshMiniCardReservations()
         m_reservationTable->setItem(row, 5, new QTableWidgetItem(status));
 
         auto *actions = new QWidget(m_reservationTable);
-        actions->setStyleSheet("background:transparent;");
+        actions->setStyleSheet(highlightOverdueCheckout ? "background:#FEF2F2;" : "background:transparent;");
         auto *actionLayout = new QHBoxLayout(actions);
         actionLayout->setContentsMargins(4, 2, 4, 2);
         actionLayout->setSpacing(6);
@@ -288,6 +305,14 @@ void DashboardWidget::refreshMiniCardReservations()
         }
         actionLayout->addStretch();
         m_reservationTable->setCellWidget(row, 6, actions);
+        if (highlightOverdueCheckout) {
+            for (int column = 0; column < 6; ++column) {
+                if (auto *item = m_reservationTable->item(row, column)) {
+                    item->setBackground(QColor("#FEF2F2"));
+                    item->setForeground(QColor("#B91C1C"));
+                }
+            }
+        }
         ++row;
     }
 
@@ -299,18 +324,58 @@ void DashboardWidget::refreshMiniCardReservations()
         m_reservationTable->setItem(0, 0, empty);
         m_reservationTable->setSpan(0, 0, 1, m_reservationTable->columnCount());
     }
+
+    fitReservationTableToRows();
 }
 
 void DashboardWidget::updateDateTime()
 {
-    const QString currentTime = QDateTime::currentDateTime().toString("dddd, dd/MM/yyyy · HH:mm:ss");
-    ui->lblDate->setText(currentTime);
+    const QDateTime now = QDateTime::currentDateTime();
+    ui->lblDate->setText(now.toString("dddd, dd/MM/yyyy · HH:mm:ss"));
+
+    const qint64 currentMinute = now.toSecsSinceEpoch() / 60;
+    if (currentMinute != m_checkoutAlertMinute) {
+        m_checkoutAlertMinute = currentMinute;
+        refreshCheckoutAlertState(now);
+    }
+}
+
+void DashboardWidget::refreshCheckoutAlertState(const QDateTime& now)
+{
+    bool hasOverdueCheckout = false;
+    if (m_manager) {
+        for (const auto& booking : m_manager->getBookings()) {
+            if (!booking || booking->isDeleted()
+                || m_manager->getBookingState(*booking) != BookingState::ACTIVE) {
+                continue;
+            }
+
+            QDateTime plannedOut = QDateTime::fromString(
+                QString::fromStdString(booking->getPlannedCheckOutAt()), Qt::ISODateWithMs);
+            if (!plannedOut.isValid()) {
+                plannedOut = QDateTime(
+                    QDate::fromString(QString::fromStdString(booking->getCheckOutDate()), Qt::ISODate),
+                    QTime(0, 0));
+            }
+            if (plannedOut.isValid() && plannedOut < now) {
+                hasOverdueCheckout = true;
+                break;
+            }
+        }
+    }
+
+    m_hasOverdueCheckout = hasOverdueCheckout;
+    ui->miniCard3->setAlert(hasOverdueCheckout);
+    if (m_selectedMiniCard == 3 && m_reservationPanel && m_reservationPanel->isVisible()) {
+        refreshMiniCardReservations();
+    }
 }
 
 // =================================================================
 void DashboardWidget::populateData()
 {
     if (!m_manager) {
+        m_hasOverdueCheckout = false;
         ui->statCard1->setData("Total Room Number", "0", "0 room types", true);
         ui->statCard2->setData("Occupancy rate", "0%", "No data available", true);
         ui->statCard3->setData("This month's arrivals", "0", "No data available", true);
@@ -318,6 +383,7 @@ void DashboardWidget::populateData()
         ui->miniCard1->setData("📅", QColor("#E8F0FF"), "Today's upcoming check-ins", "0");
         ui->miniCard2->setData("🛏", QColor("#E6FAF4"), "Currently staying", "0");
         ui->miniCard3->setData("✔", QColor("#F0EBFF"), "Today's planned check-outs", "0");
+        ui->miniCard3->setAlert(false);
         ui->miniCard4->setData("✖", QColor("#FDE8E6"), "Cancelled", "0");
         return;
     }
@@ -332,8 +398,10 @@ void DashboardWidget::populateData()
     int upcomingCount = 0;
     int activeCount = 0;
     int plannedCheckoutCount = 0;
+    int overdueCheckoutCount = 0;
     int cancelledCount = 0;
     const QDate statsToday = QDate::currentDate();
+    const QDateTime statsNow = QDateTime::currentDateTime();
 
     for (const auto& room : m_manager->getRooms()) {
         if (!room || room->isArchived()) {
@@ -368,7 +436,12 @@ void DashboardWidget::populateData()
             break;
         case BookingState::ACTIVE:
             activeCount++;
-            if (plannedOut.date() == statsToday) plannedCheckoutCount++;
+            if (plannedOut.isValid() && plannedOut < statsNow) {
+                overdueCheckoutCount++;
+                plannedCheckoutCount++;
+            } else if (plannedOut.date() == statsToday) {
+                plannedCheckoutCount++;
+            }
             break;
         case BookingState::COMPLETED: break;
         case BookingState::CANCELLED: cancelledCount++; break;
@@ -423,7 +496,10 @@ void DashboardWidget::populateData()
                            "Actual check-ins for " + QString::number(statsToday.year()), true);
     ui->miniCard1->setData("📅", QColor("#E8F0FF"), "Today's upcoming check-ins", QString::number(upcomingCount));
     ui->miniCard2->setData("🛏", QColor("#E6FAF4"), "Currently staying", QString::number(activeCount));
-    ui->miniCard3->setData("✔", QColor("#F0EBFF"), "Today's planned check-outs", QString::number(plannedCheckoutCount));
+    ui->miniCard3->setData("✔", overdueCheckoutCount > 0 ? QColor("#FDE8E6") : QColor("#F0EBFF"),
+                           "Today's planned check-outs", QString::number(plannedCheckoutCount));
+    m_hasOverdueCheckout = overdueCheckoutCount > 0;
+    ui->miniCard3->setAlert(overdueCheckoutCount > 0);
     // Modified: Present one cancelled lifecycle bucket; a guest not arriving is captured in its cancellation reason.
     ui->miniCard4->setData("✖", QColor("#FDE8E6"), "Cancelled", QString::number(cancelledCount));
 
@@ -1086,9 +1162,14 @@ QString DashboardWidget::buildBookingHistoryHtml() const
            << ".booking-meta{font-size:8.5pt;color:#8F9BB7;}"
            << ".stay-date{font-size:9pt;font-weight:600;color:#52637A;margin-top:5px;}"
            << ".room-chip{background:#EAF1FF;color:#2B6DEF;border-radius:8px;padding:3px 7px;font-size:8pt;font-weight:700;}"
-           << ".pagination{width:100%;margin-top:12px;border-collapse:collapse;}"
-           << ".page-link{display:inline-block;background:#FFFFFF;color:#52637A;border:1px solid #DCE5F0;border-radius:6px;padding:4px 8px;margin:0 3px;font-size:8.5pt;font-weight:700;text-decoration:none;}"
-           << ".page-link-active{display:inline-block;background:#2B6DEF;color:#FFFFFF;border:1px solid #2B6DEF;border-radius:6px;padding:4px 8px;margin:0 3px;font-size:8.5pt;font-weight:700;text-decoration:none;}"
+            << ".pagination{width:100%;margin-top:14px;border-collapse:collapse;}"
+           << ".page-controls{border-collapse:separate;}"
+           << ".page-cell{padding:0 2px;}"
+           << ".page-link,.page-link-active,.page-link-disabled{display:block;min-width:18px;text-align:center;border-radius:7px;padding:5px 9px;font-size:8.5pt;font-weight:700;text-decoration:none;}"
+           << ".page-link{background:#FFFFFF;color:#52637A;border:1px solid #DCE5F0;}"
+           << ".page-link-active{background:#2B6DEF;color:#FFFFFF;border:1px solid #2B6DEF;}"
+           << ".page-link-disabled{background:#F8FAFC;color:#B8C2D1;border:1px solid #E8EEF6;}"
+           << ".page-nav{min-width:58px;}"
            << ".data-table{border-collapse:collapse;width:100%;margin-top:6px;}"
            << ".data-table th,.data-table td{border:1px solid #E8EEF6;padding:8px 9px;text-align:left;vertical-align:top;}"
            << ".data-table th{background:#F5F8FC;color:#52637A;font-size:8pt;font-weight:700;}"
@@ -1195,12 +1276,26 @@ QString DashboardWidget::buildBookingHistoryHtml() const
         }
 
         if (pageCount > 1) {
-            stream << "<table class='pagination' width='100%' cellspacing='0' cellpadding='0'><tr><td align='center'>";
+            stream << "<table class='pagination' width='100%' cellspacing='0' cellpadding='0'><tr><td align='center'>"
+                   << "<table class='page-controls' align='center' cellspacing='6' cellpadding='0'><tr>";
+            if (currentPage > 0) {
+                stream << "<td class='page-cell'><a class='page-link page-nav' href='page:"
+                       << (currentPage - 1) << "'>&#8249; Previous</a></td>";
+            } else {
+                stream << "<td class='page-cell'><span class='page-link-disabled page-nav'>&#8249; Previous</span></td>";
+            }
             for (int page = 0; page < pageCount; ++page) {
                 const QString cssClass = page == currentPage ? "page-link-active" : "page-link";
-                stream << "<a class='" << cssClass << "' href='page:" << page << "'>" << (page + 1) << "</a>";
+                stream << "<td class='page-cell'><a class='" << cssClass << "' href='page:"
+                       << page << "'>" << (page + 1) << "</a></td>";
             }
-            stream << "</td></tr></table>";
+            if (currentPage + 1 < pageCount) {
+                stream << "<td class='page-cell'><a class='page-link page-nav' href='page:"
+                       << (currentPage + 1) << "'>Next &#8250;</a></td>";
+            } else {
+                stream << "<td class='page-cell'><span class='page-link-disabled page-nav'>Next &#8250;</span></td>";
+            }
+            stream << "</tr></table></td></tr></table>";
         }
     }
     stream << "</div>";

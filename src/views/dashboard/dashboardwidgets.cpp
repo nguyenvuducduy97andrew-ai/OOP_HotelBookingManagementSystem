@@ -99,16 +99,40 @@ void MiniCard::setActive(bool active)
     updateStyle(false);
 }
 
+void MiniCard::setAlert(bool alert)
+{
+    if (m_isAlert == alert) return;
+    m_isAlert = alert;
+    updateStyle(false);
+}
+
 void MiniCard::updateStyle(bool hover)
 {
+    if (m_isAlert) {
+        const QString alertTextStyle = m_isActive
+            ? "background: transparent; color: #FFFFFF; font-weight: bold;"
+            : "background: transparent; color: #B91C1C; font-weight: bold;";
+        m_textLabel->setStyleSheet(alertTextStyle);
+        m_valueLabel->setStyleSheet(alertTextStyle);
+
+        if (m_isActive) {
+            setStyleSheet("MiniCard { background-color: #DC2626; border-radius: 12px; border: 1px solid #B91C1C; }");
+        } else if (hover) {
+            setStyleSheet("MiniCard { background-color: #FEE2E2; border-radius: 12px; border: 1px solid #EF4444; }");
+        } else {
+            setStyleSheet("MiniCard { background-color: #FEF2F2; border-radius: 12px; border: 1px solid #FCA5A5; }");
+        }
+        return;
+    }
+
     m_textLabel->setStyleSheet("background: transparent; " + QString(m_isActive ? "color: #FFFFFF; font-weight: bold;" : ""));
-    m_valueLabel->setStyleSheet("background: transparent; " + QString(m_isActive ? "color: #FFFFFF; font-weight: bold;" : "")); 
+    m_valueLabel->setStyleSheet("background: transparent; " + QString(m_isActive ? "color: #FFFFFF; font-weight: bold;" : ""));
     
     if (m_isActive) {
         if (hover) {
-            setStyleSheet("MiniCard { background-color: #1874CD; border-radius: 12px; border: 1px solid #1874CD; }");
+            setStyleSheet("MiniCard { background-color: #4F6BFF; border-radius: 12px; border: 1px solid #1874CD; }");
         } else {
-            setStyleSheet("MiniCard { background-color: #1E90FF; border-radius: 12px; border: 1px solid #1E90FF; }");
+            setStyleSheet("MiniCard { background-color: #4F6BFF; border-radius: 12px; border: 1px solid #1E90FF; }");
         }
     } else {
         if (hover) {
